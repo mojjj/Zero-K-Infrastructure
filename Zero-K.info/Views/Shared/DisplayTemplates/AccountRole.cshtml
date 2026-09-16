@@ -13,6 +13,6 @@
     <span>&nbsp;</span>
     if (Global.Account != null && Global.Account.CanRecall(entry.Account, entry.RoleType))
     {
-        <a href="@Url.Action("RecallRole", "Planetwars", new { accountID = entry.AccountID, roleTypeID = entry.RoleTypeID })">(recall)</a>
+        @Html.PostLink("(recall)", "RecallRole", "Planetwars", new { accountID = entry.AccountID, roleTypeID = entry.RoleTypeID }, "js_confirm")
     }
 }

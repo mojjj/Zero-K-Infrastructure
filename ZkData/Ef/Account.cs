@@ -292,10 +292,17 @@ namespace ZkData
         }
 
 
+        /// <summary>
+        /// BCrypt cost for newly written hashes. Existing hashes keep the cost they were written
+        /// with - it is stored in the hash itself - so raising this only affects passwords set from
+        /// now on, and Verify keeps working for the old ones.
+        /// </summary>
+        public const int BcryptWorkFactor = 10;
+
         public void SetPasswordHashed(string passwordHash)
         {
             if (string.IsNullOrEmpty(passwordHash)) PasswordBcrypt = null;
-            else PasswordBcrypt = BCrypt.Net.BCrypt.HashPassword(passwordHash, 4);
+            else PasswordBcrypt = BCrypt.Net.BCrypt.HashPassword(passwordHash, BcryptWorkFactor);
         }
 
         public void SetPasswordPlain(string passwordPlain)

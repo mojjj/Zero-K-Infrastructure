@@ -538,6 +538,7 @@ namespace ZeroKWeb.Controllers
             return View(res);
         }
 
+        [HttpPost]
         [ValidateAntiForgeryToken]
         [Auth(Role = AdminLevel.Moderator)]
         public ActionResult AdminThread(int threadID, int newcat, bool isPinned, bool isLocked) {

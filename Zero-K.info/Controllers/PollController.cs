@@ -21,6 +21,7 @@ namespace ZeroKWeb.Controllers
             return null;
         }
 
+        [HttpPost]
         [ValidateAntiForgeryToken]
         [Auth(Role = AdminLevel.Moderator)]
         public ActionResult NewPoll(string question, string answers, bool? isAnonymous)
@@ -195,6 +196,8 @@ namespace ZeroKWeb.Controllers
         }
 
         //[ValidateAntiForgeryToken]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [Auth(Role = AdminLevel.Moderator)]
         public ActionResult SwapHeadline(int pollid)
         {
@@ -217,6 +220,8 @@ namespace ZeroKWeb.Controllers
             return View("PollUserVotes", acc);
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [Auth(Role = AdminLevel.Moderator)]
         public ActionResult SwapVisible(int pollid)
         {

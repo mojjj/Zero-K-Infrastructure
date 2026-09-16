@@ -94,6 +94,8 @@ namespace ZeroKWeb.Controllers
         }
 
         //[ValidateAntiForgeryToken]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [Auth(Role = AdminLevel.Moderator)]
         public async Task<ActionResult> RemoveBlockedCompany(int companyID)
         {
@@ -108,6 +110,8 @@ namespace ZeroKWeb.Controllers
         }
 
         //[ValidateAntiForgeryToken]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [Auth(Role = AdminLevel.Moderator)]
         public async Task<ActionResult> RemoveBlockedHost(int hostID)
         {

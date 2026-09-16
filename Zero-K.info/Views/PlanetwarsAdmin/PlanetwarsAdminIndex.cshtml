@@ -24,9 +24,9 @@
     }
     else
     {
-        @Html.ActionLink("Select", "SetDefault", new { galaxyID = gal.GalaxyID })
+        @Html.PostLink("Select", "SetDefault", null, new { galaxyID = gal.GalaxyID })
         <span>&nbsp;|&nbsp;</span>
-        @Html.ActionLink("Delete", "Delete", new { galaxyID = gal.GalaxyID }, new { @class = "js_confirm" })
+        @Html.PostLink("Delete", "Delete", null, new { galaxyID = gal.GalaxyID }, "js_confirm")
     }
 }
 
@@ -78,9 +78,11 @@
                     Selected map utils
                 </td>
                 <td>
-                    @Html.ActionLink("Randomize maps", "RandomizeMaps", new { galaxyID = Model.LastSelectedGalaxyID })<br />
-                    @Html.ActionLink("Set team sizes", "SetPlanetTeamSizes", new { galaxyID = Model.LastSelectedGalaxyID })<br />
-                    @Html.ActionLink("Start galaxy", "StartGalaxy", new { galaxyID = Model.LastSelectedGalaxyID })<br />
+                    @Html.PostLink("Randomize maps", "RandomizeMaps", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
+                    @Html.PostLink("Set team sizes", "SetPlanetTeamSizes", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
+                    @Html.PostLink("Start galaxy", "StartGalaxy", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
+                    @Html.PostLink("Add wormholes", "AddWormholes", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
+                    @Html.PostLink("Own planets", "OwnPlanets", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
                     @Html.ActionLink("Reset all PW player ratings", "ResetRatings")<br />
                 </td>
             </tr>
