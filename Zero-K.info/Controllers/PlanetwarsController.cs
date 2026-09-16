@@ -808,7 +808,7 @@ namespace ZeroKWeb.Controllers
             var account = db.CurrentAccount();
             if (Global.IsAccountAuthorized && Global.Account.CanPlayerPlanetWars() && account?.FactionID != null && planet.CanMatchMakerPlay(account.Faction))
             {
-                Global.LobbyApi.InProcess.PlanetWarsMatchMaker.AddAttackOption(planet, account.FactionID.Value);
+                Global.LobbyApi.AddPlanetWarsAttackOption(planet, account.FactionID.Value);
                 Global.LobbyApi.RequestJoinPlanet(Global.Account.Name, planet.PlanetID, account.Faction.Shortcut);
             }
             return RedirectToAction("Planet", new { id = planetID });
@@ -818,11 +818,10 @@ namespace ZeroKWeb.Controllers
         [Auth]
         public ActionResult MatchMaker()
         {
-            var pwm = Global.LobbyApi.InProcess.PlanetWarsMatchMaker;
-            if (pwm != null)
+            if (Global.LobbyApi.IsPlanetWarsMatchMakerRunning)
             {
                 // admin view gets a per-viewer command so per-option flags render correctly
-                var state = Global.LobbyApi.InProcess.PlanetWarsMatchMaker.GenerateLobbyCommand(Global.Account?.Name, Global.Account?.Faction?.Shortcut);
+                var state = Global.LobbyApi.GeneratePlanetWarsLobbyCommand(Global.Account?.Name, Global.Account?.Faction?.Shortcut);
                 if (state != null) return View("PwMatchMaker", state);
             }
             return Content("Match maker offline");

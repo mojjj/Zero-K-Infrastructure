@@ -71,3 +71,12 @@ in-process today and changes no behaviour; its purpose is to make the coupling
 explicit and countable before a transport is chosen. Members on the interface can move
 across a process boundary; anything still reached through `InProcess` cannot yet, and
 is the remaining work.
+
+Count what is left with:
+
+    grep -rn "LobbyApi.InProcess" Zero-K.info/
+
+As of this commit that is 8 uses, all in `TourneyController` - a tournament admin
+console over live `TourneyBattle` objects, which the Razor view also renders directly.
+Closing it needs a tournament API with DTOs rather than a mechanical translation, and
+it is the last blocker for running the lobby server in its own process.

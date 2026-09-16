@@ -237,9 +237,9 @@ namespace ZeroKWeb
         async Task<PublicCommunityInfo> Process(GetPublicCommunityInfo r)
         {
             var info = new PublicCommunityInfo();
-            info.NewsItems = Global.LobbyApi.InProcess.NewsListManager.GetCurrentNewsList().NewsItems;
-            info.LadderItems = Global.LobbyApi.InProcess.LadderListManager.GetCurrentLadderList().LadderItems;
-            info.ForumItems = Global.LobbyApi.InProcess.ForumListManager.GetCurrentForumList(null).ForumItems;
+            info.NewsItems = Global.LobbyApi.GetCurrentNewsList().NewsItems;
+            info.LadderItems = Global.LobbyApi.GetCurrentLadderList().LadderItems;
+            info.ForumItems = Global.LobbyApi.GetCurrentForumList(null).ForumItems;
             info.UserCountLimited = MiscVar.ZklsMaxUsers > 0;
             info.MapItems = MemCache.GetCached<List<MapItem>>("featuredMapItems",
                 () =>

@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using LobbyClient;
+using System.Linq;
+using PlasmaShared;
+using ZeroKWeb;
 using ZkData;
 
 namespace ZkLobbyServer
@@ -68,5 +71,50 @@ namespace ZkLobbyServer
         public Task AddBattle(ServerBattle battle) => server.AddBattle(battle);
 
         public Task RemoveBattle(Battle battle) => server.RemoveBattle(battle);
+
+        public NewsList GetCurrentNewsList() => server.NewsListManager.GetCurrentNewsList();
+
+        public LadderList GetCurrentLadderList() => server.LadderListManager.GetCurrentLadderList();
+
+        public ForumList GetCurrentForumList(int? accountID) => server.ForumListManager.GetCurrentForumList(accountID);
+
+        public void OnNewsChanged() => server.NewsListManager.OnNewsChanged();
+
+        public void AddClanChannel(Clan clan) => server.ChannelManager.AddClanChannel(clan);
+
+        public bool CanJoinChannel(Account acc, string channel) => server.ChannelManager.CanJoin(acc, channel);
+
+        public bool VerifyIp(string ip) => server.LoginChecker.VerifyIp(ip);
+
+        public void LogIpFailure(string ip) => server.LoginChecker.LogIpFailure(ip);
+
+        public bool IsPlanetWarsMatchMakerRunning => server.PlanetWarsMatchMaker != null;
+
+        public PwPhase? PlanetWarsPhase => server.PlanetWarsMatchMaker?.Phase;
+
+        public void AddPlanetWarsAttackOption(Planet planet, int attackerFactionId) =>
+            server.PlanetWarsMatchMaker?.AddAttackOption(planet, attackerFactionId);
+
+        public PwMatchCommand GeneratePlanetWarsLobbyCommand(string playerName, string playerFaction) =>
+            server.PlanetWarsMatchMaker?.GenerateLobbyCommand(playerName, playerFaction);
+
+        public LobbyBattleStats GetBattleStats() {
+            var stats = new LobbyBattleStats();
+            foreach (var b in server.Battles.Values) {
+                if (b == null || !b.IsInGame) continue;
+                stats.BattlesRunning++;
+                stats.UsersFighting += b.NonSpectatorCount + b.SpectatorCount;
+            }
+            return stats;
+        }
+
+        public bool IsUserInAnyBattle(string userName) =>
+            server.Battles.Any(x => x.Value != null && x.Value.GetAllUserNames().Contains(userName));
+
+        public Task ConnectPlayerToBattle(string userName, int battleID) {
+            var user = server.ConnectedUsers.Get(userName);
+            if (user == null) return Task.FromResult(0);
+            return user.Process(new RequestConnectSpring() { BattleID = battleID });
+        }
     }
 }
