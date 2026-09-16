@@ -283,7 +283,7 @@ namespace ZeroKWeb.Controllers
             var r = db.Resources.Single(x => x.ResourceID == id);
 
             if (r.MapSupportLevel != mapSupportLevel)
-                await Global.Server.GhostChanSay(GlobalConst.ModeratorChannel, string.Format("{0} has changed level of map {1} from {2} to {3}", Global.Account.Name, r.InternalName, r.MapSupportLevel, mapSupportLevel));
+                await Global.LobbyApi.GhostChanSay(GlobalConst.ModeratorChannel, string.Format("{0} has changed level of map {1} from {2} to {3}", Global.Account.Name, r.InternalName, r.MapSupportLevel, mapSupportLevel));
 
             r.TaggedByAccountID = Global.AccountID;
             r.MapIsSpecial = special;
@@ -299,7 +299,7 @@ namespace ZeroKWeb.Controllers
             r.MapFFAMaxTeams = ffaTeams;
             r.MapSpringieCommands = springieCommands;
             db.SaveChanges();
-            await Global.Server.OnServerMapsChanged();
+            await Global.LobbyApi.OnServerMapsChanged();
             return RedirectToAction("Detail", new { id = id });
         }
 

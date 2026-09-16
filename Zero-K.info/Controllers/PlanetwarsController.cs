@@ -26,7 +26,7 @@ namespace ZeroKWeb.Controllers
             Planet planet = db.Planets.Single(x => x.PlanetID == planetID);
             bool accessible =(useWarp == true) ? planet.CanBombersWarp(acc.Faction) : planet.CanBombersAttack(acc.Faction);
             if (!accessible) return Content("You cannot attack here");
-            if (Global.Server.GetPlanetBattles(planet).Any(x => x.IsInGame)) return Content("Battle in progress on the planet, cannot bomb planet");
+            if (Global.LobbyApi.GetPlanetBattles(planet).Any(x => x.IsInGame)) return Content("Battle in progress on the planet, cannot bomb planet");
 
             bool selfbomb = acc.FactionID == planet.OwnerFactionID;
             if (count < 0) count = 0;
@@ -136,7 +136,7 @@ namespace ZeroKWeb.Controllers
             using (var db = new ZkDataContext())
             {
                 Planet planet = db.Planets.Single(p => p.PlanetID == planetID);
-                if (Global.Server.GetPlanetBattles(planet).Any(x => x.IsInGame)) return Content("Battle in progress on the planet, cannot build structures");
+                if (Global.LobbyApi.GetPlanetBattles(planet).Any(x => x.IsInGame)) return Content("Battle in progress on the planet, cannot build structures");
                 Account acc = db.Accounts.Single(x => x.AccountID == Global.AccountID);
                 if (acc.FactionID != planet.OwnerFactionID) return Content("Planet is not under your control.");
 
@@ -178,7 +178,7 @@ namespace ZeroKWeb.Controllers
             using (var db = new ZkDataContext())
             {
                 Planet planet = db.Planets.Single(p => p.PlanetID == planetID);
-                if (Global.Server.GetPlanetBattles(planet).Any(x => x.IsInGame)) return Content("Battle in progress on the planet, cannot destroy structures");
+                if (Global.LobbyApi.GetPlanetBattles(planet).Any(x => x.IsInGame)) return Content("Battle in progress on the planet, cannot destroy structures");
                 Account acc = db.Accounts.Single(x => x.AccountID == Global.AccountID);
                 StructureType structureType = db.StructureTypes.SingleOrDefault(s => s.StructureTypeID == structureTypeID);
                 Faction faction = planet.Faction;
@@ -376,7 +376,7 @@ namespace ZeroKWeb.Controllers
             int there = planet.PlanetFactions.Where(x => x.FactionID == acc.FactionID).Sum(x => (int?)x.Dropships) ?? 0;
             bool accessible = useWarp == true ? planet.CanDropshipsWarp(acc.Faction) : planet.CanDropshipsAttack(acc.Faction);
             if (!accessible) return Content(string.Format("That planet cannot be attacked"));
-            if (Global.Server.GetPlanetBattles(planet).Any(x => x.IsInGame)) return Content("Battle in progress on the planet, cannot send ships");
+            if (Global.LobbyApi.GetPlanetBattles(planet).Any(x => x.IsInGame)) return Content("Battle in progress on the planet, cannot send ships");
             
             int cnt = Math.Max(count, 0);
 
@@ -395,7 +395,7 @@ namespace ZeroKWeb.Controllers
                 }
 
                 if (planet.Account != null) {
-                    Global.Server.GhostPm(planet.Account.Name, string.Format(
+                    Global.LobbyApi.GhostPm(planet.Account.Name, string.Format(
                         "Warning: long range scanners detected fleet of {0} ships inbound to your planet {1} {3}/Planetwars/Planet/{2}",
                         cnt,
                         planet.Name,
@@ -480,7 +480,7 @@ namespace ZeroKWeb.Controllers
                                                             role.IsClanOnly ? (object)myAccount.Clan : myAccount.Faction,
                                                             role,
                                                             myAccount));
-                Global.Server.GhostPm(targetAccount.Name, string.Format("You were recalled from the function of {0} by {1}", role.Name, myAccount.Name));
+                Global.LobbyApi.GhostPm(targetAccount.Name, string.Format("You were recalled from the function of {0} by {1}", role.Name, myAccount.Name));
                 db.SaveChanges();
                 return RedirectToAction("Detail", "Users", new { id = accountID });
             }
@@ -536,7 +536,7 @@ namespace ZeroKWeb.Controllers
                                                                 role,
                                                                 myAccount));
                 }
-                Global.Server.GhostPm(targetAccount.Name, string.Format("You were appointed for the function of {0} by {1}", role.Name, myAccount.Name));
+                Global.LobbyApi.GhostPm(targetAccount.Name, string.Format("You were appointed for the function of {0} by {1}", role.Name, myAccount.Name));
                 db.SaveChanges();
                 return RedirectToAction("Detail", "Users", new { id = accountID });
             }
@@ -808,8 +808,8 @@ namespace ZeroKWeb.Controllers
             var account = db.CurrentAccount();
             if (Global.IsAccountAuthorized && Global.Account.CanPlayerPlanetWars() && account?.FactionID != null && planet.CanMatchMakerPlay(account.Faction))
             {
-                Global.Server.PlanetWarsMatchMaker.AddAttackOption(planet, account.FactionID.Value);
-                Global.Server.RequestJoinPlanet(Global.Account.Name, planet.PlanetID, account.Faction.Shortcut);
+                Global.LobbyApi.InProcess.PlanetWarsMatchMaker.AddAttackOption(planet, account.FactionID.Value);
+                Global.LobbyApi.RequestJoinPlanet(Global.Account.Name, planet.PlanetID, account.Faction.Shortcut);
             }
             return RedirectToAction("Planet", new { id = planetID });
         }
@@ -818,11 +818,11 @@ namespace ZeroKWeb.Controllers
         [Auth]
         public ActionResult MatchMaker()
         {
-            var pwm = Global.Server.PlanetWarsMatchMaker;
+            var pwm = Global.LobbyApi.InProcess.PlanetWarsMatchMaker;
             if (pwm != null)
             {
                 // admin view gets a per-viewer command so per-option flags render correctly
-                var state = Global.Server.PlanetWarsMatchMaker.GenerateLobbyCommand(Global.Account?.Name, Global.Account?.Faction?.Shortcut);
+                var state = Global.LobbyApi.InProcess.PlanetWarsMatchMaker.GenerateLobbyCommand(Global.Account?.Name, Global.Account?.Faction?.Shortcut);
                 if (state != null) return View("PwMatchMaker", state);
             }
             return Content("Match maker offline");
@@ -831,7 +831,7 @@ namespace ZeroKWeb.Controllers
         [Auth]
         public ActionResult MatchMakerJoin(int planetID, string attackerFaction)
         {
-            Global.Server.RequestJoinPlanet(Global.Account.Name, planetID, attackerFaction);
+            Global.LobbyApi.RequestJoinPlanet(Global.Account.Name, planetID, attackerFaction);
             return MatchMaker();
         }
 

@@ -26,8 +26,8 @@ namespace ZeroKWeb.Controllers
         [NoCache]
         public async Task<ActionResult> SendCommand(string link) {
             if (Global.Account == null) return Content("You must be logged in to the site");
-            if (!Global.Server.IsLobbyConnected(Global.Account.Name)) return Content("To use this feature, you need to be running the game and be logged in there");
-            await Global.Server.SendSiteToLobbyCommand(Global.Account.Name, new SiteToLobbyCommand() { Command = link });
+            if (!Global.LobbyApi.IsLobbyConnected(Global.Account.Name)) return Content("To use this feature, you need to be running the game and be logged in there");
+            await Global.LobbyApi.SendSiteToLobbyCommand(Global.Account.Name, new SiteToLobbyCommand() { Command = link });
             return Content("");
         }
 
@@ -39,8 +39,8 @@ namespace ZeroKWeb.Controllers
             var planet = db.Planets.Find(id);
             if (planet != null)
             {
-                var battle = Global.Server.GetPlanetBattles(planet).OrderByDescending(x => x.Users.Count).FirstOrDefault();
-                if (battle != null) Global.Server.ConnectedUsers.Get(Global.Account.Name)?.Process(new RequestConnectSpring() { BattleID = id });
+                var battle = Global.LobbyApi.GetPlanetBattles(planet).OrderByDescending(x => x.Users.Count).FirstOrDefault();
+                if (battle != null) Global.LobbyApi.InProcess.ConnectedUsers.Get(Global.Account.Name)?.Process(new RequestConnectSpring() { BattleID = id });
             }
 
             return RedirectToAction("Planet", "Planetwars", new { id = id });
@@ -70,7 +70,7 @@ namespace ZeroKWeb.Controllers
             db.SaveChanges();
 
             var str = string.Format("{0} added new blocked VPN company: {1}", Global.Account.Name, companyName);
-            await Global.Server.GhostChanSay(GlobalConst.ModeratorChannel, str);
+            await Global.LobbyApi.GhostChanSay(GlobalConst.ModeratorChannel, str);
             return  RedirectToAction("BlockedVPNs");
         }
 
@@ -89,7 +89,7 @@ namespace ZeroKWeb.Controllers
             db.SaveChanges();
 
             var str = string.Format("{0} added new blocked VPN host: {1}", Global.Account.Name, hostname);
-            await Global.Server.GhostChanSay(GlobalConst.ModeratorChannel, str);
+            await Global.LobbyApi.GhostChanSay(GlobalConst.ModeratorChannel, str);
             return RedirectToAction("BlockedVPNs");
         }
 
@@ -105,7 +105,7 @@ namespace ZeroKWeb.Controllers
             db.BlockedCompanies.DeleteOnSubmit(todel);
             db.SaveChanges();
             var str = string.Format("{0} removed blocked VPN company: {1}", Global.Account.Name, name);
-            await Global.Server.GhostChanSay(GlobalConst.ModeratorChannel, str);
+            await Global.LobbyApi.GhostChanSay(GlobalConst.ModeratorChannel, str);
             return RedirectToAction("BlockedVPNs");
         }
 
@@ -121,7 +121,7 @@ namespace ZeroKWeb.Controllers
             db.BlockedHosts.DeleteOnSubmit(todel);
             db.SaveChanges();
             var str = string.Format("{0} removed blocked VPN host: {1}", Global.Account.Name, name);
-            await Global.Server.GhostChanSay(GlobalConst.ModeratorChannel, str);
+            await Global.LobbyApi.GhostChanSay(GlobalConst.ModeratorChannel, str);
             return RedirectToAction("BlockedVPNs");
         }
 
@@ -214,10 +214,10 @@ namespace ZeroKWeb.Controllers
             if (!string.IsNullOrEmpty(model.Channel))
             {
                 // only show allowed channels
-                if (!Global.Server.ChannelManager.CanJoin(Global.Account, model.Channel)) return PartialView("LobbyChatMessages", model);
+                if (!Global.LobbyApi.InProcess.ChannelManager.CanJoin(Global.Account, model.Channel)) return PartialView("LobbyChatMessages", model);
                 if (!String.IsNullOrEmpty(model.Message) && !isMuted)
                 {
-                    await Global.Server.GhostSay(new Say()
+                    await Global.LobbyApi.GhostSay(new Say()
                     {
                         IsEmote = false,
                         Place = SayPlace.Channel,
@@ -239,7 +239,7 @@ namespace ZeroKWeb.Controllers
             {
                 if (!String.IsNullOrEmpty(model.Message) && !isMuted)
                 {
-                    await Global.Server.GhostSay(new Say()
+                    await Global.LobbyApi.GhostSay(new Say()
                     {
                         IsEmote = false,
                         Place = SayPlace.User,

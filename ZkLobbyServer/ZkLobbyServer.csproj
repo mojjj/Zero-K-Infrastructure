@@ -151,6 +151,8 @@
     <Compile Include="ReplayStorage.cs" />
     <Compile Include="ServerBattle.cs" />
     <Compile Include="ServerRunner.cs" />
+    <Compile Include="ILobbyServerApi.cs" />
+    <Compile Include="InProcessLobbyServerApi.cs" />
     <Compile Include="ServerTextCommands.cs" />
     <Compile Include="SpringieInterface\Balancer.cs" />
     <Compile Include="SpringieInterface\BattleResultHandler.cs" />

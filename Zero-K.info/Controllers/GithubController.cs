@@ -71,7 +71,7 @@ namespace ZeroKWeb.Controllers
                     break;
             }
 
-            if (text != null) await Global.Server.GhostChanSay(channel, text);
+            if (text != null) await Global.LobbyApi.GhostChanSay(channel, text);
 
             return Content("");
         }
