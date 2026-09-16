@@ -136,7 +136,7 @@ namespace ZeroKWeb.Controllers
             }
 
             db.SaveChanges();
-            Global.Server.PublishAccountUpdate(acc);
+            Global.LobbyApi.PublishAccountUpdate(acc);
             return clan;
         }
 
@@ -178,7 +178,7 @@ namespace ZeroKWeb.Controllers
                     }
 
                     db.SaveChanges();
-                    Global.Server.PublishAccountUpdate(acc);
+                    Global.LobbyApi.PublishAccountUpdate(acc);
                     return RedirectToAction("Detail", new { id = clan.ClanID });
                 }
             }
@@ -203,13 +203,13 @@ namespace ZeroKWeb.Controllers
             }
             else
             {
-                await Global.Server.GhostChanSay(GlobalConst.ModeratorChannel, string.Format("{0} kicked {1} from clan {2}", Global.Account.Name, kickee_acc.Name, db.Clans.Single(x => x.ClanID == clanID).ClanName));
+                await Global.LobbyApi.GhostChanSay(GlobalConst.ModeratorChannel, string.Format("{0} kicked {1} from clan {2}", Global.Account.Name, kickee_acc.Name, db.Clans.Single(x => x.ClanID == clanID).ClanName));
             }
 
             PerformLeaveClan(accountID);
             db.SaveChanges();
             PlanetWarsTurnHandler.SetPlanetOwners(new PlanetwarsEventCreator());
-            await Global.Server.PublishAccountUpdate(kickee_acc);
+            await Global.LobbyApi.PublishAccountUpdate(kickee_acc);
             return RedirectToAction("Detail", new { id = clanID });
         }
 
@@ -258,10 +258,10 @@ namespace ZeroKWeb.Controllers
 
                 if (Global.IsModerator && (!Global.Account.HasClanRight(x => x.RightEditTexts) || clan.ClanID != Global.Account.ClanID))
                 {
-                    await Global.Server.GhostChanSay(GlobalConst.ModeratorChannel, string.Format("{0} edited clan {1} {2}", Global.Account.Name, orgClan.ClanName, Url.Action("Detail", "Clans", new { id = clan.ClanID }, "http")));
+                    await Global.LobbyApi.GhostChanSay(GlobalConst.ModeratorChannel, string.Format("{0} edited clan {1} {2}", Global.Account.Name, orgClan.ClanName, Url.Action("Detail", "Clans", new { id = clan.ClanID }, "http")));
                     if (orgClan.ClanName != clan.ClanName)
                     {
-                        await Global.Server.GhostChanSay(GlobalConst.ModeratorChannel, string.Format("{0} => {1}", orgClan.ClanName, clan.ClanName));
+                        await Global.LobbyApi.GhostChanSay(GlobalConst.ModeratorChannel, string.Format("{0} => {1}", orgClan.ClanName, clan.ClanName));
                     }
                 }
 
@@ -384,9 +384,9 @@ namespace ZeroKWeb.Controllers
                 db.SaveChanges();
             }
 
-            await Global.Server.PublishAccountUpdate(acc);
-            Global.Server.ChannelManager.AddClanChannel(clan);
-            await Global.Server.SetTopic(clan.GetClanChannel(), clan.SecretTopic, Global.Account.Name);
+            await Global.LobbyApi.PublishAccountUpdate(acc);
+            Global.LobbyApi.InProcess.ChannelManager.AddClanChannel(clan);
+            await Global.LobbyApi.SetTopic(clan.GetClanChannel(), clan.SecretTopic, Global.Account.Name);
             return RedirectToAction("Detail", new { id = clan.ClanID });
         }
 

@@ -148,11 +148,11 @@ namespace ZeroKWeb.Controllers
         static CurrentLobbyStats GetCurrentLobbyStats()
         {
             var ret = new CurrentLobbyStats();
-            if (Global.Server != null)
+            if (Global.LobbyApi != null)
             {
-                ret.UsersOnline = Global.Server.ConnectedUsers.Count;
+                ret.UsersOnline = Global.LobbyApi.ConnectedUserCount;
 
-                foreach (var b in Global.Server.Battles.Values)
+                foreach (var b in Global.LobbyApi.InProcess.Battles.Values)
                 {
                     if (b.IsInGame)
                     {
@@ -161,7 +161,7 @@ namespace ZeroKWeb.Controllers
                     }
                 }
 
-                ret.UsersDiscord = Global.Server.GetDiscordUserCount();
+                ret.UsersDiscord = Global.LobbyApi.GetDiscordUserCount();
             }
 
             return ret;
@@ -233,7 +233,7 @@ namespace ZeroKWeb.Controllers
         [AcceptVerbs(HttpVerbs.Post | HttpVerbs.Get)]
         public ActionResult Logon(string login, string password, string referer, string zklogin)
 		{
-		    if (!Global.Server.LoginChecker.VerifyIp(Request.UserHostAddress)) return Content("Too many login failures, access blocked");
+		    if (!Global.LobbyApi.InProcess.LoginChecker.VerifyIp(Request.UserHostAddress)) return Content("Too many login failures, access blocked");
 
 		    var openid = new OpenIdRelyingParty();
             IAuthenticationResponse response = openid.GetResponse();
@@ -262,7 +262,7 @@ namespace ZeroKWeb.Controllers
 		    else
 		    {
 		        Trace.TraceWarning("Invalid login attempt for {0}", login);
-		        Global.Server.LoginChecker.LogIpFailure(Request.UserHostAddress);
+		        Global.LobbyApi.InProcess.LoginChecker.LogIpFailure(Request.UserHostAddress);
 		        return Content("Invalid password");
 		    }
 		}

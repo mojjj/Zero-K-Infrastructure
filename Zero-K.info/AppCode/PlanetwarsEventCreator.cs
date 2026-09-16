@@ -93,11 +93,11 @@ public class PlanetwarsEventCreator:IPlanetwarsEventCreator {
 
         ev.Text = String.Format(format, args);
         try {
-            if (Global.Server != null) {
-                foreach (var clan in orgArgs.OfType<Clan>().Where(x => x != null)) Global.Server.GhostSay(
+            if (Global.LobbyApi != null) {
+                foreach (var clan in orgArgs.OfType<Clan>().Where(x => x != null)) Global.LobbyApi.GhostSay(
                     new Say() { User = GlobalConst.NightwatchName, IsEmote = true, Place = SayPlace.Channel,Target = clan.GetClanChannel(), Text = ev.PlainText});
                 foreach (var faction in orgArgs.OfType<Faction>().Where(x => x != null))
-                    Global.Server.GhostSay(
+                    Global.LobbyApi.GhostSay(
                         new Say() { User = GlobalConst.NightwatchName, IsEmote = true, Place = SayPlace.Channel, Target = faction.Shortcut, Text = ev.PlainText });
             }
         } catch (Exception ex) {
@@ -114,7 +114,7 @@ public class PlanetwarsEventCreator:IPlanetwarsEventCreator {
 
     public void GhostPm(string user, string text)
     {
-        Global.Server.GhostPm(user, text);
+        Global.LobbyApi.GhostPm(user, text);
     }
 
 }

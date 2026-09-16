@@ -104,6 +104,13 @@ namespace ZeroKWeb
         //public static PlanetWarsMatchMaker PlanetWarsMatchMaker { get; private set; }
         public static ZkLobbyServer.ZkLobbyServer Server { get; private set; }
 
+        /// <summary>
+        /// The website's view of the lobby server. Prefer this over <see cref="Server"/>: the
+        /// members on the interface are the ones that can survive the server moving to its own
+        /// process, which is what Zero-K.info/HOSTING.md is about. Null until the server starts.
+        /// </summary>
+        public static ZkLobbyServer.ILobbyServerApi LobbyApi { get; private set; }
+
         public static ServerRunner ZkServerRunner { get; private set; }
         public static ForumPostCache ForumPostCache { get; private set; }= new ForumPostCache();
 
@@ -142,6 +149,7 @@ namespace ZeroKWeb
             var sitePath = mvcApplication.Server.MapPath("~");
             ZkServerRunner = new ServerRunner(sitePath, new PlanetwarsEventCreator());
             Server = ZkServerRunner.ZkLobbyServer;
+            LobbyApi = new ZkLobbyServer.InProcessLobbyServerApi(Server);
 
             Trace.TraceInformation("Starting lobby server");
             ZkServerRunner.Run();
