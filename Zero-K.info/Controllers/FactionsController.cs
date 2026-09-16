@@ -116,6 +116,9 @@ namespace ZeroKWeb.Controllers
         /// <param name="delete">Delete the specified <see cref="TreatyEffect"/>?</param>
         /// <param name="propose">If not null or empty, this is a newly proposed treaty</param>
         /// <returns></returns>
+        [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult ModifyTreaty(int factionTreatyID,
                                          int? turns,
                                          int? acceptingFactionID,
@@ -203,6 +206,9 @@ namespace ZeroKWeb.Controllers
 
      
 
+        [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult CancelTreaty(int id) {
             var db = new ZkDataContext();
             var treaty = db.FactionTreaties.Single(x => x.FactionTreatyID == id);
@@ -218,6 +224,9 @@ namespace ZeroKWeb.Controllers
             return Content("Cannot cancel");
         }
 
+        [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult CounterProposal(int id) {
             var db = new ZkDataContext();
             var treaty = db.FactionTreaties.Single(x => x.FactionTreatyID == id);
@@ -292,6 +301,9 @@ namespace ZeroKWeb.Controllers
         /// <summary>
         /// Set faction secret topic (applied to lobby channel as well)
         /// </summary>
+        [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult SetTopic(int factionID, string secretTopic) {
             var db = new ZkDataContext();
             var fac = db.Factions.Single(x => x.FactionID == factionID);

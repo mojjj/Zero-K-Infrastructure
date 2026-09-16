@@ -207,6 +207,7 @@ namespace ZeroKWeb.Controllers
         /// Brings up the planet image selector page
         /// </summary>
         /// <param name="resourceID">The ID of the map to assign a planet image to</param>
+        [Auth(Role = AdminLevel.Moderator)]
         public ActionResult PlanetImageSelect(int resourceID) {
             var res = new PlanetImageSelectData();
             var db = new ZkDataContext();
@@ -239,6 +240,9 @@ namespace ZeroKWeb.Controllers
             return Content("");
         }
 
+        [Auth(Role = AdminLevel.Moderator)]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult RemovePlanetIcon(int resourceID) {
             var db = new ZkDataContext();
             var res = db.Resources.Single(x => x.ResourceID == resourceID);
@@ -247,6 +251,9 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Detail", new { id = res.ResourceID });
         }
 
+        [Auth(Role = AdminLevel.Moderator)]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult SubmitPlanetIcon(int resourceID, string icon) {
             var db = new ZkDataContext();
             var res = db.Resources.Single(x => x.ResourceID == resourceID);

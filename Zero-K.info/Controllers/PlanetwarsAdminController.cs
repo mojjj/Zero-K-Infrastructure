@@ -149,6 +149,8 @@ namespace ZeroKWeb.Controllers
 
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult SetDefault(int galaxyid)
         {
             var db = new ZkDataContext();
@@ -158,6 +160,8 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [Auth(Role = AdminLevel.SuperAdmin)]
         public ActionResult Delete(int galaxyid)
         {
@@ -168,6 +172,8 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult SetPlanetTeamSizes(int galaxyID)
         {
             var db = new ZkDataContext();
@@ -189,6 +195,8 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult RandomizeMaps(int galaxyID)
         {
             using (var db = new ZkDataContext())
@@ -232,6 +240,8 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult AddWormholes(int galaxyID)
         {
             var db = new ZkDataContext();
@@ -246,6 +256,8 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult OwnPlanets(int galaxyID)
         {
             var db = new ZkDataContext();
@@ -290,6 +302,8 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult StartGalaxy(int galaxyID)
         {
             AddWormholes(galaxyID);

@@ -111,6 +111,7 @@
 {
     <div class="admin">
         <form method="post" action="@Url.Action("SubmitRenamePlanet")">
+        @Html.AntiForgeryToken()
             <input type="hidden" name="planetID" value="@Model.PlanetID"/>
             <table>
                 <tr>
