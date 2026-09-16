@@ -385,7 +385,7 @@ namespace ZeroKWeb.Controllers
             }
 
             await Global.LobbyApi.PublishAccountUpdate(acc);
-            Global.LobbyApi.InProcess.ChannelManager.AddClanChannel(clan);
+            Global.LobbyApi.AddClanChannel(clan);
             await Global.LobbyApi.SetTopic(clan.GetClanChannel(), clan.SecretTopic, Global.Account.Name);
             return RedirectToAction("Detail", new { id = clan.ClanID });
         }

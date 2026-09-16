@@ -40,7 +40,7 @@ namespace ZeroKWeb.Controllers
             if (planet != null)
             {
                 var battle = Global.LobbyApi.GetPlanetBattles(planet).OrderByDescending(x => x.Users.Count).FirstOrDefault();
-                if (battle != null) Global.LobbyApi.InProcess.ConnectedUsers.Get(Global.Account.Name)?.Process(new RequestConnectSpring() { BattleID = id });
+                if (battle != null) Global.LobbyApi.ConnectPlayerToBattle(Global.Account.Name, id);
             }
 
             return RedirectToAction("Planet", "Planetwars", new { id = id });
@@ -214,7 +214,7 @@ namespace ZeroKWeb.Controllers
             if (!string.IsNullOrEmpty(model.Channel))
             {
                 // only show allowed channels
-                if (!Global.LobbyApi.InProcess.ChannelManager.CanJoin(Global.Account, model.Channel)) return PartialView("LobbyChatMessages", model);
+                if (!Global.LobbyApi.CanJoinChannel(Global.Account, model.Channel)) return PartialView("LobbyChatMessages", model);
                 if (!String.IsNullOrEmpty(model.Message) && !isMuted)
                 {
                     await Global.LobbyApi.GhostSay(new Say()

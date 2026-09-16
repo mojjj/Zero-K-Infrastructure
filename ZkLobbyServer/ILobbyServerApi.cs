@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using LobbyClient;
+using ZeroKWeb;
 using ZkData;
 
 namespace ZkLobbyServer
@@ -74,6 +75,65 @@ namespace ZkLobbyServer
         Task AddBattle(ServerBattle battle);
         Task RemoveBattle(Battle battle);
 
+        // ---- lobby content lists --------------------------------------------------------
+        // Served to the game client and refreshed when the website edits the underlying rows.
+
+        NewsList GetCurrentNewsList();
+        LadderList GetCurrentLadderList();
+        ForumList GetCurrentForumList(int? accountID);
+        void OnNewsChanged();
+
+        // ---- channels -------------------------------------------------------------------
+
+        void AddClanChannel(Clan clan);
+        bool CanJoinChannel(Account acc, string channel);
+
+        // ---- login throttling -----------------------------------------------------------
+        // Shared between the lobby and the website so a brute force cannot dodge one by using
+        // the other.
+
+        bool VerifyIp(string ip);
+        void LogIpFailure(string ip);
+
+        // ---- planetwars matchmaker ------------------------------------------------------
+
+        /// <summary>False when PlanetWars is offline; callers must handle that.</summary>
+        bool IsPlanetWarsMatchMakerRunning { get; }
+
+        /// <summary>Null when the matchmaker is not running.</summary>
+        PwPhase? PlanetWarsPhase { get; }
+
+        void AddPlanetWarsAttackOption(Planet planet, int attackerFactionId);
+
+        /// <summary>Per-viewer, so attack options render with the right flags. Null when offline.</summary>
+        PwMatchCommand GeneratePlanetWarsLobbyCommand(string playerName, string playerFaction);
+
+        // ---- battles --------------------------------------------------------------------
+
+        /// <summary>Aggregate counts for the front page, so callers do not walk the battle list.</summary>
+        LobbyBattleStats GetBattleStats();
+
+        /// <summary>Used to warn before renaming someone who is mid-battle.</summary>
+        bool IsUserInAnyBattle(string userName);
+
+        // ---- connected users ------------------------------------------------------------
+
+        /// <summary>Tells a connected client to join a battle. No-op when the user is offline.</summary>
+        Task ConnectPlayerToBattle(string userName, int battleID);
+
+        // ---- not modelled yet -----------------------------------------------------------
+        //
+        // TourneyController is a tournament admin console over live server objects: it lists
+        // TourneyBattle instances, creates them from a TourneyPrototype, reads their Debriefings
+        // and Prototype.TeamPlayers, and the Razor view renders those objects directly.
+        //
+        // Remoting it needs a tournament API rather than a translation: DTOs for battle,
+        // prototype and debriefing, a create/remove/force-join contract, and the view rewritten
+        // against the DTOs. That is the last thing standing between this interface and an
+        // out-of-process lobby server, and it is deliberately not bodged onto the interface -
+        // returning ServerBattle or TourneyBattle from here would break the promise that
+        // everything above can cross a process boundary.
+
         // ---- escape hatch ---------------------------------------------------------------
 
         /// <summary>
@@ -87,5 +147,12 @@ namespace ZkLobbyServer
         ///     grep -rn "LobbyApi.InProcess" Zero-K.info/
         /// </summary>
         ZkLobbyServer InProcess { get; }
+    }
+
+    /// <summary>Aggregate battle counts, so the website does not need the live battle list.</summary>
+    public class LobbyBattleStats
+    {
+        public int BattlesRunning;
+        public int UsersFighting;
     }
 }

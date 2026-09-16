@@ -574,7 +574,7 @@ namespace ZeroKWeb.Controllers
             if (!Account.IsValidLobbyName(newUsername)) return Content("Invalid username");
             var existing = db.Accounts.FirstOrDefault(x => x.Name.ToUpper() == newUsername.ToUpper() && x.AccountID != accountID);
             if (existing != null) return Content("Name conflict with user " + existing.AccountID);
-            if (Global.LobbyApi.InProcess.Battles.Any(x => x.Value.GetAllUserNames().Contains(acc.Name))) return Content(acc.Name + " is currently fighting in a battle. Rename action not advised.");
+            if (Global.LobbyApi.IsUserInAnyBattle(acc.Name)) return Content(acc.Name + " is currently fighting in a battle. Rename action not advised.");
             await Global.LobbyApi.KickFromServer(Global.Account.Name, acc.Name, "Your username has been changed from " + acc.Name + " to " + newUsername + ". Please login using your new username.");
 
             var oldName = acc.Name;
@@ -637,7 +637,7 @@ namespace ZeroKWeb.Controllers
             if (AuthServiceClient.VerifyAccountPlain(acc.Name, oldPassword) == null)
             {
                 Trace.TraceWarning("Failed password check for {0} on attempted password change", Global.Account.Name);
-                Global.LobbyApi.InProcess.LoginChecker.LogIpFailure(Request.UserHostAddress);
+                Global.LobbyApi.LogIpFailure(Request.UserHostAddress);
                 return Content("Invalid password");
             }
             if (newPassword != newPassword2) return Content("New passwords do not match");
