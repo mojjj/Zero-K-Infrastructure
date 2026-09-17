@@ -80,6 +80,33 @@ Migrating forward afterwards fills the new columns from their defaults. Loading 
     docker compose -f db/docker-compose.yml down        # keeps the data
     docker compose -f db/docker-compose.yml down -v     # deletes it
 
+## The committed test fixture
+
+`db/fixture/fixture.sql` is a small, anonymised slice of the real database that **is**
+committed - unlike anything in `db/dumps/`. About 60 KB, loads in a second:
+
+    DB_NAME=zk_test ./db/load-fixture.sh
+
+30 accounts, 67 resources, 150 battles, 375 player rows, 57 ratings. The selection is the
+30 most active accounts since 2024 and the battles in which every non-spectating player is
+one of them, which gives a densely connected set - isolated players never converge, so a
+scattered sample would be useless for rating tests. The result has a real skill spread:
+one account with 85 battles and 59 wins, another with 29 and 4.
+
+**What was removed.** Every identifier is renumbered from 1, so nothing points back at a
+real account, battle or map. Names become `player01`..`player30`, maps `test_map_N`,
+battles `Test battle N`. E-mail addresses, password hashes, Steam IDs and names, countries,
+avatars, aliases, special notes, public keys, lobby versions, purchased DLC, replay file
+names and map author names are dropped entirely, as are the clan and faction links. Login
+timestamps are flattened to fixed dates.
+
+**What was kept**, because it is the shape the rating code reads: who played whom, when,
+for how long, who won, team numbers, Elo changes, and map proportions. Battle start times
+are real, because WHR indexes ratings by day and the spacing matters.
+
+Regenerate it from a loaded database with `./db/make-fixture.py`. The anonymisation is
+done in SQL inside that script, in one place, so it can be read and audited.
+
 ## Towards automated tests
 
 `Tests.Portable` deliberately has no database: it links pure source files and runs on
