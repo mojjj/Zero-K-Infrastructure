@@ -71,6 +71,7 @@
     <Compile Include="Ef\AccountRating.cs" />
     <Compile Include="Ef\WHR\PlayerRating.cs" />
     <Compile Include="Ef\WHR\RatingSystems.cs" />
+    <Compile Include="Ef\WHR\RatingSystems.Dates.cs" />
     <Compile Include="Ef\WHR\WholeHistoryRating.cs" />
     <Compile Include="Enums\AdminLevel.cs" />
     <Compile Include="Enums\DevLevel.cs" />
