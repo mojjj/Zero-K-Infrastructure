@@ -137,6 +137,7 @@
     <Compile Include="UnitsyncResourcePresenceChecker.cs" />
     <Compile Include="Utils.cs" />
     <Compile Include="Utils.Enumerable.cs" />
+    <Compile Include="Imaging\ImageSizing.cs" />
     <Compile Include="UnitSyncLib\ListOption.cs" />
     <Compile Include="UnitSyncLib\Map.cs" />
     <Compile Include="UnitSyncLib\MapInfo.cs" />

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
@@ -8,6 +8,7 @@ using System.Web;
 using System.Web.Mvc;
 using ZkData;
 using PlasmaShared;
+using PlasmaShared.Imaging;
 
 namespace ZeroKWeb.Controllers
 {
@@ -103,7 +104,7 @@ namespace ZeroKWeb.Controllers
 				if (im != null)
 				{
 					im.Save(Server.MapPath(news.ImageRelativeUrl));
-                    Image thumb = im.GetResized(120, (int)Math.Round(120.0 / im.Width * im.Height), InterpolationMode.HighQualityBicubic);
+                    Image thumb = im.GetResized(120, ImageSizing.ProportionalHeight(im.Width, im.Height, 120), InterpolationMode.HighQualityBicubic);
                     thumb.Save(Server.MapPath(news.ThumbRelativeUrl));
 				}
 				scope.Complete();

@@ -9,6 +9,7 @@ using System.Web;
 using System.Web.Mvc;
 using PlasmaShared;
 using ZkData;
+using PlasmaShared.Imaging;
 
 namespace ZeroKWeb.Controllers
 {
@@ -87,7 +88,7 @@ namespace ZeroKWeb.Controllers
 
                 if (im != null)
                 {
-                    Image thumb = im.GetResized(256, (int)Math.Round(256.0 / im.Width * im.Height), InterpolationMode.HighQualityBicubic);
+                    Image thumb = im.GetResized(256, ImageSizing.ProportionalHeight(im.Width, im.Height, 256), InterpolationMode.HighQualityBicubic);
                     var targetPath = Server.MapPath(news.ImageRelativeUrl);
                     var folder = Path.GetDirectoryName(targetPath);
                     if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);

@@ -18,6 +18,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using PlasmaShared.Imaging;
 using Encoder = System.Drawing.Imaging.Encoder;
 
 #endregion
@@ -613,8 +614,11 @@ namespace PlasmaShared
         {
             var stream = new MemoryStream();
 
-            var ratio = (float)image.Size.Width / image.Size.Height;
-            var newSize = ratio > 1 ? new Size(image.Size.Width, (int)(image.Size.Height / ratio)) : new Size((int)(image.Size.Width * ratio), image.Size.Height);
+            // NOTE: this rule re-applies the image's own aspect ratio to an image that is
+            // already in proportion, so non-square images come out distorted, and the size
+            // argument is ignored entirely. Both are preserved deliberately - see
+            // ImageSizing.LegacyToBytesSize and IMAGING-MIGRATION.md.
+            var newSize = ImageSizing.LegacyToBytesSize(image.Size.Width, image.Size.Height);
             var resizedImage = new Bitmap(newSize.Width, newSize.Height, PixelFormat.Format24bppRgb);
             using (var graphics = Graphics.FromImage(resizedImage))
             {
