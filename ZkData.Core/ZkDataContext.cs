@@ -45,10 +45,18 @@ namespace ZkData
             modelBuilder.ApplyEf6CompositeKeys();
             modelBuilder.ApplyEf6IndexAttributes();
 
+            // EF Core maps DateTime to datetime2; EF6 mapped it to datetime, and the
+            // database has datetime.
+            modelBuilder.ApplyEf6DateTimeMapping();
+
             // EF6's fluent relationship configuration, translated - see
             // ZkDataContext.Relationships.cs and the generator beside it.
             ConfigureRelationships(modelBuilder);
             ConfigureRelationshipsByHand(modelBuilder);
+
+            // Column facets read out of db/schema/schema.txt - see
+            // ZkDataContext.ColumnFacets.cs and the generator beside it.
+            ConfigureColumnFacets(modelBuilder);
 
         }
 
@@ -57,6 +65,9 @@ namespace ZkData
 
         /// <summary>The handful the generator leaves alone - ZkDataContext.RelationshipsByHand.cs.</summary>
         partial void ConfigureRelationshipsByHand(ModelBuilder modelBuilder);
+
+        /// <summary>Generated in ZkDataContext.ColumnFacets.cs.</summary>
+        partial void ConfigureColumnFacets(ModelBuilder modelBuilder);
 
         /// <summary>
         /// EF6's change-tracking wrapper, which IEntityAfterChange implementations take.

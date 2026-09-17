@@ -24,9 +24,9 @@ namespace ZkData
     {
         partial void ConfigureRelationships(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<Account>().Property(e => e.Aliases);
-            modelBuilder.Entity<Account>().Property(e => e.Country);
-            modelBuilder.Entity<Account>().Property(e => e.SteamID);
+            modelBuilder.Entity<Account>().Property(e => e.Aliases).IsUnicode(false);
+            modelBuilder.Entity<Account>().Property(e => e.Country).IsUnicode(false);
+            modelBuilder.Entity<Account>().Property(e => e.SteamID).HasPrecision(38, 0);
             modelBuilder.Entity<Account>().HasMany(e => e.AbuseReportsByAccountID).WithOne(e => e.AccountByAccountID).HasForeignKey(e => e.AccountID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Account>().HasMany(e => e.AbuseReportsByReporterAccountID).WithOne(e => e.AccountByReporterAccountID).HasForeignKey(e => e.ReporterAccountID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Account>().HasMany(e => e.AccountBattleAwards).WithOne(e => e.Account).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
@@ -68,7 +68,7 @@ namespace ZkData
             modelBuilder.Entity<Account>().HasOne(e => e.Clan).WithMany(e => e.Accounts).HasForeignKey(e => e.ClanID).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Account>().HasMany(e => e.ForumPosts).WithOne(e => e.Account).HasForeignKey(e => e.AuthorAccountID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Account>().HasMany(e => e.AccountMapBans).WithOne(e => e.Account).HasForeignKey(e => e.AccountID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
-            modelBuilder.Entity<AccountBattleAward>().Property(e => e.AwardKey);
+            modelBuilder.Entity<AccountBattleAward>().Property(e => e.AwardKey).IsUnicode(false);
             modelBuilder.Entity<Campaign>().HasMany(e => e.AccountCampaignJournalProgresses).WithOne(e => e.Campaign).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Campaign>().HasMany(e => e.AccountCampaignProgresses).WithOne(e => e.Campaign).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Campaign>().HasMany(e => e.AccountCampaignVars).WithOne(e => e.Campaign).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
@@ -81,7 +81,7 @@ namespace ZkData
             modelBuilder.Entity<CampaignJournal>().HasMany(e => e.AccountCampaignJournalProgress).WithOne(e => e.CampaignJournal).HasForeignKey(e => new { e.CampaignID, e.JournalID }).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignJournal>().HasMany(e => e.CampaignJournalVars).WithOne(e => e.CampaignJournal).HasForeignKey(e => new { e.CampaignID, e.JournalID }).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignPlanet>().HasKey(x => new { x.CampaignID, x.PlanetID });
-            modelBuilder.Entity<CampaignPlanet>().Property(e => e.Name);
+            modelBuilder.Entity<CampaignPlanet>().Property(e => e.Name).IsUnicode(false);
             modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.AccountCampaignProgress).WithOne(e => e.CampaignPlanet).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.CampaignEvents).WithOne(e => e.CampaignPlanet).HasForeignKey(e => new { e.CampaignID, e.PlanetID }).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.CampaignJournals).WithOne(e => e.CampaignPlanet).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
@@ -91,17 +91,17 @@ namespace ZkData
             modelBuilder.Entity<CampaignVar>().HasMany(e => e.AccountCampaignVars).WithOne(e => e.CampaignVar).HasForeignKey(e => new { e.CampaignID, e.VarID }).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignVar>().HasMany(e => e.CampaignJournalVars).WithOne(e => e.CampaignVar).HasForeignKey(e => new { e.CampaignID, e.RequiredVarID }).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignVar>().HasMany(e => e.CampaignPlanetVars).WithOne(e => e.CampaignVar).HasForeignKey(e => new { e.CampaignID, e.RequiredVarID }).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
-            modelBuilder.Entity<Clan>().Property(e => e.ClanName);
-            modelBuilder.Entity<Clan>().Property(e => e.Description);
-            modelBuilder.Entity<Clan>().Property(e => e.Password);
-            modelBuilder.Entity<Clan>().Property(e => e.Shortcut);
+            modelBuilder.Entity<Clan>().Property(e => e.ClanName).IsUnicode(false);
+            modelBuilder.Entity<Clan>().Property(e => e.Description).IsUnicode(false);
+            modelBuilder.Entity<Clan>().Property(e => e.Password).IsUnicode(false);
+            modelBuilder.Entity<Clan>().Property(e => e.Shortcut).IsUnicode(false);
             modelBuilder.Entity<Clan>().HasMany(e => e.AccountRoles).WithOne(e => e.Clan).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<Clan>().HasMany(e => e.ForumThreads).WithOne(e => e.Clan).HasForeignKey(e => e.RestrictedClanID).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<Clan>().HasMany(e => e.PlanetOwnerHistories).WithOne(e => e.Clan).HasForeignKey(e => e.OwnerClanID).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Clan>().HasMany(e => e.Polls).WithOne(e => e.Clan).HasForeignKey(e => e.RestrictClanID).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CommanderDecorationSlot>().HasMany(e => e.CommanderDecorations).WithOne(e => e.CommanderDecorationSlot).HasForeignKey(e => e.SlotID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CommanderSlot>().HasMany(e => e.CommanderModules).WithOne(e => e.CommanderSlot).HasForeignKey(e => e.SlotID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
-            modelBuilder.Entity<Faction>().Property(e => e.Color);
+            modelBuilder.Entity<Faction>().Property(e => e.Color).IsUnicode(false);
             modelBuilder.Entity<Faction>().HasMany(e => e.FactionTreatiesByProposingFaction).WithOne(e => e.FactionByProposingFactionID).HasForeignKey(e => e.ProposingFactionID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Faction>().HasMany(e => e.FactionTreatiesByAcceptingFaction).WithOne(e => e.FactionByAcceptingFactionID).HasForeignKey(e => e.AcceptingFactionID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Faction>().HasMany(e => e.Planets).WithOne(e => e.Faction).HasForeignKey(e => e.OwnerFactionID).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
@@ -118,16 +118,16 @@ namespace ZkData
             modelBuilder.Entity<ForumThread>().HasMany(e => e.Missions).WithOne(e => e.ForumThread).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<ForumThread>().HasMany(e => e.News).WithOne(e => e.ForumThread).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<ForumThread>().HasMany(e => e.ForumPosts).WithOne(e => e.ForumThread).HasForeignKey(e => e.ForumThreadID).IsRequired(true).OnDelete(DeleteBehavior.Cascade);
-            modelBuilder.Entity<Galaxy>().Property(e => e.MatchMakerState);
-            modelBuilder.Entity<Mission>().Property(e => e.Description);
-            modelBuilder.Entity<Mission>().Property(e => e.DescriptionStory);
-            modelBuilder.Entity<Mission>().Property(e => e.TokenCondition);
+            modelBuilder.Entity<Galaxy>().Property(e => e.MatchMakerState).IsUnicode(false);
+            modelBuilder.Entity<Mission>().Property(e => e.Description).IsUnicode(false);
+            modelBuilder.Entity<Mission>().Property(e => e.DescriptionStory).IsUnicode(false);
+            modelBuilder.Entity<Mission>().Property(e => e.TokenCondition).IsUnicode(false);
             modelBuilder.Entity<Mission>().HasMany(e => e.CampaignPlanets).WithOne(e => e.Mission).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Mission>().HasMany(e => e.Ratings).WithOne(e => e.Mission).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<Mission>().HasMany(e => e.Resources).WithOne(e => e.Mission).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
-            modelBuilder.Entity<News>().Property(e => e.Text);
+            modelBuilder.Entity<News>().Property(e => e.Text).IsUnicode(false);
             modelBuilder.Entity<CampaignEvent>().HasOne(x => x.Campaign).WithMany(x => x.CampaignEvents).HasForeignKey(x => x.CampaignID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
-            modelBuilder.Entity<Planet>().Property(e => e.Name);
+            modelBuilder.Entity<Planet>().Property(e => e.Name).IsUnicode(false);
             modelBuilder.Entity<Planet>().HasMany(e => e.AccountPlanets).WithOne(e => e.Planet).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Planet>().HasMany(e => e.LinksByPlanetID1).WithOne(e => e.PlanetByPlanetID1).HasForeignKey(e => e.PlanetID1).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Planet>().HasMany(e => e.LinksByPlanetID2).WithOne(e => e.PlanetByPlanetID2).HasForeignKey(e => e.PlanetID2).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
@@ -139,13 +139,13 @@ namespace ZkData
             modelBuilder.Entity<Resource>().HasMany(e => e.SpringBattlesByModID).WithOne(e => e.ResourceByModResourceID).HasForeignKey(e => e.ModResourceID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Resource>().HasMany(e => e.SpringBattlesByMapResourceID).WithOne(e => e.ResourceByMapResourceID).HasForeignKey(e => e.MapResourceID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Resource>().HasMany(e => e.BansByAccountID).WithOne(e => e.Resource).HasForeignKey(e => e.BannedMapResourceID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
-            modelBuilder.Entity<ResourceContentFile>().Property(e => e.Md5).IsUnicode(false);
-            modelBuilder.Entity<ResourceContentFile>().Property(e => e.Links);
-            modelBuilder.Entity<ResourceDependency>().Property(e => e.NeedsInternalName);
+            modelBuilder.Entity<ResourceContentFile>().Property(e => e.Md5).IsFixedLength().IsUnicode(false);
+            modelBuilder.Entity<ResourceContentFile>().Property(e => e.Links).IsUnicode(false);
+            modelBuilder.Entity<ResourceDependency>().Property(e => e.NeedsInternalName).IsUnicode(false);
             modelBuilder.Entity<RoleType>().HasMany(e => e.Polls).WithOne(e => e.RoleType).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<RoleType>().HasMany(e => e.RoleTypeHierarchiesByMasterRoleTypeID).WithOne(e => e.MasterRoleType).HasForeignKey(e => e.MasterRoleTypeID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<RoleType>().HasMany(e => e.RoleTypeHierarchiesBySlaveRoleTypeID).WithOne(e => e.SlaveRoleType).HasForeignKey(e => e.SlaveRoleTypeID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
-            modelBuilder.Entity<SpringBattle>().Property(e => e.EngineGameID);
+            modelBuilder.Entity<SpringBattle>().Property(e => e.EngineGameID).IsUnicode(false);
             modelBuilder.Entity<StructureType>().HasMany(e => e.PlanetStructures).WithOne(e => e.StructureType).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<TreatyEffectType>().HasMany(e => e.TreatyEffects).WithOne(e => e.TreatyEffectType).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<Unlock>().HasMany(e => e.Commanders).WithOne(e => e.Unlock).HasForeignKey(e => e.ChassisUnlockID).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
