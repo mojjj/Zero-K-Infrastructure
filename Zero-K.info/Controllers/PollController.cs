@@ -57,7 +57,7 @@ namespace ZeroKWeb.Controllers
 
                         db.SaveChanges();
 
-                        Global.Server.GhostPm(acc.Name, string.Format("You were recalled from the function of {0} by a vote", p.RoleType.Name));
+                        Global.LobbyApi.GhostPm(acc.Name, string.Format("You were recalled from the function of {0} by a vote", p.RoleType.Name));
                     }
                     else
                     {
@@ -101,7 +101,7 @@ namespace ZeroKWeb.Controllers
                                                    yes,
                                                    no));
 
-                            Global.Server.GhostPm(acc.Name, string.Format("Congratulations!! You were elected into a function of {0} by a vote", p.RoleType.Name));
+                            Global.LobbyApi.GhostPm(acc.Name, string.Format("Congratulations!! You were elected into a function of {0} by a vote", p.RoleType.Name));
                         }
                     }
                 }

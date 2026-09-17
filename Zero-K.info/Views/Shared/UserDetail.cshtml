@@ -69,7 +69,7 @@
             <table>
                 <tr>
                     <td>
-                        @if (Model.AccountID != Global.AccountID && Global.Server.IsLobbyConnected(Global.Account.Name))
+                        @if (Model.AccountID != Global.AccountID && Global.LobbyApi.IsLobbyConnected(Global.Account.Name))
                         {
                             <a href="@Html.PrintSpringLink("chat/user/" + Model.Name)" nicetitle="Chat with @Model.Name in the lobby"><img src="/img/chat.png" height="32" /></a><br />
                         }

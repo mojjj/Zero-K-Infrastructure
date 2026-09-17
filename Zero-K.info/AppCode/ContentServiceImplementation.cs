@@ -192,8 +192,8 @@ namespace ZeroKWeb
                     {
                         acc.CanPlayMultiplayer = true;
                         db.SaveChanges();
-                        Global.Server.PublishAccountUpdate(acc);
-                        Global.Server.GhostPm(acc.Name, "Congratulations! You are now authorized to play MultiPlayer games!");
+                        Global.LobbyApi.PublishAccountUpdate(acc);
+                        Global.LobbyApi.GhostPm(acc.Name, "Congratulations! You are now authorized to play MultiPlayer games!");
                     }
                 }
             }
@@ -237,9 +237,9 @@ namespace ZeroKWeb
         async Task<PublicCommunityInfo> Process(GetPublicCommunityInfo r)
         {
             var info = new PublicCommunityInfo();
-            info.NewsItems = Global.Server.NewsListManager.GetCurrentNewsList().NewsItems;
-            info.LadderItems = Global.Server.LadderListManager.GetCurrentLadderList().LadderItems;
-            info.ForumItems = Global.Server.ForumListManager.GetCurrentForumList(null).ForumItems;
+            info.NewsItems = Global.LobbyApi.GetCurrentNewsList().NewsItems;
+            info.LadderItems = Global.LobbyApi.GetCurrentLadderList().LadderItems;
+            info.ForumItems = Global.LobbyApi.GetCurrentForumList(null).ForumItems;
             info.UserCountLimited = MiscVar.ZklsMaxUsers > 0;
             info.MapItems = MemCache.GetCached<List<MapItem>>("featuredMapItems",
                 () =>

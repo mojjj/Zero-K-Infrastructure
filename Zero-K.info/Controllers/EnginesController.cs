@@ -131,7 +131,7 @@ namespace ZeroKWeb.Controllers
             {
                 MiscVar.DefaultEngine = engine;
                 Global.SteamDepotGenerator.RunAll();
-                Global.Server.SetEngine(engine);
+                Global.LobbyApi.SetEngine(engine);
             } else Trace.TraceWarning("Engine {0} not found in the list", engine);
             return RedirectToAction("Index");
         }

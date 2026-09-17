@@ -148,20 +148,15 @@ namespace ZeroKWeb.Controllers
         static CurrentLobbyStats GetCurrentLobbyStats()
         {
             var ret = new CurrentLobbyStats();
-            if (Global.Server != null)
+            if (Global.LobbyApi != null)
             {
-                ret.UsersOnline = Global.Server.ConnectedUsers.Count;
+                ret.UsersOnline = Global.LobbyApi.ConnectedUserCount;
 
-                foreach (var b in Global.Server.Battles.Values)
-                {
-                    if (b.IsInGame)
-                    {
-                        ret.BattlesRunning++;
-                        ret.UsersFighting += b.NonSpectatorCount + b.SpectatorCount;
-                    }
-                }
+                var battleStats = Global.LobbyApi.GetBattleStats();
+                ret.BattlesRunning = battleStats.BattlesRunning;
+                ret.UsersFighting = battleStats.UsersFighting;
 
-                ret.UsersDiscord = Global.Server.GetDiscordUserCount();
+                ret.UsersDiscord = Global.LobbyApi.GetDiscordUserCount();
             }
 
             return ret;
@@ -233,7 +228,7 @@ namespace ZeroKWeb.Controllers
         [AcceptVerbs(HttpVerbs.Post | HttpVerbs.Get)]
         public ActionResult Logon(string login, string password, string referer, string zklogin)
 		{
-		    if (!Global.Server.LoginChecker.VerifyIp(Request.UserHostAddress)) return Content("Too many login failures, access blocked");
+		    if (!Global.LobbyApi.VerifyIp(Request.UserHostAddress)) return Content("Too many login failures, access blocked");
 
 		    var openid = new OpenIdRelyingParty();
             IAuthenticationResponse response = openid.GetResponse();
@@ -262,7 +257,7 @@ namespace ZeroKWeb.Controllers
 		    else
 		    {
 		        Trace.TraceWarning("Invalid login attempt for {0}", login);
-		        Global.Server.LoginChecker.LogIpFailure(Request.UserHostAddress);
+		        Global.LobbyApi.LogIpFailure(Request.UserHostAddress);
 		        return Content("Invalid password");
 		    }
 		}

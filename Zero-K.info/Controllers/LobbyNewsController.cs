@@ -37,7 +37,7 @@ namespace ZeroKWeb.Controllers
             var n = db.LobbyNews.Find(id);
             db.LobbyNews.Remove(n);
             db.SaveChanges();
-            Global.Server.NewsListManager.OnNewsChanged();
+            Global.LobbyApi.OnNewsChanged();
             return RedirectToAction("Index");
         }
 
@@ -95,7 +95,7 @@ namespace ZeroKWeb.Controllers
                 }
                 scope.Complete();
             }
-            Global.Server.NewsListManager.OnNewsChanged();
+            Global.LobbyApi.OnNewsChanged();
 
             return RedirectToAction("Index", "LobbyNews");
         }

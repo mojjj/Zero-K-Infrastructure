@@ -102,7 +102,18 @@ namespace ZeroKWeb
 
         public static PayPalInterface PayPalInterface { get; private set; }
         //public static PlanetWarsMatchMaker PlanetWarsMatchMaker { get; private set; }
+        /// <summary>
+        /// The raw lobby server. Prefer <see cref="LobbyApi"/> - this stays public only for the
+        /// Fixer tool, which still reads the PlanetWars matchmaker directly.
+        /// </summary>
         public static ZkLobbyServer.ZkLobbyServer Server { get; private set; }
+
+        /// <summary>
+        /// The website's view of the lobby server. Prefer this over <see cref="Server"/>: the
+        /// members on the interface are the ones that can survive the server moving to its own
+        /// process, which is what Zero-K.info/HOSTING.md is about. Null until the server starts.
+        /// </summary>
+        public static ZkLobbyServer.ILobbyServerApi LobbyApi { get; private set; }
 
         public static ServerRunner ZkServerRunner { get; private set; }
         public static ForumPostCache ForumPostCache { get; private set; }= new ForumPostCache();
@@ -142,6 +153,7 @@ namespace ZeroKWeb
             var sitePath = mvcApplication.Server.MapPath("~");
             ZkServerRunner = new ServerRunner(sitePath, new PlanetwarsEventCreator());
             Server = ZkServerRunner.ZkLobbyServer;
+            LobbyApi = new ZkLobbyServer.InProcessLobbyServerApi(Server);
 
             Trace.TraceInformation("Starting lobby server");
             ZkServerRunner.Run();
@@ -162,7 +174,7 @@ namespace ZeroKWeb
             AutoRegistrator.NewZkReleaseRegistered += (game, chobby) =>
             {
                 SteamDepotGenerator.RunAll();
-                Server.SetGame(game);
+                LobbyApi.SetGame(game);
             };
 
             AutoRegistrator.RunMainAndMapSyncAsync();
@@ -236,7 +248,7 @@ namespace ZeroKWeb
             PayPalInterface = new PayPalInterface();
             PayPalInterface.Error +=
                 (e) => {
-                    Server.GhostSay(new Say() {
+                    LobbyApi.GhostSay(new Say() {
                         IsEmote = true,
                         Target = "zkdev",
                         User = GlobalConst.NightwatchName,
@@ -248,10 +260,10 @@ namespace ZeroKWeb
                 var message = string.Format("WOOHOO! {0:d} New contribution of {1:F2}€ - for the jar {2}", c.Time, c.Euros,
                     c.ContributionJar.Name);
 
-                Server.GhostSay(new Say() { IsEmote = true, Target = "zk", User = GlobalConst.NightwatchName, Text = message });
+                LobbyApi.GhostSay(new Say() { IsEmote = true, Target = "zk", User = GlobalConst.NightwatchName, Text = message });
 
                 if (c.AccountByAccountID != null) {
-                    Server.GhostSay(new Say() {
+                    LobbyApi.GhostSay(new Say() {
                         IsEmote = true,
                         Target = "zk",
                         User = GlobalConst.NightwatchName,
