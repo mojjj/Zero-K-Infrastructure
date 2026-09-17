@@ -132,7 +132,7 @@ These were cleared ahead of the migration because they are safe on EF6 today:
   were declared inside `GlobalConst.cs`, which needs WCF and therefore cannot compile on
   .NET 9 - so anything referencing those enums inherited that. They are now
   `Shared/PlasmaShared/ModeType.cs` and `PlanetWarsModes.cs`. Same pattern as
-  `GlobalConst.Rating.cs` and `Utils.Enumerable.cs`: the pure part in its own file, the
+  `GlobalConst.Portable.cs` and `Utils.Enumerable.cs`: the pure part in its own file, the
   public API unchanged.
 
 ## What is not a problem
@@ -145,6 +145,40 @@ does not have them:
 - No `MapToStoredProcedures`.
 - No EDMX - the model is code-first.
 - No `DbFunctions` / canonical function calls.
+
+## The port, started
+
+`ZkData.Core/` is the .NET 9 data layer, built alongside the running one. It **links** the
+entity classes out of `ZkData` rather than copying them, so the EF6 model production runs
+and the EF Core model being built cannot drift, and the schema diff measures a real
+difference rather than a transcription error.
+
+Two shims carry the weight, both in `ZkData.Core/Ef6Compat/`:
+
+- **`IndexAttribute`** - EF6's property-level `[Index]`, redefined in EF6's own namespace so
+  the 36 uses compile unchanged, with `IndexConventions` reading them back and declaring
+  the indexes to EF Core. Without this, those 36 lines would have to change twice and
+  production would break in between.
+- **`System.Data.Entity`** - `Include`, `AsNoTracking` and `EntityState`, mapped onto EF
+  Core. The surface needed turned out to be tiny, because entity classes do little data
+  access themselves.
+
+`ZkDataContext` in that project deliberately carries the same name and namespace as the
+EF6 one: eight entity classes call `new ZkDataContext()` from their own logic, so any other
+name would mean editing them.
+
+**Where it stands:** everything compiles except 15 errors in 6 files. They are:
+
+| Kind | Count | Fix |
+|---|---|---|
+| more pure constants still trapped in `GlobalConst.cs` | 7 | lift them to `GlobalConst.Portable.cs`, as ~25 already were |
+| `Database.CommandTimeout` | 2 | EF Core spells it `SetCommandTimeout` |
+| `EntityState` assigned into EF Core's change tracker | 2 | the shim boundary; enums take no conversion operators, so these need a cast by hand |
+| `PriorityScheduler`, `Secrets` not yet linked | 2 | link them |
+| `PlanetStructure.GenerateResized` uses `Image` and `InterpolationMode` directly | 2 | route through the imaging seam - `Images.Processor.SaveResized` |
+
+That last one is where the two blockers meet: an entity class that cannot reach .NET 9
+because it resizes an image. It is exactly what `IImageProcessor` exists for.
 
 ## Order of work
 

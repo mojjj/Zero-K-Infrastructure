@@ -108,32 +108,23 @@ namespace ZkData
         public const int SteamAppID = 334920;
         public const int ZkLobbyUserCpu = 6667;
         public const int ZkLobbyUserCpuLinux = 6668;
-        public const int MaxUsernameLength = 25;
         public const int CommanderProfileCount = 6;
         public const int NumCommanderLevels = 5;
         public const int MaxCommanderNameLength = 20;
 
-        public const string DefaultEngineOverride = "104.0.1-287-gf7b0fcc"; // hack for ZKL using tasclient's engine - override here for missions etc
 
         public const int MinDurationForXP = 240;    // seconds
-        public const int MinDurationForElo = 60;
         public const int MinDurationForPlanetwars = 0;
         public const int MaxDurationForPlanetwars = 60*60*3; // 3 hours
 
         public const int LadderSize = 50; // Amount of players shown on ladders
         public const float LadderUpdatePeriod = 1; //Ladder is fully updated every X hours
-        public const float LadderEloMaxChange = 50;
-        public const float LadderEloMinChange = 1;
         public const float LadderEloClassicEloK = 32f; //K value of classic elo
         public const float LadderEloSmoothingFactor = 0.8f; //1 for change as fast as whr, 0 for no change
-        public const int MaxLevelForMalus = 5;
-        public const float MaxMalus = 400;
 
         public const int MapBansPerPlayer = 6; // Allow users to enter this many bans in UI
         public const float MaximumPercentageOfBannedMaps = 0.75f; // Do not ban more than 75% of all maps regardless of player or ban count
 
-        public const int XpForMissionOrBots = 25;
-        public const int XpForMissionOrBotsVictory = 50;
 
         public const double EloWeightMax = 6;
         public const double EloWeightLearnFactor = 10;
@@ -153,19 +144,13 @@ namespace ZkData
         
         public const string LobbyAccessCookieName = "zk_lobby";
 
-        public const double PlanetMetalPerTurn = 1;
-        public const double PlanetWarsEnergyToMetalRatio = 0.0;
-        public const double PlanetWarsMaximumIP = 100.0; //maximum IP on each planet
         public const int PlanetWarsVictoryPointsToWin = 50;
         public const int VictoryPointDecay = 1;
         public const int BaseInfluencePerBattle = 32;
         public const int InfluencePerAttacker = 1;
         public const double PlanetWarsAttackerMetal = 100;
         public const double PlanetWarsDefenderMetal = 100;
-        public const int InfluencePerShip = 1;
         public const double InfluencePerTech = 1;
-        public const double InfluenceDecay = 1;
-        public const double InfluenceToCapturePlanet = PlanetWarsMaximumIP / 2 + 0.1;
         public const double InfluenceToLosePlanet = 10;
         public const double DropshipsForFullWarpIPGain = 10;
         public const double SelfDestructRefund = 0.5;
@@ -173,14 +158,10 @@ namespace ZkData
         public const double BomberKillIpChance = 1.2;
         public const double BomberKillIpAmount = 1;
         public const double StructureIngameDisableTimeMult = 2;
-        public const int DefaultDropshipCapacity = 50;
-        public const int DefaultBomberCapacity = 50;
         public const int AttackPointsForVictory = 2;
         public const int AttackPointsForDefeat = 1;
-        public static readonly int? MaxClanSkilledSize = null;
         public const int FactionChannelMinLevel = 2;
         public const bool RotatePWMaps = false;
-        public const bool RequireWormholeToTravel = true;
         public const bool CanChangeClanFaction = true;
         public const double MaxPwEloDifference = 120;
 
@@ -195,13 +176,8 @@ namespace ZkData
         public const double EurosToKudos = 10.0;
         public const string TeamEmail = "Zero-K team <team@zero-k.info>";
 
-        public const int KudosForBronze = 100;
-        public const int KudosForSilver = 250;
-        public const int KudosForGold = 500;
-        public const int KudosForDiamond = 1000;
 
         public const int ForumPostsPerPage = 20;
-        public const int MinLevelForForumVote = 2;
         public const int MinNetKarmaToVote = -30;
         public const int PostVoteHideThreshold = -6;
         public const bool OnlyAdminsSeePostVoters = false;
@@ -210,10 +186,7 @@ namespace ZkData
         public const int PlanetWarsMaxTeamsize = 4;
         public const double PlanetWarsDefenderWinKillCcMultiplier = 0.2;
         public const double PlanetWarsAttackerWinLoseCcMultiplier = 0.5;
-        public const int MinPlanetWarsLevel = 5;
-        public const int MinPlanetWarsElo = -1000;
 
-        public const int WikiEditLevel = 20;
 
         public const int TcpLingerStateSeconds = 5;
         public const bool TcpLingerStateEnabled = true;
@@ -260,8 +233,6 @@ namespace ZkData
 
         public static string UnitSyncEngine = "unitsync";
 
-        public static int SteamContributionJarID = 2;
-        public static Dictionary<ulong, int> DlcToKudos = new Dictionary<ulong, int>() { { 842950, 100 }, { 842951, 250 }, { 842952, 500 } };
 
         public static DateTime SteamRelease = new DateTime(2018, 4, 27, 8, 0, 0, DateTimeKind.Utc);
         public static bool IsLongAfterSteam => DateTime.UtcNow.Subtract(SteamRelease).TotalDays > 14;

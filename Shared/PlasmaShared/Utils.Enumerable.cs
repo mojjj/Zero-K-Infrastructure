@@ -1,5 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace PlasmaShared
 {
@@ -17,6 +21,64 @@ namespace PlasmaShared
             {
                 action(item);
             }
+        }
+        public static IEnumerable<Type> GetAllTypesWithAttribute<T>()
+        {
+            var allowedAssemblies = new string[]
+            {
+                typeof(T).Assembly.GetName().Name,
+                Assembly.GetEntryAssembly()?.GetName().Name, Assembly.GetExecutingAssembly().GetName().Name,
+                Assembly.GetCallingAssembly().GetName().Name
+            };
+            
+            return from a in AppDomain.CurrentDomain.GetAssemblies().Where(x=> allowedAssemblies.Contains(x.GetName().Name)).ToList().AsParallel()
+                   from t in a.GetLoadableTypes()
+                   let attributes = t.GetCustomAttributes(typeof(T), true)
+                   where attributes != null && attributes.Length > 0
+                   select t;
+        }
+        public static IEnumerable<Type> GetLoadableTypes(this Assembly assembly)
+        {
+            if (assembly == null) throw new ArgumentNullException(nameof(assembly));
+            try
+            {
+                return assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException e)
+            {
+                return e.Types.Where(t => t != null);
+            }
+        }
+        public static string EscapePath(this string path)
+        {
+            if (String.IsNullOrEmpty(path)) return path;
+            var escaped = new StringBuilder();
+            foreach (var c in path)
+            {
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '(' || c == ')' || c == '.') escaped.Append(c);
+                else escaped.Append('_');
+            }
+            return escaped.ToString();
+        }
+        public static string StringJoin(this IEnumerable<string> enumeration)
+        {
+            return string.Join(", ", enumeration);
+        }
+        public static string HashLobbyPassword(string pass)
+        {
+            var md5 = (MD5)HashAlgorithm.Create("MD5");
+            md5.Initialize();
+            var hashed = md5.ComputeHash(Encoding.ASCII.GetBytes(pass ?? ""));
+            return Convert.ToBase64String(hashed);
+        }
+        public static bool ValidLobbyNameCharacter(char c)
+        {
+            if (c >= 'a' && c <= 'z') return true;
+            if (c >= 'A' && c <= 'Z') return true;
+            if (c >= '0' && c <= '9') return true;
+            if (c == '_') return true;
+            if (c == '[' || c == ']') return true;
+            return false;
         }
     }
 }

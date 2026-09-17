@@ -88,7 +88,7 @@ identical and the Framework build green:
 
 - `ZkData/Ef/WHR/RatingSystems.Dates.cs` - the two pure day-conversion helpers, out of an
   EF-coupled class.
-- `Shared/PlasmaShared/GlobalConst.Rating.cs` and `ModeType.cs` - the rating constants and
+- `Shared/PlasmaShared/GlobalConst.Portable.cs` and `ModeType.cs` - the rating constants and
   the mode enum, out of the file holding the service factory.
 - `Shared/PlasmaShared/Utils.Enumerable.cs` - the `ForEach` extension, out of the file that
   pulls in `System.Drawing`.
