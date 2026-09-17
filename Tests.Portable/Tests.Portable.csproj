@@ -43,6 +43,13 @@
     <Compile Include="..\Zero-K.info\AppCode\GalaxyMapGeometry.cs" Link="Linked\GalaxyMapGeometry.cs" />
   </ItemGroup>
 
+  <!-- Diagrams vector math. Uses System.Drawing.Point, which lives in
+       System.Drawing.Primitives and is part of the .NET 9 shared framework - unlike the
+       imaging types in System.Drawing.Common. Linking it here proves that. -->
+  <ItemGroup>
+    <Compile Include="..\Shared\PlasmaShared\Diagrams\Vector.cs" Link="Linked\Vector.cs" />
+  </ItemGroup>
+
   <!-- support types the above need -->
   <ItemGroup>
     <Compile Include="..\Shared\PlasmaShared\ISpringieService\RatingCategory.cs" Link="Linked\RatingCategory.cs" />

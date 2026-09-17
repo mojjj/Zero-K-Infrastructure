@@ -13,7 +13,7 @@ docker run --rm -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:9.0 \
     dotnet test Tests.Portable/Tests.Portable.csproj
 ```
 
-33 tests, about 150 ms.
+41 tests, about 150 ms.
 
 CI runs exactly this on every pull request - `.github/workflows/test_portable.yml`, on a
 stock Linux runner, no Windows and no database.
@@ -58,6 +58,8 @@ player's displayed rating, and a port that shifts it would do so silently.
 - `RatingConstantsTests` - the shape of the drift constants.
 - `GalaxyMapGeometryTests` - the PlanetWars galaxy map link layout (Phase 5), which used
   to be inline in three Razor views and emitted as JavaScript, so nothing could check it.
+- `VectorTests` - polar-coordinate maths from the diagram renderer, linked both to test it
+  and to demonstrate that `System.Drawing.Point` is fine on .NET 9.
 
 These were checked against a deliberate mutation: changing the Elo scale constant from
 `ln(10)/400` to `ln(10)/200` fails three of them.
@@ -69,7 +71,7 @@ Each of these is why a file is *not* in the list, and each is real work for Phas
 | Blocker | Where | Note |
 |---|---|---|
 | WCF (`System.ServiceModel`) | `GlobalConst.cs`, via `IContentServiceClient` | Server-side WCF has no in-box .NET 9 successor. A constants file is unportable because it also holds a service factory. |
-| `System.Drawing` | `Utils.cs` | On .NET 9 this is `System.Drawing.Common`, which is **Windows-only**. Image resizing in a 1045-line utility grab bag. |
+| `System.Drawing.Common` | `Utils.cs` and 12 others | The **imaging** types only - `Bitmap`, `Graphics`, `Image` - which are Windows-only on .NET 9. The geometry types (`Point`, `Size`, `Rectangle`) are in `System.Drawing.Primitives` and work fine; `Linked/Vector.cs` proves it. See `Shared/PlasmaShared/IMAGING-MIGRATION.md`. |
 | Entity Framework 6 | `RatingSystems.cs`, `WholeHistoryRating.cs` | EF6 does not run on .NET 9; EF Core is a rewrite of the data layer, not a retarget. |
 
 Three small splits were made to get the WHR core linkable, each keeping the public API
