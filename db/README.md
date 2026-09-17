@@ -80,6 +80,27 @@ Migrating forward afterwards fills the new columns from their defaults. Loading 
     docker compose -f db/docker-compose.yml down        # keeps the data
     docker compose -f db/docker-compose.yml down -v     # deletes it
 
+## The schema snapshot
+
+`db/schema/schema.txt` records the schema the EF6 migrations produce - 91 tables, 746
+columns, 267 indexes, 163 foreign keys - in a sorted, normalised form that diffs cleanly.
+
+    ./db/dump-schema.py            # regenerate it
+    ./db/dump-schema.py --check    # compare a live database against it
+
+It is deliberately not SQL Server's own scripting output, which carries generated
+constraint names and storage settings that change between runs and versions. It records
+what a model has to get right and nothing else.
+
+Two uses. It is the contract the EF Core port must reproduce
+(`ZkData/EFCORE-MIGRATION.md`), and it turns schema drift into a diff on a pull request -
+CI checks it on every one. The live database being behind this repository is what made the
+BCP dump refuse to load, and nothing in the repository recorded that; this is the fix for
+that class of surprise.
+
+If a migration changes the schema on purpose, regenerate and commit the snapshot in the
+same pull request.
+
 ## The committed test fixture
 
 `db/fixture/fixture.sql` is a small, anonymised slice of the real database that **is**

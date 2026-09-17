@@ -55,6 +55,12 @@ jobs:
       - name: Create the schema
         run: ./db/dbsetup.sh latest
 
+      # The migrations are the only thing that should change this schema. If a pull
+      # request changes it without updating the snapshot, that is either an accident or a
+      # deliberate change someone forgot to record - both worth stopping for.
+      - name: Check the schema against the committed snapshot
+        run: ./db/dump-schema.py --check
+
       - name: Load the test fixture
         run: ./db/load-fixture.sh
 
