@@ -43,7 +43,6 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Data" />
     <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="System.Data.Linq" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Numerics" />
     <Reference Include="System.Runtime.Serialization" />
@@ -76,11 +75,6 @@
     <Compile Include="AppCode\MediaWikiRecentChanges.cs" />
     <Compile Include="AppCode\UniGrid\Col.cs" />
     <Compile Include="AppCode\UniGrid\HCol.cs" />
-    <Compile Include="AppCode\ModStatsDb.designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ModStatsDb.dbml</DependentUpon>
-    </Compile>
     <Compile Include="AppCode\UniGrid\IUniGrid.cs" />
     <Compile Include="AppCode\UniGrid\IUniGridCol.cs" />
     <Compile Include="AppCode\UniGrid\UniGrid.cs" />
@@ -107,7 +101,6 @@
     <Compile Include="Controllers\PlanetwarsAdminController.cs" />
     <Compile Include="Controllers\ReplaysController.cs" />
     <Compile Include="Controllers\TourneyController.cs" />
-    <Compile Include="Controllers\UnitStatsController.cs" />
     <Compile Include="ApiControllers\WhrController.cs" />
     <Compile Include="ForumParser\ForumWikiParser.cs" />
     <Compile Include="ForumParser\LinkedListNodeBackEnumerator.cs" />
@@ -170,38 +163,16 @@
     <Compile Include="Controllers\UsersController.cs" />
     <Compile Include="Controllers\WikiController.cs" />
     <Compile Include="Models\CommentList.cs" />
-    <Compile Include="ResourceList.aspx.cs">
-      <DependentUpon>ResourceList.aspx</DependentUpon>
-      <SubType>ASPXCodeBehind</SubType>
-    </Compile>
-    <Compile Include="ResourceList.aspx.designer.cs">
-      <DependentUpon>ResourceList.aspx</DependentUpon>
-    </Compile>
-    <Compile Include="ErrorReports.aspx.cs">
-      <DependentUpon>ErrorReports.aspx</DependentUpon>
-      <SubType>ASPXCodeBehind</SubType>
-    </Compile>
-    <Compile Include="ErrorReports.aspx.designer.cs">
-      <DependentUpon>ErrorReports.aspx</DependentUpon>
-    </Compile>
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Compile>
     <Compile Include="AppCode\ResourceLinkProvider.cs" />
-    <Compile Include="AppCode\MessageBox.cs" />
     <Compile Include="MissionService.svc.cs">
       <DependentUpon>MissionService.svc</DependentUpon>
     </Compile>
     <Compile Include="AppCode\PlasmaServer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="ResourceDetail.aspx.cs">
-      <DependentUpon>ResourceDetail.aspx</DependentUpon>
-      <SubType>ASPXCodeBehind</SubType>
-    </Compile>
-    <Compile Include="ResourceDetail.aspx.designer.cs">
-      <DependentUpon>ResourceDetail.aspx</DependentUpon>
-    </Compile>
     <Compile Include="Controllers\PostHistoryController.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -212,15 +183,12 @@
     <Content Include="favicon.png" />
     <Content Include="Img\**" />
     <Content Include="lobby\index.html" />
-    <Content Include="ResourceList.aspx" />
-    <Content Include="ErrorReports.aspx" />
     <Content Include="Global.asax">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Img\cup.png" />
     <Content Include="Img\Loader.gif" />
     <Content Include="MissionService.svc" />
-    <Content Include="ResourceDetail.aspx" />
     <Content Include="Scripts\browser-css.js" />
     <Content Include="OpenSans-Semibold.ttf" />
     <Content Include="OpenSans-Semibold.eot" />
@@ -276,17 +244,6 @@
     <Content Include="Views\Mods\GameModesIndex.cshtml" />
     <Content Include="Views\Maps\PlanetImageSelect.cshtml" />
     <Content Include="App_Code\GridHelpers.cshtml" />
-    <None Include="AppCode\ModStatsDb.dbml">
-      <Generator>MSLinqToSQLGenerator</Generator>
-      <LastGenOutput>ModStatsDb.designer.cs</LastGenOutput>
-      <SubType>Designer</SubType>
-    </None>
-    <None Include="AppCode\DataClasses1.dbml.views">
-      <DependentUpon>ModStatsDb.dbml</DependentUpon>
-    </None>
-    <None Include="AppCode\ModStatsDb.dbml.views">
-      <DependentUpon>ModStatsDb.dbml</DependentUpon>
-    </None>
     <Content Include="Img\fanart\zk_logo_alt.xcf" />
     <Content Include="Img\structures\defgrid.xcf" />
     <Content Include="Img\structures\superweapon.xcf" />
@@ -328,7 +285,6 @@
     <Content Include="Views\Poll\PollUserVotes.cshtml" />
     <Content Include="Views\Users\UserRoleList.cshtml" />
     <Content Include="Views\Forum\PostList.cshtml" />
-    <Content Include="Views\UnitStats\UnitStatsDetail.cshtml" />
     <Content Include="Views\Home\UserTooltip.cshtml" />
     <Content Include="Views\Shared\DisplayTemplates\Punishment.cshtml" />
     <Content Include="Views\Users\AdminUserDetail.cshtml" />
@@ -483,9 +439,6 @@
     <Service Include="{3259AA49-8AA1-44D3-9025-A0B520596A8C}" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="AppCode\ModStatsDb.dbml.layout">
-      <DependentUpon>ModStatsDb.dbml</DependentUpon>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Antlr" Version="3.5.0.2" />
