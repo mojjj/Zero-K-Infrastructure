@@ -10,6 +10,7 @@ using System.Web;
 using System.Web.Mvc;
 using PlasmaShared;
 using ZkData;
+using PlasmaShared.Imaging;
 
 namespace ZeroKWeb.Controllers
 {
@@ -274,9 +275,10 @@ namespace ZeroKWeb.Controllers
 
                 if (image != null && image.ContentLength > 0)
                 {
-                    var im = Image.FromStream(image.InputStream);
-                    if (im.Width != 64 || im.Height != 64) im = im.GetResized(64, 64, InterpolationMode.HighQualityBicubic);
-                    im.Save(newImageUrl);
+                    var uploaded = Images.ReadAll(image.InputStream);
+                    if (Images.Processor.Measure(uploaded) != new Size(64, 64))
+                        Images.Processor.SaveResized(uploaded, new Size(64, 64), newImageUrl);
+                    else Images.Processor.Save(uploaded, newImageUrl);
                 }
                 else if (shortcutChanged)
                 {
@@ -294,8 +296,7 @@ namespace ZeroKWeb.Controllers
 
                 if (bgimage != null && bgimage.ContentLength > 0)
                 {
-                    var im = Image.FromStream(bgimage.InputStream);
-                    im.Save(newBGImageUrl);
+                    Images.Processor.Save(Images.ReadAll(bgimage.InputStream), newBGImageUrl);
                 }
                 else if (shortcutChanged)
                 {
@@ -370,14 +371,14 @@ namespace ZeroKWeb.Controllers
 
                 if (image != null && image.ContentLength > 0)
                 {
-                    var im = Image.FromStream(image.InputStream);
-                    if (im.Width != 64 || im.Height != 64) im = im.GetResized(64, 64, InterpolationMode.HighQualityBicubic);
-                    im.Save(Server.MapPath(clan.GetImageUrl()));
+                    var uploaded = Images.ReadAll(image.InputStream);
+                    if (Images.Processor.Measure(uploaded) != new Size(64, 64))
+                        Images.Processor.SaveResized(uploaded, new Size(64, 64), Server.MapPath(clan.GetImageUrl()));
+                    else Images.Processor.Save(uploaded, Server.MapPath(clan.GetImageUrl()));
                 }
                 if (bgimage != null && bgimage.ContentLength > 0)
                 {
-                    var im = Image.FromStream(bgimage.InputStream);
-                    im.Save(Server.MapPath(clan.GetBGImageUrl()));
+                    Images.Processor.Save(Images.ReadAll(bgimage.InputStream), Server.MapPath(clan.GetBGImageUrl()));
                 }
 
                 db.Events.InsertOnSubmit(PlanetwarsEventCreator.CreateEvent("New clan {0} formed by {1}", clan, acc));

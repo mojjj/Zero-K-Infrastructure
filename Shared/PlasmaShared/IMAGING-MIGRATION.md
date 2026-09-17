@@ -90,10 +90,25 @@ whether to re-process the existing ones is a decision, not a refactor.
    by 14 tests. It is pure, uses only `System.Drawing.Primitives`, and therefore already
    runs on .NET 9. Sizing is where a change silently distorts an image, so it is worth
    holding still before anything underneath it moves.
-1. Put an interface over the remaining `Utils.cs` pixel operations; keep `System.Drawing`
-   behind it. Note that `GetResized` and `GetResizedWithCache` are used mostly by
-   `ZeroKLobby`, a WinForms client that is not part of this port and keeps System.Drawing
-   either way - so the seam only needs to cover the server-side callers.
+1. **Done:** `Imaging/IImageProcessor.cs` is the seam - `Measure`, `Save`, `SaveResized`,
+   in terms of encoded bytes and `System.Drawing.Size`. Nothing in it names `Bitmap`,
+   `Image` or `Graphics`, so it compiles on .NET 9; it is linked into `Tests.Portable` and
+   exercised there, which is what stops someone quietly adding an `Image` to it.
+   `SystemDrawingImageProcessor` implements it as a thin wrapper that does exactly what
+   each call site did before, so no pixels changed.
+
+   Migrated to it: clan avatar and background upload (both actions in `ClansController`),
+   the news thumbnail, the lobby news thumbnail. Five call sites; `Images.Processor` is the
+   one place an ImageSharp implementation gets substituted.
+
+   Not migrated, and why:
+   - `PlanetwarsController.SaveJpeg` renders a galaxy image in memory with `Graphics` and
+     saves the `Bitmap` it already holds. Nothing crosses a byte boundary, so the seam does
+     not fit until the renderer itself is ported.
+   - `AutoRegistrator` / `UnitSync` receive `Bitmap` objects from a native library. That is
+     the interop rewrite described above, not a call-site change.
+   - `GetResized` / `GetResizedWithCache` in `ZeroKLobby`: a WinForms client that is not
+     part of this port and keeps System.Drawing either way.
 2. Add an ImageSharp implementation beside it; switch the callers that only resize and
    save. Comparable output can be checked by eye on a test deployment.
 3. `ResizedImageCache` - its key is an `Image`, so it changes with whatever type replaces

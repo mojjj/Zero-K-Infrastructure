@@ -57,10 +57,10 @@ namespace ZeroKWeb.Controllers
                 news.Title=  nn.Title;
                 news.Text = nn.Text;
 
-				Image im = null;
+				byte[] uploadedImage = null;
 				if (image != null && image.ContentLength > 0)
 				{
-					im = Image.FromStream(image.InputStream);
+					uploadedImage = Images.ReadAll(image.InputStream);
 					news.ImageExtension = Path.GetExtension(image.FileName);
 					news.ImageContentType = image.ContentType;
 					news.ImageLength = image.ContentLength;
@@ -101,11 +101,13 @@ namespace ZeroKWeb.Controllers
                     db.SaveChanges();
                 }
 
-				if (im != null)
+				if (uploadedImage != null)
 				{
-					im.Save(Server.MapPath(news.ImageRelativeUrl));
-                    Image thumb = im.GetResized(120, ImageSizing.ProportionalHeight(im.Width, im.Height, 120), InterpolationMode.HighQualityBicubic);
-                    thumb.Save(Server.MapPath(news.ThumbRelativeUrl));
+					Images.Processor.Save(uploadedImage, Server.MapPath(news.ImageRelativeUrl));
+					var uploadedSize = Images.Processor.Measure(uploadedImage);
+					Images.Processor.SaveResized(uploadedImage,
+					    new Size(120, ImageSizing.ProportionalHeight(uploadedSize.Width, uploadedSize.Height, 120)),
+					    Server.MapPath(news.ThumbRelativeUrl));
 				}
 				scope.Complete();
 			}
