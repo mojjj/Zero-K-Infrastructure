@@ -1,4 +1,4 @@
-#region using
+﻿#region using
 
 using System;
 using System.Collections.Generic;
@@ -27,7 +27,7 @@ namespace PlasmaShared
     /// <summary>
     /// General purpose static functions here
     /// </summary>
-    public static class Utils
+    public static partial class Utils
     {
         public static void SafeDispose(this IDisposable o)
         {
@@ -43,14 +43,6 @@ namespace PlasmaShared
         public static IEnumerable<Indexed<T>> ToIndexedList<T>(this IEnumerable<T> enumeration)
         {
             return enumeration.Select((x, i) => new Indexed<T>(x, i));
-        }
-
-        public static void ForEach<T>(this IEnumerable<T> enumeration, Action<T> action)
-        {
-            foreach (T item in enumeration)
-            {
-                action(item);
-            }
         }
 
         public static IEnumerable<TSource> DistinctBy<TSource, TKey>(this IEnumerable<TSource> source, Func<TSource, TKey> keySelector)

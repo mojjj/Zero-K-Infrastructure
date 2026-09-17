@@ -80,6 +80,8 @@
     <Compile Include="EventArgs.cs" />
     <Compile Include="EventExtensions.cs" />
     <Compile Include="GlobalConst.cs" />
+    <Compile Include="GlobalConst.Rating.cs" />
+    <Compile Include="ModeType.cs" />
     <Compile Include="IpHelpers.cs" />
     <Compile Include="ISpringieService\RatingCategory.cs" />
     <Compile Include="PriorityScheduler.cs" />
@@ -134,6 +136,7 @@
     <Compile Include="UnitSyncLib\ModMissionSlot.cs" />
     <Compile Include="UnitsyncResourcePresenceChecker.cs" />
     <Compile Include="Utils.cs" />
+    <Compile Include="Utils.Enumerable.cs" />
     <Compile Include="UnitSyncLib\ListOption.cs" />
     <Compile Include="UnitSyncLib\Map.cs" />
     <Compile Include="UnitSyncLib\MapInfo.cs" />
