@@ -7,7 +7,6 @@ using System.Text.RegularExpressions;
 using System.Web.Helpers;
 using System.Web.Mvc;
 using System.Web.UI;
-using Microsoft.Linq.Translations;
 using PlasmaShared;
 using Ratings;
 using ZkData;

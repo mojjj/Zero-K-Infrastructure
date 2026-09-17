@@ -109,7 +109,8 @@ Windows runner, and still has to.
 What is still blocked, in the order it has to be unblocked:
 
 1. **EF6.** `ZkDataContext` and 117 migrations. EF Core is a rewrite of the data layer,
-   not a retarget, and everything else waits behind it.
+   not a retarget, and everything else waits behind it. Measured in
+   `ZkData/EFCORE-MIGRATION.md`, along with the two blockers already cleared.
 2. **`System.Drawing`.** Used for image resizing in `Shared/PlasmaShared/Utils.cs`. On
    .NET 9 it lives in `System.Drawing.Common`, which is Windows-only. Needs ImageSharp or
    SkiaSharp.
