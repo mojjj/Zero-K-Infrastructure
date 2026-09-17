@@ -1,0 +1,98 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The .NET 9 port of the data layer, built alongside the running one rather than in
+    place of it.
+
+    It LINKS the entity classes out of ZkData instead of copying them. That is the whole
+    strategy: the same source files feed the EF6 model that production runs and the EF Core
+    model being built, so the two cannot drift while the port is in progress, and the
+    schema diff against db/schema/schema.txt measures a real difference rather than a
+    transcription error.
+
+    Progress is measured, not asserted:
+        ./db/efcore-schema.sh            builds a database from this model and diffs it
+                                         against the schema the EF6 migrations produce
+
+    Nothing references this project yet. It is not in Zero-K.sln.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>ZkData.Core</RootNamespace>
+    <!-- linked legacy sources: their warnings belong to the original project -->
+    <NoWarn>$(NoWarn);CS0618;CS0649;CS0168;CS1998;CS0108;CS0114;CS0169;CS0067</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
+  </ItemGroup>
+
+  <!-- the entity classes, linked from ZkData and unmodified -->
+  <ItemGroup>
+    <!--
+      DynamicConfig is excluded: it assigns EF6's EntityState to EF Core's change tracker,
+      which the shim cannot bridge because enums take no conversion operators. It is the
+      one entity class that needs porting by hand.
+    -->
+    <Compile Include="..\ZkData\Ef\*.cs" Exclude="..\ZkData\Ef\DynamicConfig.cs" Link="Linked\Ef\%(Filename).cs" />
+    <Compile Include="..\ZkData\Enums\*.cs" Link="Linked\Enums\%(Filename).cs" />
+  </ItemGroup>
+
+  <!-- supporting types those entities need, also linked -->
+  <ItemGroup>
+    <Compile Include="..\Shared\PlasmaShared\ISpringieService\RatingCategory.cs" Link="Linked\RatingCategory.cs" />
+    <Compile Include="..\Shared\PlasmaShared\ISpringieService\AutohostMode.cs" Link="Linked\AutohostMode.cs" />
+    <Compile Include="..\Shared\PlasmaShared\MapSupportLevel.cs" Link="Linked\MapSupportLevel.cs" />
+    <Compile Include="..\Shared\PlasmaShared\GlobalConst.Portable.cs" Link="Linked\GlobalConst.Portable.cs" />
+    <Compile Include="..\Shared\PlasmaShared\ModeType.cs" Link="Linked\ModeType.cs" />
+    <Compile Include="..\Shared\PlasmaShared\PlanetWarsModes.cs" Link="Linked\PlanetWarsModes.cs" />
+    <Compile Include="..\Shared\PlasmaShared\Utils.Enumerable.cs" Link="Linked\Utils.Enumerable.cs" />
+    <Compile Include="..\Shared\PlasmaShared\Imaging\ImageSizing.cs" Link="Linked\ImageSizing.cs" />
+    <Compile Include="..\Shared\PlasmaShared\Imaging\IImageProcessor.cs" Link="Linked\IImageProcessor.cs" />
+    <Compile Include="..\Shared\PlasmaShared\Imaging\ImageSharpImageProcessor.cs" Link="Linked\ImageSharpImageProcessor.cs" />
+    <Compile Include="..\Shared\PlasmaShared\IContentService\ClientMissionInfo.cs" Link="Linked\ClientMissionInfo.cs" />
+    <Compile Include="..\Shared\PlasmaShared\CommandJsonSerializer.cs" Link="Linked\CommandJsonSerializer.cs" />
+    <Compile Include="..\Shared\ZkData\ResourceType.cs" Link="Linked\ResourceType.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\PlayerRating.cs" Link="Linked\WHR\PlayerRating.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\MapRatings.cs" Link="Linked\WHR\MapRatings.cs" />
+    <Compile Include="..\ZkData\SpringFilesUnitsyncAttempt.cs" Link="Linked\SpringFilesUnitsyncAttempt.cs" />
+    <Compile Include="..\ZkData\SteamWebApi.cs" Link="Linked\SteamWebApi.cs" />
+    <Compile Include="..\Shared\PlasmaShared\Relation.cs" Link="Linked\Relation.cs" />
+    <Compile Include="..\Shared\LobbyClient\Protocol\Messages.cs" Link="Linked\Protocol\Messages.cs" />
+    <Compile Include="..\Shared\LobbyClient\Protocol\MatchMakerMessages.cs" Link="Linked\Protocol\MatchMakerMessages.cs" />
+    <Compile Include="..\Shared\LobbyClient\Protocol\PartyMessages.cs" Link="Linked\Protocol\PartyMessages.cs" />
+    <Compile Include="..\Shared\LobbyClient\UserBattleStatus.cs" Link="Linked\UserBattleStatus.cs" />
+    <Compile Include="..\Shared\LobbyClient\Spring.SpringBattleContext.cs" Link="Linked\SpringBattleContext.cs" />
+    <Compile Include="..\Shared\PlasmaShared\IContentService\IContentService.cs" Link="Linked\ContentServiceDtos.cs" />
+    <Compile Include="..\ZkData\LogEntry.cs" Link="Linked\LogEntry.cs" />
+    <Compile Include="..\ZkData\IPlanetwarsEventCreator.cs" Link="Linked\IPlanetwarsEventCreator.cs" />
+    <Compile Include="..\ZkData\IEntityAfterChange.cs" Link="Linked\IEntityAfterChange.cs" />
+    <Compile Include="..\ZkData\IEntityBeforeChange.cs" Link="Linked\IEntityBeforeChange.cs" />
+    <Compile Include="..\Shared\PlasmaShared\IContentService\ResourceData.cs" Link="Linked\ResourceData.cs" />
+    <Compile Include="..\Shared\PlasmaShared\IContentService\ScriptMissionData.cs" Link="Linked\ScriptMissionData.cs" />
+    <Compile Include="..\Shared\PlasmaShared\IContentService\ReturnValue.cs" Link="Linked\ReturnValue.cs" />
+    <Compile Include="..\Shared\PlasmaShared\ISpringieService\PlayerTeam.cs" Link="Linked\PlayerTeam.cs" />
+    <Compile Include="..\Shared\PlasmaShared\ISpringieService\LobbyHostingContext.cs" Link="Linked\LobbyHostingContext.cs" />
+    <Compile Include="..\Shared\PlasmaShared\ISpringieService\BattlePlayerResult.cs" Link="Linked\BattlePlayerResult.cs" />
+    <Compile Include="..\Shared\PlasmaShared\ISpringieService\BotTeam.cs" Link="Linked\BotTeam.cs" />
+    <Compile Include="..\Shared\PlasmaShared\ISpringieService\BalanceTeamsResult.cs" Link="Linked\BalanceTeamsResult.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\Player.cs" Link="Linked\WHR\Player.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\PlayerDay.cs" Link="Linked\WHR\PlayerDay.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\Game.cs" Link="Linked\WHR\Game.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\RatingSystems.Dates.cs" Link="Linked\WHR\RatingSystems.Dates.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\IRatingSystem.cs" Link="Linked\WHR\IRatingSystem.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\ITopPlayersUpdateListener.cs" Link="Linked\WHR\ITopPlayersUpdateListener.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\Ranks.cs" Link="Linked\WHR\Ranks.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\RatingSystems.cs" Link="Linked\WHR\RatingSystems.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\WholeHistoryRating.cs" Link="Linked\WHR\WholeHistoryRating.cs" />
+  </ItemGroup>
+
+</Project>

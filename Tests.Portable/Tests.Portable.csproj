@@ -62,7 +62,7 @@
   <!-- support types the above need -->
   <ItemGroup>
     <Compile Include="..\Shared\PlasmaShared\ISpringieService\RatingCategory.cs" Link="Linked\RatingCategory.cs" />
-    <Compile Include="..\Shared\PlasmaShared\GlobalConst.Rating.cs"                Link="Linked\GlobalConst.Rating.cs" />
+    <Compile Include="..\Shared\PlasmaShared\GlobalConst.Portable.cs"                Link="Linked\GlobalConst.Portable.cs" />
     <Compile Include="..\Shared\PlasmaShared\ModeType.cs"                          Link="Linked\ModeType.cs" />
     <Compile Include="..\Shared\PlasmaShared\Utils.Enumerable.cs"                  Link="Linked\Utils.Enumerable.cs" />
   </ItemGroup>

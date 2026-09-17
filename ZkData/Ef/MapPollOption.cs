@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using ZkData;
-using System.Data.Entity;
 using Newtonsoft.Json;
 using Ratings;
 using System.ComponentModel.DataAnnotations;
