@@ -39,6 +39,10 @@ namespace ZkData
 
             // EF6 applied [Index] on properties by convention; EF Core has no such
             // convention, so the attributes are read back and declared explicitly.
+            // EF6 accepted several [Key] properties ordered by [Column(Order)]; EF Core
+            // requires the key declared explicitly. Do this before the indexes, because a
+            // primary key is itself an index.
+            modelBuilder.ApplyEf6CompositeKeys();
             modelBuilder.ApplyEf6IndexAttributes();
 
             // The EF6 fluent configuration in ZkDataContext.OnModelCreating - 111 HasMany,

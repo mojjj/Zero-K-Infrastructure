@@ -167,7 +167,41 @@ Two shims carry the weight, both in `ZkData.Core/Ef6Compat/`:
 EF6 one: eight entity classes call `new ZkDataContext()` from their own logic, so any other
 name would mean editing them.
 
-**Where it stands:** everything compiles except 15 errors in 6 files. They are:
+**Where it stands: the model compiles.** It also builds, in the EF Core sense - the
+context loads and gets as far as validating relationships. Two more compatibility
+conventions were needed on the way, both in `ZkData.Core/Ef6Compat/`:
+
+- **`CompositeKeyConventions`** - EF6 accepted several `[Key]` properties ordered by
+  `[Column(Order = n)]`; EF Core wants the key declared explicitly and throws otherwise.
+  Column order matters here, because it decides the clustered index's column order.
+- **`IndexConventions`** had to skip EF Core's shared-type entities - the
+  `Dictionary<string, object>` join tables it materialises for many-to-many - which carry
+  no attributes and cannot be passed to `modelBuilder.Entity()`.
+
+Three call sites in production moved behind `ZkData/DbCompat.cs`, which has an EF Core
+twin: `Database.CommandTimeout` (EF Core spells it `SetCommandTimeout`) and one
+`EntityState` assignment. C# has no extension properties, so the call site had to move
+rather than the API.
+
+`PlanetStructure.GenerateResized` now goes through the imaging seam instead of calling
+`Image.FromFile` directly. That was the entity class that could not reach .NET 9 because
+it resized an image - the two blockers meeting - and the seam is what unblocked it. One
+visible consequence: the seam resamples bicubic where that code asked for
+HighQualityBilinear, so resized structure icons will differ very slightly.
+
+**The next chunk is the relationship configuration.** EF Core stops at:
+
+    Unable to determine the relationship represented by navigation
+    'AbuseReport.AccountByAccountID' of type 'Account'
+
+which is the 144 fluent lines in EF6's `OnModelCreating` - 111 `HasMany`, 73
+`WithRequired`, 34 `WithOptional`, 77 `WillCascadeOnDelete` - not yet translated. EF Core
+cannot infer a relationship when two navigations on one entity point at the same type, and
+`AbuseReport` has both `AccountByAccountID` and `ReporterAccountID`. That translation is
+the work the schema diff exists to guide, and the 77 cascade rules are the part that has to
+be read one at a time rather than pattern-replaced.
+
+The errors that were outstanding before this, now cleared:
 
 | Kind | Count | Fix |
 |---|---|---|

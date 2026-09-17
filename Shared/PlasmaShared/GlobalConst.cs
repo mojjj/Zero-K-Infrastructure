@@ -105,7 +105,6 @@ namespace ZkData
         public static string SiteDiskPath = @"c:\projekty\zero-k.info\www";
 
 
-        public const int SteamAppID = 334920;
         public const int ZkLobbyUserCpu = 6667;
         public const int ZkLobbyUserCpuLinux = 6668;
         public const int CommanderProfileCount = 6;
@@ -113,14 +112,9 @@ namespace ZkData
         public const int MaxCommanderNameLength = 20;
 
 
-        public const int MinDurationForXP = 240;    // seconds
         public const int MinDurationForPlanetwars = 0;
         public const int MaxDurationForPlanetwars = 60*60*3; // 3 hours
 
-        public const int LadderSize = 50; // Amount of players shown on ladders
-        public const float LadderUpdatePeriod = 1; //Ladder is fully updated every X hours
-        public const float LadderEloClassicEloK = 32f; //K value of classic elo
-        public const float LadderEloSmoothingFactor = 0.8f; //1 for change as fast as whr, 0 for no change
 
         public const int MapBansPerPlayer = 6; // Allow users to enter this many bans in UI
         public const float MaximumPercentageOfBannedMaps = 0.75f; // Do not ban more than 75% of all maps regardless of player or ban count

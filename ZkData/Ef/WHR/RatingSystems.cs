@@ -36,7 +36,7 @@ namespace Ratings
                         using (ZkDataContext data = new ZkDataContext())
                         {
                             int battles = 0;
-                            data.Database.CommandTimeout = 240;
+                            data.Database.SetCommandTimeoutCompat(240);
                             for (int month = 10*12; month > 0; month--)
                             {
                                 DateTime minStartTime = DateTime.Now.AddMonths(-month);
