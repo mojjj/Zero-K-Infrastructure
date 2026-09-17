@@ -45,11 +45,18 @@ namespace ZkData
             modelBuilder.ApplyEf6CompositeKeys();
             modelBuilder.ApplyEf6IndexAttributes();
 
-            // The EF6 fluent configuration in ZkDataContext.OnModelCreating - 111 HasMany,
-            // 77 WillCascadeOnDelete, 73 WithRequired, 34 WithOptional - is NOT translated
-            // yet. That is the next slice of work, and the schema diff is what says how
-            // much of it matters.
+            // EF6's fluent relationship configuration, translated - see
+            // ZkDataContext.Relationships.cs and the generator beside it.
+            ConfigureRelationships(modelBuilder);
+            ConfigureRelationshipsByHand(modelBuilder);
+
         }
+
+        /// <summary>Generated in ZkDataContext.Relationships.cs.</summary>
+        partial void ConfigureRelationships(ModelBuilder modelBuilder);
+
+        /// <summary>The handful the generator leaves alone - ZkDataContext.RelationshipsByHand.cs.</summary>
+        partial void ConfigureRelationshipsByHand(ModelBuilder modelBuilder);
 
         /// <summary>
         /// EF6's change-tracking wrapper, which IEntityAfterChange implementations take.

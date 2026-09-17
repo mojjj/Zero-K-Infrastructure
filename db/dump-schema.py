@@ -28,7 +28,8 @@ import json, os, subprocess, sys, pathlib, difflib
 PASS = os.environ.get("MSSQL_SA_PASSWORD", "ZkLocal!Dev2026")
 DB = (sys.argv[sys.argv.index("--db") + 1] if "--db" in sys.argv
       else os.environ.get("DB_NAME", "zk_test"))
-OUT = pathlib.Path(__file__).parent / "schema" / "schema.txt"
+OUT = pathlib.Path(sys.argv[sys.argv.index("--out") + 1]) if "--out" in sys.argv \
+    else pathlib.Path(__file__).parent / "schema" / "schema.txt"
 
 
 def query(sql):
@@ -85,7 +86,15 @@ ORDER BY OBJECT_NAME(fk.parent_object_id), OBJECT_NAME(fk.referenced_object_id),
 FOR JSON PATH;
 """
 
-MIGRATIONS = "SELECT MigrationId FROM __MigrationHistory ORDER BY MigrationId FOR JSON PATH;"
+# A database built straight from a model has no EF6 migration history, so this is
+# optional rather than required - which is what makes the tool usable on both sides of
+# the port comparison.
+MIGRATIONS = """
+IF OBJECT_ID('__MigrationHistory') IS NOT NULL
+    SELECT MigrationId FROM __MigrationHistory ORDER BY MigrationId FOR JSON PATH;
+ELSE
+    SELECT TOP 0 '' AS MigrationId FOR JSON PATH;
+"""
 
 
 def width(col):
@@ -109,7 +118,7 @@ def render():
         "# The contract the EF Core port has to reproduce, and the thing that makes schema",
         "# drift show up as a diff. See ZkData/EFCORE-MIGRATION.md.",
         "",
-        "migrations applied: %d, through %s" % (len(migs), migs[-1]["MigrationId"] if migs else "(none)"),
+        "migrations applied: %d, through %s" % (len(migs), migs[-1]["MigrationId"] if migs else "(none - built from a model)"),
         "tables: %d, columns: %d, indexes: %d, foreign keys: %d" % (
             len({c["table"] for c in cols}), len(cols), len(idx), len(fks)),
         "",
