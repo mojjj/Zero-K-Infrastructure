@@ -28,6 +28,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="MSTest.TestAdapter" Version="3.6.1" />
     <PackageReference Include="MSTest.TestFramework" Version="3.6.1" />
+    <!-- the imaging implementation under test; see Linked/ImageSharpImageProcessor.cs -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
   </ItemGroup>
 
   <!-- Whole History Rating: the Bayesian core, free of Entity Framework -->
@@ -54,6 +56,7 @@
   <ItemGroup>
     <Compile Include="..\Shared\PlasmaShared\Imaging\ImageSizing.cs" Link="Linked\ImageSizing.cs" />
     <Compile Include="..\Shared\PlasmaShared\Imaging\IImageProcessor.cs" Link="Linked\IImageProcessor.cs" />
+    <Compile Include="..\Shared\PlasmaShared\Imaging\ImageSharpImageProcessor.cs" Link="Linked\ImageSharpImageProcessor.cs" />
   </ItemGroup>
 
   <!-- support types the above need -->

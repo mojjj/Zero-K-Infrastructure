@@ -142,6 +142,7 @@
     <Compile Include="Imaging\IImageProcessor.cs" />
     <Compile Include="Imaging\Images.cs" />
     <Compile Include="Imaging\SystemDrawingImageProcessor.cs" />
+    <Compile Include="Imaging\ImageSharpImageProcessor.cs" />
     <Compile Include="UnitSyncLib\ListOption.cs" />
     <Compile Include="UnitSyncLib\Map.cs" />
     <Compile Include="UnitSyncLib\MapInfo.cs" />
@@ -215,6 +216,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="JetBrains.Annotations" Version="2022.1.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
     <PackageReference Include="Microsoft.CSharp" Version="4.5.0" />
     <PackageReference Include="Microsoft.DotNet.InternalAbstractions" Version="1.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyModel" Version="1.0.0" />
