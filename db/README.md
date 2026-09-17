@@ -107,11 +107,45 @@ are real, because WHR indexes ratings by day and the spacing matters.
 Regenerate it from a loaded database with `./db/make-fixture.py`. The anonymisation is
 done in SQL inside that script, in one place, so it can be read and audited.
 
-## Towards automated tests
+## The database tests
+
+`Tests.Database` exercises the Whole History Rating pipeline end to end against the
+fixture - the real `RatingSystems.Init()` entry point the website calls at startup, not
+just the arithmetic.
+
+    docker compose -f db/docker-compose.yml up -d && ./db/wait-for-db.sh
+    ZK_CONNECTION_STRING="$(DB_NAME=zk_test ./db/connection-string.sh)" ./db/dbsetup.sh latest
+    DB_NAME=zk_test ./db/load-fixture.sh
+    ./db/run-db-tests.sh
+
+Nine tests, and the pipeline itself takes under a second on the fixture. Pass a substring
+to run a subset: `./db/run-db-tests.sh Predicted`.
+
+It targets **net48** because `WholeHistoryRating`, `SpringBattle` and `ZkDataContext` are
+Entity Framework 6, which does not run on .NET 9 - the blocker in
+`ZkData/EFCORE-MIGRATION.md`. When that lifts, this project can move.
+
+`OutputType` is `Exe` because mono has no working vstest runner, so `Program.cs`
+discovers and runs the `[TestMethod]`s itself. The same methods are found normally by
+Visual Studio and by the Windows CI runner; there is one set of tests either way.
+
+**Two things worth knowing before reading the tests.** First, the harness deletes
+`AccountRatings` before starting: those rows are the live pipeline's stored output,
+carried along in the fixture, and leaving them would let `GetPlayerRating` answer from the
+database cache without ever running the computation. Second, the fixture's battles are
+historical, so no player is inside `GlobalConst.LadderActivityDays` and nothing is
+*ranked* - rating and ranking are separate, and a test states that rather than working
+around it.
+
+The assertions are properties, not pinned numbers: ordering, convergence, bounds and rank
+correlation. WHR's exact output depends on iteration count and ordering, so pinning Elo
+would break on any tuning.
+
+## Towards more automated tests
 
 `Tests.Portable` deliberately has no database: it links pure source files and runs on
-.NET 9 in about 150 ms, and that should stay true. Database-backed tests want to be a
-separate project so a developer without Docker can still run the fast suite.
+.NET 9 in about 150 ms, and that should stay true. That is why the database tests are a
+separate project - a developer without Docker can still run the fast suite.
 
 When that project is written, the shape that fits what is here: bring the container up in
 CI as a service, build the schema with `db/dbsetup.sh latest`, and let each test run in a
