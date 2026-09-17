@@ -111,9 +111,13 @@ What is still blocked, in the order it has to be unblocked:
 1. **EF6.** `ZkDataContext` and 117 migrations. EF Core is a rewrite of the data layer,
    not a retarget, and everything else waits behind it. Measured in
    `ZkData/EFCORE-MIGRATION.md`, along with the two blockers already cleared.
-2. **`System.Drawing`.** Used for image resizing in `Shared/PlasmaShared/Utils.cs`. On
-   .NET 9 it lives in `System.Drawing.Common`, which is Windows-only. Needs ImageSharp or
-   SkiaSharp.
+2. **`System.Drawing.Common`** - the imaging types only. `Bitmap`, `Graphics`, `Image`
+   and friends throw `PlatformNotSupportedException` off Windows since .NET 7. The
+   geometry types (`Point`, `Size`, `Rectangle`, `Color`) are in
+   `System.Drawing.Primitives`, are part of the .NET 9 shared framework and are **not** a
+   blocker - an earlier version of this note said otherwise. 13 files are affected, with
+   `Shared/PlasmaShared/Utils.cs` the choke point. Measured in
+   `Shared/PlasmaShared/IMAGING-MIGRATION.md`.
 3. **Server-side WCF.** The two `.svc` endpoints above. CoreWCF, or replace them and ship
    updated clients first.
 4. **A mono build still needs one workaround**, so it is not CI-able as a Linux check yet:
