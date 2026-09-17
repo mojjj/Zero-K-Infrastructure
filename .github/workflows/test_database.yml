@@ -2,8 +2,9 @@
 # fixture.
 #
 # Slower and heavier than test_portable.yml - it pulls SQL Server and mono, builds the
-# ZkData chain twice and runs an actual rating computation - so it only fires when
-# something it covers changes. Run it by hand from the Actions tab any time.
+# ZkData chain twice and runs an actual rating computation - about two minutes. It runs on
+# every pull request all the same, because it is a required check: a required check that
+# is skipped never reports, and the pull request waits for it forever.
 #
 # It uses exactly the scripts a developer uses locally (db/README.md). If this job breaks,
 # the same four commands reproduce it on a laptop.
@@ -17,19 +18,7 @@ name: Database tests
 on:
   push:
     branches: [ master ]
-    paths:
-      - 'db/**'
-      - 'ZkData/**'
-      - 'Shared/**'
-      - 'Tests.Database/**'
-      - '.github/workflows/test_database.yml'
   pull_request:
-    paths:
-      - 'db/**'
-      - 'ZkData/**'
-      - 'Shared/**'
-      - 'Tests.Database/**'
-      - '.github/workflows/test_database.yml'
   workflow_dispatch:
 
 concurrency:
