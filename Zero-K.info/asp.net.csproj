@@ -143,6 +143,7 @@
     <Compile Include="ForumParser\TocEntry.cs" />
     <Compile Include="ForumParser\TranslateContext.cs" />
     <Compile Include="AppCode\Global.cs" />
+    <Compile Include="AppCode\GalaxyMapGeometry.cs" />
     <Compile Include="AppCode\HtmlHelperExtensions.cs" />
     <Compile Include="AppCode\JsonRequest.cs" />
     <Compile Include="AppCode\NoCache.cs" />
@@ -208,7 +209,6 @@
     <Content Include="Scripts\jquery.ui.stars.js" />
     <Content Include="Scripts\moment.min.js" />
     <Content Include="Scripts\nicetitle.js" />
-    <Content Include="Scripts\raphael-min.js" />
     <Content Include="Scripts\site_main.js" />
     <Content Include="Styles\countDown.css" />
     <Content Include="Styles\jquery.datetimepicker.min.css" />

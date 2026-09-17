@@ -38,6 +38,11 @@
     <Compile Include="..\ZkData\Ef\WHR\RatingSystems.Dates.cs" Link="Linked\WHR\RatingSystems.Dates.cs" />
   </ItemGroup>
 
+  <!-- PlanetWars galaxy map geometry (Phase 5) -->
+  <ItemGroup>
+    <Compile Include="..\Zero-K.info\AppCode\GalaxyMapGeometry.cs" Link="Linked\GalaxyMapGeometry.cs" />
+  </ItemGroup>
+
   <!-- support types the above need -->
   <ItemGroup>
     <Compile Include="..\Shared\PlasmaShared\ISpringieService\RatingCategory.cs" Link="Linked\RatingCategory.cs" />
