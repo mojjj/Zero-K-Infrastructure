@@ -29,8 +29,10 @@ EF Core cannot read EF6's `__MigrationHistory` table. The realistic route is to 
 replaying history**: baseline the current schema as a single EF Core initial migration,
 and mark it as already applied on the live database rather than running it. The 117 EF6
 migrations stay in the repository as the record of how the schema got here, and stop
-being executable. Nothing about this can be validated without a database dump, which the
-repository does not contain - see `Zero-K.info/HOSTING.md`.
+being executable. There is now a database to validate against: `db/README.md` builds one with real data, and
+`db/DbSetup` applies the EF6 migrations from the command line under mono - in both
+directions, which is how the dump gets loaded at all. So a proposed EF Core baseline can be
+compared against a real EF6-built schema locally, on Linux, without Windows.
 
 ### 2. The fluent configuration is written in EF6's vocabulary
 
