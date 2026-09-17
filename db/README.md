@@ -26,20 +26,54 @@ The connection string is hard-coded per mode in `Shared/PlasmaShared/GlobalConst
 
     export ZK_CONNECTION_STRING="$(./db/connection-string.sh)"
 
-## Two ways to get a schema
+## Create the schema
 
-**From the migrations, no dump needed.** Local mode sets `AutoMigrateDatabase = true`, so
-`ZkDataContext` runs `Database.CreateIfNotExists()` and applies all 117 EF6 migrations on
-first use, then `Migrations/Configuration.Seed` adds forum categories, a resource row and,
-because the mode is Local, `LocalSeed`. That gives a working empty site with no personal
-data in it at all.
+    ./db/dbsetup.sh latest
 
-The catch is that EF6 migrations run on .NET Framework, so this path needs Windows or a
-Windows CI runner. It cannot be driven from Linux today - which is one more thing the
-EF Core migration would fix, since `dotnet ef` is cross-platform
-(`ZkData/EFCORE-MIGRATION.md`).
+That builds and runs `db/DbSetup`, a small EF6 migration runner, under mono in Docker. It
+applies all 117 migrations and seeds forum categories, a resource row and `LocalSeed`,
+giving a working empty database with **no personal data in it at all**.
 
-**From a dump**, when you need real data to test against: see `db/dumps/README.md`.
+An earlier version of this file said schema creation needed Windows, because EF6
+migrations run on .NET Framework. That turns out to be wrong: mono runs them fine against
+SQL Server 2022, in both directions. Verified - `./db/dbsetup.sh status` reports
+`applied: 117, pending: 0`.
+
+    ./db/dbsetup.sh status     # what is applied, what is pending
+    ./db/dbsetup.sh list       # the most recent migrations
+    ./db/dbsetup.sh to <id>    # migrate up OR down to a given migration
+
+## Load real data
+
+See `db/dumps/README.md` for where dumps go, then:
+
+    ./db/load-bcp.sh --all
+
+**The dump is behind this repository's migrations, and the load will fail if you skip
+this.** The `.bcp` files are SQL Server native format, which is positional and
+type-exact, so a table whose columns have changed since the dump was taken will not load.
+`AddPwAttackCharges` added two columns to `Accounts` and `AddStructureBlockFlags` added
+two to `StructureTypes`, both in April 2026, and the live database does not have them.
+
+So the sequence is: roll the schema back to the dump's level, load, then migrate forward.
+
+    ./db/dbsetup.sh to 202404060935038_AddPopularMapsFraction
+    ./db/load-bcp.sh --all
+    ./db/dbsetup.sh latest
+
+Migrating forward afterwards fills the new columns from their defaults. Loading roughly
+2 GB takes about three and a half minutes here, and gives a 6 GB database:
+
+| Table | Rows |
+|---|---|
+| SpringBattlePlayers | 8,646,551 |
+| AccountBattleAwards | 7,718,096 |
+| SpringBattleBots | 3,245,290 |
+| SpringBattles | 2,250,838 |
+| Accounts | 307,045 |
+| AccountRatings | 58,373 |
+| ResourceContentFiles | 51,448 |
+| Resources | 45,991 |
 
 ## Stop it, and start over
 
@@ -53,8 +87,10 @@ EF Core migration would fix, since `dotnet ef` is cross-platform
 separate project so a developer without Docker can still run the fast suite.
 
 When that project is written, the shape that fits what is here: bring the container up in
-CI as a service, restore a small redacted dump, point `ZK_CONNECTION_STRING` at it, and
-let each test run in a transaction that is rolled back. Note the blocker above - until
-EF6 is migrated, schema creation needs a Windows runner, so the first database tests will
-either run on the existing self-hosted Windows runner or restore a dump that already has
-the schema in it.
+CI as a service, build the schema with `db/dbsetup.sh latest`, and let each test run in a
+transaction that is rolled back. No Windows runner is needed for the schema - `DbSetup`
+runs under mono - though CI would have to build it, which takes a few minutes the fast
+suite does not.
+
+For tests that need data rather than an empty schema, a small redacted fixture is a better
+fit than this 6 GB dump.
