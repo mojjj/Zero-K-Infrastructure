@@ -58,6 +58,9 @@ namespace ZkData
             // ZkDataContext.ColumnFacets.cs and the generator beside it.
             ConfigureColumnFacets(modelBuilder);
 
+            // Table names must be set before the facets are looked up by table name.
+            ConfigureTableNames(modelBuilder);
+
         }
 
         /// <summary>Generated in ZkDataContext.Relationships.cs.</summary>
@@ -68,6 +71,9 @@ namespace ZkData
 
         /// <summary>Generated in ZkDataContext.ColumnFacets.cs.</summary>
         partial void ConfigureColumnFacets(ModelBuilder modelBuilder);
+
+        /// <summary>Four names EF Core's convention gets wrong - ZkDataContext.TableNames.cs.</summary>
+        partial void ConfigureTableNames(ModelBuilder modelBuilder);
 
         /// <summary>
         /// EF6's change-tracking wrapper, which IEntityAfterChange implementations take.
@@ -121,6 +127,7 @@ namespace ZkData
         public virtual DbSet<CommanderSlot> CommanderSlots { get; set; }
         public virtual DbSet<Contribution> Contributions { get; set; }
         public virtual DbSet<ContributionJar> ContributionJars { get; set; }
+        public virtual DbSet<DynamicConfig> DynamicConfigs { get; set; }
         public virtual DbSet<Event> Events { get; set; }
         public virtual DbSet<Faction> Factions { get; set; }
         public virtual DbSet<FactionTreaty> FactionTreaties { get; set; }

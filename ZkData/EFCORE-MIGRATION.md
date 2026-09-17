@@ -199,7 +199,7 @@ the schema the EF6 migrations produce:
 | indexes | 267 | 224 |
 | foreign keys | 163 | 164 |
 
-**175 differing lines**, down from 353. That is the number the port is working down, and it
+**74 differing lines**, down from 353. That is the number the port is working down, and it
 is a number rather than an impression.
 
 What closed the first half:
@@ -219,24 +219,43 @@ What closed the first half:
   dropping every single-facet statement. Caught by the diff, which is the point of having
   one.
 
+Then, in the same way:
+
+- **Four table names.** EF6 named a table after the pluralised entity type; EF Core after
+  the DbSet property. Two DbSets are singular and two are named for the forum search index
+  they serve (`IndexWords` holds `Word`). Written out rather than fixed by a pluralisation
+  convention: four names from the schema are four facts, while a rule would be a guess with
+  89 chances to be wrong - `News`, whose table is `News`, defeats every naive pluraliser.
+- **`DynamicConfig` re-included.** Its one EF6-only line - assigning `EntityState` into the
+  change tracker - now goes through `DbCompat.MarkModified`, the helper already used for
+  `Ranks`.
+- **159 indexes declared from the schema.** EF6 indexed foreign key columns even where they
+  were already the leading columns of the primary key; EF Core treats those as redundant
+  and skips them. That alone was 38 lines of difference.
+
+Where the two schemas now stand:
+
+| | EF6 | EF Core |
+|---|---|---|
+| tables | 91 | 90 - only `__MigrationHistory` missing, which EF Core has no reason to create |
+| columns | 746 | 747 |
+| indexes | 267 | 263 |
+| foreign keys | 163 | 164 |
+
 What remains, in order of size:
 
-1. **58 index lines.** Mostly indexes EF6 created on foreign key columns that EF Core has
-   not, plus the indexes belonging to the tables below.
-2. **55 column lines.** Three known causes: the excluded `DynamicConfigs`; two columns where
-   the entity attribute and the database disagree (`Name` is `varchar(200)` in the model and
-   `varchar(2000)` in the database - a migration widened it without updating the attribute,
-   which is drift worth knowing about on its own); and shadow foreign key columns EF Core
-   invented (`CampaignPlanetCampaignID`) where a relationship is not mapped onto the
-   existing key.
-3. **31 foreign key lines**, largely delete behaviour. The generator defaults to `Restrict`
+1. **27 foreign key lines**, largely delete behaviour. The generator defaults to `Restrict`
    where EF6 said nothing, because assuming EF6's cascade default produced cascade paths
    SQL Server refuses outright. The real schema cascades 62 of its 163; the diff names
-   which.
-4. **10 table lines.** EF6 pluralised type names; EF Core takes the DbSet property name. So
-   `AccountCampaignProgress` against `AccountCampaignProgresses`, and the forum word index
-   comes out `IndexWords`/`IndexForumPosts` rather than `Words`/`ForumPostWords`. Worth
-   fixing rather than accepting, because the database already has the old names.
+   which, and they should be set from it rather than from a rule.
+2. **18 index lines** and **5 unique index lines** - the remainder after declaring the
+   schema's own, mostly differences in column order within an index.
+3. **12 column lines.** Two are drift rather than port work: `Name` is `varchar(200)` in the
+   entity attribute and `varchar(2000)` in the database, a migration having widened it
+   without updating the model. The rest are shadow foreign key columns EF Core invented,
+   such as `CampaignPlanetCampaignID`, where a relationship is not mapped onto the existing
+   key - those need a `HasForeignKey` naming the real columns.
+4. **7 primary key lines**, column ordering within composite keys.
 
 Reproduce the comparison:
 

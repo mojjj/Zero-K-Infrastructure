@@ -37,12 +37,7 @@
 
   <!-- the entity classes, linked from ZkData and unmodified -->
   <ItemGroup>
-    <!--
-      DynamicConfig is excluded: it assigns EF6's EntityState to EF Core's change tracker,
-      which the shim cannot bridge because enums take no conversion operators. It is the
-      one entity class that needs porting by hand.
-    -->
-    <Compile Include="..\ZkData\Ef\*.cs" Exclude="..\ZkData\Ef\DynamicConfig.cs" Link="Linked\Ef\%(Filename).cs" />
+    <Compile Include="..\ZkData\Ef\*.cs" Link="Linked\Ef\%(Filename).cs" />
     <Compile Include="..\ZkData\Enums\*.cs" Link="Linked\Enums\%(Filename).cs" />
   </ItemGroup>
 
