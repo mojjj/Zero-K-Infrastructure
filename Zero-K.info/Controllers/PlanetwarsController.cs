@@ -439,6 +439,8 @@ namespace ZeroKWeb.Controllers
 
 
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [Auth(Role = AdminLevel.Moderator)]
         public ActionResult SubmitRenamePlanet(int planetID, string newName, int teamSize, string map)
         {
@@ -461,6 +463,9 @@ namespace ZeroKWeb.Controllers
         }
 
 
+        [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult RecallRole(int accountID, int roletypeID)
         {
             var db = new ZkDataContext();
@@ -482,6 +487,9 @@ namespace ZeroKWeb.Controllers
             else return Content("Cannot recall");
         }
 
+        [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult AppointRole(int accountID, int roletypeID)
         {
             var db = new ZkDataContext();

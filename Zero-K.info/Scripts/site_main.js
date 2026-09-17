@@ -205,8 +205,8 @@ function GlobalPageInit(root) {
     s.find(".js_datetimepicker").datetimepicker();
 
     // buttonification
-    s.find(":submit").button();
-    s.find(":button").button();
+    s.find(":submit").not(".postlink-button").button();
+    s.find(":button").not(".postlink-button").button();
     s.find(".js_button").button();
     s.find(".js_accordion").accordion();
 

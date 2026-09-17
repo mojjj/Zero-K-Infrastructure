@@ -34,6 +34,7 @@ namespace ZeroKWeb.Controllers
         /// </summary>
         /// <param name="nn">The existing <see cref="News"/> item, if editing</param>
         /// <remarks>Also makes or edits a <see cref="ForumThread"/> and its starting <see cref="ForumPost"/></remarks>
+		[HttpPost]
         [ValidateAntiForgeryToken]
         [Auth(Role = AdminLevel.Moderator)]
         [ValidateInput(false)]

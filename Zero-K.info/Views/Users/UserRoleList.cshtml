@@ -40,7 +40,7 @@
                      }
                      if (Global.Account.CanAppoint(Model, role))
                      {
-                         <a href="@Url.Action("AppointRole", "Planetwars", new { accountID = Model.AccountID, roleTypeID = role.RoleTypeID })">(appoint)</a>
+                         @Html.PostLink("(appoint)", "AppointRole", "Planetwars", new { accountID = Model.AccountID, roleTypeID = role.RoleTypeID })
                      }
                      index++;
                      if (index < grp.ToList().Count)

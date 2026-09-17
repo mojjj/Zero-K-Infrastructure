@@ -252,6 +252,9 @@ namespace ZeroKWeb.Controllers
         /// <summary>
         /// Reset all the user's unlocks
         /// </summary>
+		[Auth]
+		[HttpPost]
+		[ValidateAntiForgeryToken]
 		public ActionResult Reset()
 		{
 			var db = new ZkDataContext();

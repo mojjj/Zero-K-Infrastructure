@@ -153,6 +153,7 @@
     <Compile Include="AppCode\HtmlHelperExtensions.cs" />
     <Compile Include="AppCode\JsonRequest.cs" />
     <Compile Include="AppCode\NoCache.cs" />
+    <Compile Include="AppCode\PostLinkExtensions.cs" />
     <Compile Include="AppCode\SpotlightHandler.cs" />
     <Compile Include="Controllers\BattlesController.cs" />
     <Compile Include="Controllers\ForumController.cs" />

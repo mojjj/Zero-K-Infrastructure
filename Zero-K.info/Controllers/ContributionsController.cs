@@ -44,6 +44,7 @@ namespace ZeroKWeb.Controllers
         /// <summary>
         /// Manually input a contribution
         /// </summary>
+        [HttpPost]
         [ValidateAntiForgeryToken]
         [Auth(Role = AdminLevel.Moderator)]
         public ActionResult AddContribution(int accountID,int kudos, string item, string currency, double gross, double grossEur, double netEur, string email, string comment, bool isSpring, DateTime date) {
