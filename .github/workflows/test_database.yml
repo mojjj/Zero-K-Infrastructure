@@ -1,0 +1,88 @@
+# The WHR pipeline tests (Tests.Database), against a real SQL Server and the committed
+# fixture.
+#
+# Slower and heavier than test_portable.yml - it pulls SQL Server and mono, builds the
+# ZkData chain twice and runs an actual rating computation - so it only fires when
+# something it covers changes. Run it by hand from the Actions tab any time.
+#
+# It uses exactly the scripts a developer uses locally (db/README.md). If this job breaks,
+# the same four commands reproduce it on a laptop.
+#
+# Timing, measured locally: 37s from empty build directories with the images and the NuGet
+# cache already warm. On a cold runner add the SQL Server and mono image pulls and, on a
+# cache miss, the NuGet restore - a few minutes either way.
+
+name: Database tests
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'db/**'
+      - 'ZkData/**'
+      - 'Shared/**'
+      - 'Tests.Database/**'
+      - '.github/workflows/test_database.yml'
+  pull_request:
+    paths:
+      - 'db/**'
+      - 'ZkData/**'
+      - 'Shared/**'
+      - 'Tests.Database/**'
+      - '.github/workflows/test_database.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: WHR pipeline (net48 under mono, SQL Server 2022)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      DB_NAME: zk_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Both db/dbsetup.sh and db/run-db-tests.sh restore into this directory. Restoring
+      # the ZkData chain from scratch is most of the job's runtime.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zk-mono-nuget
+          key: zk-mono-nuget-${{ hashFiles('**/*.csproj', '**/packages.config') }}
+          restore-keys: zk-mono-nuget-
+
+      - name: Start SQL Server
+        run: |
+          docker compose -f db/docker-compose.yml up -d
+          ./db/wait-for-db.sh
+
+      - name: Create the schema
+        run: ./db/dbsetup.sh latest
+
+      - name: Load the test fixture
+        run: ./db/load-fixture.sh
+
+      - name: Run the WHR pipeline tests
+        run: ./db/run-db-tests.sh
+
+      - name: SQL Server log
+        if: failure()
+        run: docker logs zk-db --tail 80
+
+      # The mono container runs as root, so everything it wrote into the cache is
+      # root-owned. actions/cache saves as the runner user in a post-step and would fail
+      # on those files, so hand them back first.
+      - name: Make the NuGet cache readable by the runner
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" ~/.cache/zk-mono-nuget || true
+
+      - name: Stop SQL Server
+        if: always()
+        run: docker compose -f db/docker-compose.yml down -v

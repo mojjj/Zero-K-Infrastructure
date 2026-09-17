@@ -121,6 +121,12 @@ just the arithmetic.
 Nine tests, and the pipeline itself takes under a second on the fixture. Pass a substring
 to run a subset: `./db/run-db-tests.sh Predicted`.
 
+CI runs exactly these four commands - `.github/workflows/test_database.yml`. It only
+fires when `db/`, `ZkData/`, `Shared/` or `Tests.Database/` change, because it is heavier
+than the portable suite: it pulls SQL Server and mono and builds the ZkData chain. From
+empty build directories with the images and NuGet cache warm it takes 37 seconds; on a
+cold runner, a few minutes. It can also be started by hand from the Actions tab.
+
 It targets **net48** because `WholeHistoryRating`, `SpringBattle` and `ZkDataContext` are
 Entity Framework 6, which does not run on .NET 9 - the blocker in
 `ZkData/EFCORE-MIGRATION.md`. When that lifts, this project can move.
