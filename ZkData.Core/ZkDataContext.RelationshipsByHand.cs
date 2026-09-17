@@ -1,0 +1,54 @@
+using Microsoft.EntityFrameworkCore;
+
+namespace ZkData
+{
+    /// <summary>
+    /// The relationships the generator refuses to guess at - see
+    /// ZkData.Core/generate-relationships.py, which lists them in its output so the two
+    /// files can be checked against each other.
+    ///
+    /// Kept apart from the generated file so regenerating cannot lose them.
+    /// </summary>
+    public partial class ZkDataContext
+    {
+        partial void ConfigureRelationshipsByHand(ModelBuilder modelBuilder)
+        {
+
+            // EF6: HasRequired(e => e.Resource) with no inverse - a required one-way
+            // reference. EF Core needs the inverse spelled, even as none.
+            modelBuilder.Entity<AccountMapBan>().HasOne(e => e.Resource).WithMany()
+                .IsRequired(true).OnDelete(DeleteBehavior.Cascade);
+
+            // EF6: HasOptional(...).WithRequired(...) is a one-to-one where the dependent
+            // shares the principal's key. EF Core states that as HasOne/WithOne with the
+            // dependent named.
+            modelBuilder.Entity<Unlock>().HasOne(e => e.CommanderDecorationIcon)
+                .WithOne(e => e.Unlock)
+                .HasForeignKey<CommanderDecorationIcon>(e => e.DecorationUnlockID)
+                .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+
+            // The five many-to-many joins. EF6 described the join table with
+            // Map/MapLeftKey/MapRightKey; EF Core uses UsingEntity. Table and column names
+            // are given explicitly so the schema keeps the names the database already has.
+            modelBuilder.Entity<Clan>().HasMany(e => e.Events).WithMany(e => e.Clans)
+                .UsingEntity("EventClan", l => l.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"),
+                    r => r.HasOne(typeof(Clan)).WithMany().HasForeignKey("ClanID"));
+
+            modelBuilder.Entity<Event>().HasMany(e => e.Accounts).WithMany(e => e.Events)
+                .UsingEntity("EventAccount", l => l.HasOne(typeof(Account)).WithMany().HasForeignKey("AccountID"),
+                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"));
+
+            modelBuilder.Entity<Event>().HasMany(e => e.Factions).WithMany(e => e.Events)
+                .UsingEntity("EventFaction", l => l.HasOne(typeof(Faction)).WithMany().HasForeignKey("FactionID"),
+                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"));
+
+            modelBuilder.Entity<Event>().HasMany(e => e.Planets).WithMany(e => e.Events)
+                .UsingEntity("EventPlanet", l => l.HasOne(typeof(Planet)).WithMany().HasForeignKey("PlanetID"),
+                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"));
+
+            modelBuilder.Entity<Event>().HasMany(e => e.SpringBattles).WithMany(e => e.Events)
+                .UsingEntity("EventSpringBattle", l => l.HasOne(typeof(SpringBattle)).WithMany().HasForeignKey("SpringBattleID"),
+                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"));
+        }
+    }
+}

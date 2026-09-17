@@ -189,7 +189,50 @@ it resized an image - the two blockers meeting - and the seam is what unblocked 
 visible consequence: the seam resamples bicubic where that code asked for
 HighQualityBilinear, so resized structure icons will differ very slightly.
 
-**The next chunk is the relationship configuration.** EF Core stops at:
+**The relationships are translated, and the model now builds a database.** Measured against
+the schema the EF6 migrations produce:
+
+| | EF6 (the target) | EF Core (this model) |
+|---|---|---|
+| tables | 91 | 89 |
+| columns | 746 | 719 |
+| indexes | 267 | 224 |
+| foreign keys | 163 | 164 |
+
+**353 differing lines.** That is the number the port is working down, and it is now a
+number rather than an impression. What the diff says, in order of size:
+
+1. **Table naming.** EF6 pluralised type names; EF Core takes the DbSet property name. So
+   `AccountCampaignProgress` against `AccountCampaignProgresses`, and the forum word index
+   comes out as `IndexWords`/`IndexForumPosts` rather than `Words`/`ForumPostWords`. Four
+   tables, fixable with `[Table]` or a naming convention - and worth fixing rather than
+   accepting, because the database already has the old names.
+2. **`DynamicConfigs` is absent**, being the one entity still excluded.
+3. **Delete behaviour.** The generator now defaults to `Restrict` where EF6 said nothing,
+   because assuming EF6's cascade default produced cascade paths SQL Server refuses
+   outright. The real schema cascades 62 of its 163 foreign keys; the diff names which,
+   and those get set explicitly.
+4. Index counts differ by 43, mostly the indexes EF Core creates for foreign keys and EF6
+   did not, or vice versa.
+
+Reproduce the comparison:
+
+    ZK_CONNECTION_STRING=...zk_efcore dotnet ZkData.Core/bin/Debug/net9.0/ZkData.Core.dll create
+    DB_NAME=zk_efcore ./db/dump-schema.py --out /tmp/efcore-schema.txt
+    diff db/schema/schema.txt /tmp/efcore-schema.txt
+
+## How the relationships were translated
+
+`ZkData.Core/generate-relationships.py` reads EF6's `OnModelCreating` and emits
+`ZkDataContext.Relationships.cs`. It translated **131 of 138 statements**; the other 7 - five
+many-to-many joins with explicit join tables, and two irregular shapes - are in
+`ZkDataContext.RelationshipsByHand.cs`, which regeneration does not touch.
+
+Generated rather than typed because 139 statements is 139 chances to transpose a lambda,
+while a rule is one chance to be wrong and can be re-read. The generator refuses to guess:
+anything it does not recognise is reported, not skipped.
+
+**The old next-chunk note, for reference.** EF Core used to stop at:
 
     Unable to determine the relationship represented by navigation
     'AbuseReport.AccountByAccountID' of type 'Account'
