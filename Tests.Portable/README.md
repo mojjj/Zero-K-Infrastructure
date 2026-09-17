@@ -13,7 +13,7 @@ docker run --rm -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:9.0 \
     dotnet test Tests.Portable/Tests.Portable.csproj
 ```
 
-23 tests, about 150 ms.
+33 tests, about 150 ms.
 
 CI runs exactly this on every pull request - `.github/workflows/test_portable.yml`, on a
 stock Linux runner, no Windows and no database.
@@ -56,6 +56,8 @@ player's displayed rating, and a port that shifts it would do so silently.
   100-game streak. Properties, not pinned floats, because exact values legitimately depend
   on iteration order.
 - `RatingConstantsTests` - the shape of the drift constants.
+- `GalaxyMapGeometryTests` - the PlanetWars galaxy map link layout (Phase 5), which used
+  to be inline in three Razor views and emitted as JavaScript, so nothing could check it.
 
 These were checked against a deliberate mutation: changing the Elo scale constant from
 `ln(10)/400` to `ln(10)/200` fails three of them.

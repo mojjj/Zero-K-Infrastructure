@@ -56,55 +56,6 @@
 	var mapWidth = 700;
 	var mapHeight = 500;
 }
-@section head {
-	<script type="text/javascript">
-        window.onload = function () 
-        {
-            var paper = Raphael(document.getElementById("minimap"), @mapWidth, @mapHeight);
-
-            @foreach (var link in galaxy.Links) {
-							var p1 = link.PlanetByPlanetID1;
-							var p2 = link.PlanetByPlanetID2;
-
-							var x1 = p1.X * mapWidth;
-							var y1 = p1.Y * mapHeight;
-							var x2 = p2.X * mapWidth;
-							var y2 = p2.Y * mapHeight;
-
-
-							
-								var width = 2;
-								var color1 = p1.GetColor(Global.Account);
-								var color2 = p2.GetColor(Global.Account);
-								var angle = -Math.Atan2(x2 - x1, y2 - y1) / Math.PI * 180;
-								var length = Math.Sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-                    @: var r = paper.rect(@x1-@width/2, @y1, @width, @length);
-                    @: r.attr({
-                    @:  "fill": "90-@color2-@color1",
-                    @:  "stroke": "none"
-                    @: });
-                    @: r.rotate(@angle, @x1, @y1);
-                
-
-						} 
-
-            @foreach (var planet in galaxy.Planets) {
-							var mapIconSize = 10;
-							var stroke = "#000000";
-							if (planet.PlanetID == Model.PlanetID) {
-								mapIconSize *= 2;
-								stroke = "#ffffff";
-							}
-                @: var circle = paper.circle(@(planet.X * mapWidth), @(planet.Y * mapHeight), @mapIconSize);
-                @: circle.attr({
-                @:  "fill": "@planet.GetColor(Global.Account)",
-                @:  "stroke": "@stroke",
-                @:  "stroke-width": "3"
-                @: });
-            }
-        };
-	</script>
-}
 @Html.Partial("PlanetSummary", Model)
 
 @if (Global.Account != null && Global.IsModerator)
@@ -211,7 +162,41 @@
 		}
 	}
 	</div>
+	@* Galaxy minimap, drawn as native SVG. This was a Raphael script block emitting one
+	   paper.rect()/paper.circle() call per link and planet. *@
 	<div id="minimap">
+		<svg xmlns="http://www.w3.org/2000/svg" width="@mapWidth" height="@mapHeight"
+		     viewBox="0 0 @mapWidth @mapHeight" role="img" aria-label="Galaxy minimap">
+			<defs>
+				@foreach (var link in galaxy.Links)
+				{
+					<linearGradient id="pm@(link.PlanetID1)_@(link.PlanetID2)" x1="0" y1="0" x2="0" y2="1">
+						<stop offset="0" stop-color="@link.PlanetByPlanetID1.GetColor(Global.Account)" />
+						<stop offset="1" stop-color="@link.PlanetByPlanetID2.GetColor(Global.Account)" />
+					</linearGradient>
+				}
+			</defs>
+			@foreach (var link in galaxy.Links)
+			{
+				var lx = link.PlanetByPlanetID1.X * mapWidth;
+				var ly = link.PlanetByPlanetID1.Y * mapHeight;
+				var r = GalaxyMapGeometry.Link(lx, ly, link.PlanetByPlanetID2.X * mapWidth, link.PlanetByPlanetID2.Y * mapHeight, 2);
+
+				<rect x="@GalaxyMapGeometry.N(r.X)" y="@GalaxyMapGeometry.N(r.Y)"
+				      width="@GalaxyMapGeometry.N(r.Width)" height="@GalaxyMapGeometry.N(r.Length)"
+				      fill="url(#pm@(link.PlanetID1)_@(link.PlanetID2))"
+				      transform="rotate(@GalaxyMapGeometry.N(r.AngleDegrees) @GalaxyMapGeometry.N(lx) @GalaxyMapGeometry.N(ly))" />
+			}
+			@foreach (var planet in galaxy.Planets)
+			{
+				// the planet being viewed is drawn double size, outlined white
+				var isCurrent = planet.PlanetID == Model.PlanetID;
+				<circle cx="@GalaxyMapGeometry.N(planet.X * mapWidth)" cy="@GalaxyMapGeometry.N(planet.Y * mapHeight)"
+				        r="@(isCurrent ? 20 : 10)"
+				        fill="@planet.GetColor(Global.Account)"
+				        stroke="@(isCurrent ? "#ffffff" : "#000000")" stroke-width="3" />
+			}
+		</svg>
 	</div>
 	<div id="structures">
         <h2>Installed</h2>

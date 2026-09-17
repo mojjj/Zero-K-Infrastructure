@@ -16,7 +16,6 @@ public class BundleConfig
             "~/Scripts/jquery.expand.js",
             "~/Scripts/jquery.datetimepicker.full.min.js",
             "~/Scripts/nicetitle.js",
-            "~/Scripts/raphael-min.js",
             "~/Scripts/grid.js",
             "~/Scripts/site_main.js"));
 
