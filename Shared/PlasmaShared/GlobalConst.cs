@@ -72,6 +72,13 @@ namespace ZkData
                     break;
             }
 
+            // A local or CI database is not at any of the addresses above - see
+            // db/docker-compose.yml. This is the only way to point the application at one
+            // without editing source, and it is read after the mode has been applied so it
+            // overrides whichever mode is in force.
+            var connectionOverride = Environment.GetEnvironmentVariable("ZK_CONNECTION_STRING");
+            if (!string.IsNullOrEmpty(connectionOverride)) ZkDataContextConnectionString = connectionOverride;
+
             ResourceBaseUrl = string.Format("{0}/Resources", BaseSiteUrl);
             BaseImageUrl = string.Format("{0}/img/", BaseSiteUrl);
             SelfUpdaterBaseUrl = string.Format("{0}/lobby", BaseSiteUrl);
