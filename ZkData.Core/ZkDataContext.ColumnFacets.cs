@@ -34,7 +34,7 @@ namespace ZkData
             Facet(modelBuilder, "ResourceDependencies", "NeedsInternalName", p => p.IsUnicode(false));
             Facet(modelBuilder, "SpringBattles", "EngineGameID", p => p.IsUnicode(false));
 
-            // default constraints (30)
+            // default constraints (51)
             Facet(modelBuilder, "AccountRatings", "IsRanked", p => p.HasDefaultValueSql("(0)"));
             Facet(modelBuilder, "Accounts", "AdminLevel", p => p.HasDefaultValueSql("(0)"));
             Facet(modelBuilder, "Accounts", "CanPlayMultiplayer", p => p.HasDefaultValueSql("(1)"));
@@ -50,6 +50,27 @@ namespace ZkData
             Facet(modelBuilder, "Autohosts", "ApplicableRating", p => p.HasDefaultValueSql("(1)"));
             Facet(modelBuilder, "Autohosts", "CbalEnabled", p => p.HasDefaultValueSql("(1)"));
             Facet(modelBuilder, "Autohosts", "MaxEvenPlayers", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "MapVoteFractionOfPopularMaps", p => p.HasDefaultValueSql("(0.5)"));
+            Facet(modelBuilder, "DynamicConfigs", "MaximumBattlePlayers", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "MaximumStatLimitedBattlePlayers", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "MinimumPlayersForStdevBalance", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "Mm1v1MinimumWinChance", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "MmEloBonusMultiplier", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "MmMinimumMinutesBetweenGames", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "MmMinimumMinutesBetweenSuggestions", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "MmSizeGrowthTime", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "MmTeamsMinimumWinChance", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "MmWidthReductionForParties", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "PwAttackChargesCooldownMinutes", p => p.HasDefaultValueSql("(60)"));
+            Facet(modelBuilder, "DynamicConfigs", "PwAttackChargesMax", p => p.HasDefaultValueSql("(2)"));
+            Facet(modelBuilder, "DynamicConfigs", "PwAttackChargesPassiveLimit", p => p.HasDefaultValueSql("(1)"));
+            Facet(modelBuilder, "DynamicConfigs", "PwAttackOptionCount", p => p.HasDefaultValueSql("(6)"));
+            Facet(modelBuilder, "DynamicConfigs", "PwAttackPhaseMinutes", p => p.HasDefaultValueSql("(2)"));
+            Facet(modelBuilder, "DynamicConfigs", "PwBomberMinimumIpFloor", p => p.HasDefaultValueSql("(5)"));
+            Facet(modelBuilder, "DynamicConfigs", "PwBomberSelfIpRate", p => p.HasDefaultValueSql("(0.5)"));
+            Facet(modelBuilder, "DynamicConfigs", "PwDefendPhaseMinutes", p => p.HasDefaultValueSql("(2)"));
+            Facet(modelBuilder, "DynamicConfigs", "StdevBalanceWeight", p => p.HasDefaultValueSql("(0)"));
+            Facet(modelBuilder, "DynamicConfigs", "TimeQueueEnabled", p => p.HasDefaultValueSql("(0)"));
             Facet(modelBuilder, "FactionTreaties", "TreatyUnableToTradeMode", p => p.HasDefaultValueSql("(0)"));
             Facet(modelBuilder, "Factions", "VictoryPoints", p => p.HasDefaultValueSql("(0)"));
             Facet(modelBuilder, "ForumCategories", "ForumMode", p => p.HasDefaultValueSql("(0)"));
@@ -65,6 +86,170 @@ namespace ZkData
             Facet(modelBuilder, "SpringBattles", "Mode", p => p.HasDefaultValueSql("(0)"));
             Facet(modelBuilder, "StructureTypes", "IsIngameEvacuable", p => p.HasDefaultValueSql("(0)"));
             Facet(modelBuilder, "StructureTypes", "OwnerChangeWinsGame", p => p.HasDefaultValueSql("(0)"));
+
+            // indexes the database has that EF Core would not create (159).
+            // EF6 indexed foreign key columns even when they were already the leading
+            // columns of the primary key; EF Core treats those as redundant and skips
+            // them. Declaring them keeps the schema identical.
+            Index(modelBuilder, "AbuseReports", new[] { "AccountID" });
+            Index(modelBuilder, "AbuseReports", new[] { "ReporterAccountID" });
+            Index(modelBuilder, "AccountBattleAwards", new[] { "AccountID" });
+            Index(modelBuilder, "AccountBattleAwards", new[] { "SpringBattleID" });
+            Index(modelBuilder, "AccountCampaignJournalProgresses", new[] { "AccountID" });
+            Index(modelBuilder, "AccountCampaignJournalProgresses", new[] { "CampaignID", "JournalID" });
+            Index(modelBuilder, "AccountCampaignProgresses", new[] { "AccountID" });
+            Index(modelBuilder, "AccountCampaignProgresses", new[] { "CampaignID" });
+            Index(modelBuilder, "AccountCampaignProgresses", new[] { "CampaignID", "PlanetID" });
+            Index(modelBuilder, "AccountCampaignVars", new[] { "AccountID" });
+            Index(modelBuilder, "AccountCampaignVars", new[] { "CampaignID", "VarID" });
+            Index(modelBuilder, "AccountForumVotes", new[] { "AccountID" });
+            Index(modelBuilder, "AccountForumVotes", new[] { "ForumPostID" });
+            Index(modelBuilder, "AccountIPs", new[] { "AccountID" });
+            Index(modelBuilder, "AccountMapBans", new[] { "AccountID" });
+            Index(modelBuilder, "AccountPlanets", new[] { "AccountID" });
+            Index(modelBuilder, "AccountPlanets", new[] { "PlanetID" });
+            Index(modelBuilder, "AccountRatings", new[] { "AccountID" });
+            Index(modelBuilder, "AccountRatings", new[] { "Elo" });
+            Index(modelBuilder, "AccountRatings", new[] { "IsRanked" });
+            Index(modelBuilder, "AccountRatings", new[] { "LadderElo" });
+            Index(modelBuilder, "AccountRatings", new[] { "RealElo" });
+            Index(modelBuilder, "AccountRelations", new[] { "OwnerAccountID" });
+            Index(modelBuilder, "AccountRelations", new[] { "TargetAccountID" });
+            Index(modelBuilder, "AccountRoles", new[] { "AccountID" });
+            Index(modelBuilder, "AccountRoles", new[] { "ClanID" });
+            Index(modelBuilder, "AccountRoles", new[] { "FactionID" });
+            Index(modelBuilder, "AccountRoles", new[] { "RoleTypeID" });
+            Index(modelBuilder, "AccountUnlocks", new[] { "AccountID" });
+            Index(modelBuilder, "AccountUnlocks", new[] { "UnlockID" });
+            Index(modelBuilder, "AccountUserIDs", new[] { "AccountID" });
+            Index(modelBuilder, "Accounts", new[] { "ClanID" });
+            Index(modelBuilder, "Accounts", new[] { "FactionID" });
+            Index(modelBuilder, "CampaignEvents", new[] { "AccountID" });
+            Index(modelBuilder, "CampaignEvents", new[] { "CampaignID" });
+            Index(modelBuilder, "CampaignEvents", new[] { "CampaignID", "PlanetID" });
+            Index(modelBuilder, "CampaignJournalVars", new[] { "CampaignID", "JournalID" });
+            Index(modelBuilder, "CampaignJournalVars", new[] { "CampaignID", "RequiredVarID" });
+            Index(modelBuilder, "CampaignJournals", new[] { "CampaignID" });
+            Index(modelBuilder, "CampaignJournals", new[] { "CampaignID", "PlanetID" });
+            Index(modelBuilder, "CampaignLinks", new[] { "CampaignID" });
+            Index(modelBuilder, "CampaignLinks", new[] { "CampaignID", "PlanetToUnlockID" });
+            Index(modelBuilder, "CampaignLinks", new[] { "CampaignID", "UnlockingPlanetID" });
+            Index(modelBuilder, "CampaignPlanetVars", new[] { "CampaignID", "PlanetID" });
+            Index(modelBuilder, "CampaignPlanetVars", new[] { "CampaignID", "RequiredVarID" });
+            Index(modelBuilder, "CampaignPlanets", new[] { "CampaignID" });
+            Index(modelBuilder, "CampaignPlanets", new[] { "MissionID" });
+            Index(modelBuilder, "CampaignVars", new[] { "CampaignID" });
+            Index(modelBuilder, "Clans", new[] { "FactionID" });
+            Index(modelBuilder, "Clans", new[] { "ForumThreadID" });
+            Index(modelBuilder, "CommanderDecorationIcons", new[] { "DecorationUnlockID" });
+            Index(modelBuilder, "CommanderDecorations", new[] { "CommanderID" });
+            Index(modelBuilder, "CommanderDecorations", new[] { "DecorationUnlockID" });
+            Index(modelBuilder, "CommanderDecorations", new[] { "SlotID" });
+            Index(modelBuilder, "CommanderModules", new[] { "CommanderID" });
+            Index(modelBuilder, "CommanderModules", new[] { "ModuleUnlockID" });
+            Index(modelBuilder, "CommanderModules", new[] { "SlotID" });
+            Index(modelBuilder, "Commanders", new[] { "AccountID" });
+            Index(modelBuilder, "Commanders", new[] { "ChassisUnlockID" });
+            Index(modelBuilder, "ContributionJars", new[] { "GuarantorAccountID" });
+            Index(modelBuilder, "Contributions", new[] { "AccountID" });
+            Index(modelBuilder, "Contributions", new[] { "ContributionJarID" });
+            Index(modelBuilder, "Contributions", new[] { "ManuallyAddedAccountID" });
+            Index(modelBuilder, "FactionTreaties", new[] { "AcceptedAccountID" });
+            Index(modelBuilder, "FactionTreaties", new[] { "AcceptingFactionID" });
+            Index(modelBuilder, "FactionTreaties", new[] { "ProposingAccountID" });
+            Index(modelBuilder, "FactionTreaties", new[] { "ProposingFactionID" });
+            Index(modelBuilder, "ForumCategories", new[] { "ParentForumCategoryID" });
+            Index(modelBuilder, "ForumLastReads", new[] { "AccountID" });
+            Index(modelBuilder, "ForumLastReads", new[] { "ForumCategoryID" });
+            Index(modelBuilder, "ForumPostEdits", new[] { "EditorAccountID" });
+            Index(modelBuilder, "ForumPostEdits", new[] { "ForumPostID" });
+            Index(modelBuilder, "ForumPostWords", new[] { "ForumPostID" });
+            Index(modelBuilder, "ForumPostWords", new[] { "WordID" });
+            Index(modelBuilder, "ForumPosts", new[] { "AuthorAccountID" });
+            Index(modelBuilder, "ForumPosts", new[] { "ForumThreadID" });
+            Index(modelBuilder, "ForumThreadLastReads", new[] { "AccountID" });
+            Index(modelBuilder, "ForumThreadLastReads", new[] { "ForumThreadID" });
+            Index(modelBuilder, "ForumThreads", new[] { "CreatedAccountID" });
+            Index(modelBuilder, "ForumThreads", new[] { "ForumCategoryID" });
+            Index(modelBuilder, "ForumThreads", new[] { "LastPostAccountID" });
+            Index(modelBuilder, "ForumThreads", new[] { "RestrictedClanID" });
+            Index(modelBuilder, "ForumThreads", new[] { "Title" });
+            Index(modelBuilder, "ForumThreads", new[] { "WikiKey" });
+            Index(modelBuilder, "Galaxies", new[] { "WinnerFactionID" });
+            Index(modelBuilder, "GameModes", new[] { "ForumThreadID" });
+            Index(modelBuilder, "GameModes", new[] { "MaintainerAccountID" });
+            Index(modelBuilder, "KudosPurchases", new[] { "AccountID" });
+            Index(modelBuilder, "KudosPurchases", new[] { "UnlockID" });
+            Index(modelBuilder, "Links", new[] { "GalaxyID" });
+            Index(modelBuilder, "Links", new[] { "PlanetID1" });
+            Index(modelBuilder, "Links", new[] { "PlanetID2" });
+            Index(modelBuilder, "LobbyChatHistories", new[] { "Target" });
+            Index(modelBuilder, "LobbyChatHistories", new[] { "User" });
+            Index(modelBuilder, "LobbyNews", new[] { "AuthorAccountID" });
+            Index(modelBuilder, "MapPollOptions", new[] { "MapPollID" });
+            Index(modelBuilder, "MapPollOptions", new[] { "ResourceID" });
+            Index(modelBuilder, "MapRatings", new[] { "AccountID" });
+            Index(modelBuilder, "MapRatings", new[] { "ResourceID" });
+            Index(modelBuilder, "MissionScores", new[] { "AccountID" });
+            Index(modelBuilder, "MissionScores", new[] { "MissionID" });
+            Index(modelBuilder, "Missions", new[] { "AccountID" });
+            Index(modelBuilder, "Missions", new[] { "ForumThreadID" });
+            Index(modelBuilder, "News", new[] { "AuthorAccountID" });
+            Index(modelBuilder, "News", new[] { "ForumThreadID" });
+            Index(modelBuilder, "PlanetFactions", new[] { "FactionID" });
+            Index(modelBuilder, "PlanetFactions", new[] { "PlanetID" });
+            Index(modelBuilder, "PlanetOwnerHistories", new[] { "OwnerAccountID" });
+            Index(modelBuilder, "PlanetOwnerHistories", new[] { "OwnerClanID" });
+            Index(modelBuilder, "PlanetOwnerHistories", new[] { "OwnerFactionID" });
+            Index(modelBuilder, "PlanetOwnerHistories", new[] { "PlanetID" });
+            Index(modelBuilder, "PlanetStructures", new[] { "OwnerAccountID" });
+            Index(modelBuilder, "PlanetStructures", new[] { "PlanetID" });
+            Index(modelBuilder, "PlanetStructures", new[] { "StructureTypeID" });
+            Index(modelBuilder, "PlanetStructures", new[] { "TargetPlanetID" });
+            Index(modelBuilder, "Planets", new[] { "ForumThreadID" });
+            Index(modelBuilder, "Planets", new[] { "GalaxyID" });
+            Index(modelBuilder, "Planets", new[] { "MapResourceID" });
+            Index(modelBuilder, "Planets", new[] { "OwnerAccountID" });
+            Index(modelBuilder, "Planets", new[] { "OwnerFactionID" });
+            Index(modelBuilder, "PollOptions", new[] { "PollID" });
+            Index(modelBuilder, "PollVotes", new[] { "AccountID" });
+            Index(modelBuilder, "PollVotes", new[] { "OptionID" });
+            Index(modelBuilder, "PollVotes", new[] { "PollID" });
+            Index(modelBuilder, "Polls", new[] { "CreatedAccountID" });
+            Index(modelBuilder, "Polls", new[] { "RestrictClanID" });
+            Index(modelBuilder, "Polls", new[] { "RestrictFactionID" });
+            Index(modelBuilder, "Polls", new[] { "RoleTargetAccountID" });
+            Index(modelBuilder, "Polls", new[] { "RoleTypeID" });
+            Index(modelBuilder, "Punishments", new[] { "AccountID" });
+            Index(modelBuilder, "Punishments", new[] { "CreatedAccountID" });
+            Index(modelBuilder, "Ratings", new[] { "AccountID" });
+            Index(modelBuilder, "Ratings", new[] { "MissionID" });
+            Index(modelBuilder, "ResourceContentFiles", new[] { "ResourceID" });
+            Index(modelBuilder, "ResourceDependencies", new[] { "ResourceID" });
+            Index(modelBuilder, "Resources", new[] { "ForumThreadID" });
+            Index(modelBuilder, "Resources", new[] { "MissionID" });
+            Index(modelBuilder, "Resources", new[] { "RapidTag" });
+            Index(modelBuilder, "Resources", new[] { "TaggedByAccountID" });
+            Index(modelBuilder, "RoleTypeHierarchies", new[] { "MasterRoleTypeID" });
+            Index(modelBuilder, "RoleTypeHierarchies", new[] { "SlaveRoleTypeID" });
+            Index(modelBuilder, "RoleTypes", new[] { "RestrictFactionID" });
+            Index(modelBuilder, "SpringBattleBots", new[] { "SpringBattleID" });
+            Index(modelBuilder, "SpringBattlePlayers", new[] { "AccountID" });
+            Index(modelBuilder, "SpringBattlePlayers", new[] { "SpringBattleID" });
+            Index(modelBuilder, "SpringBattles", new[] { "EngineGameID" });
+            Index(modelBuilder, "SpringBattles", new[] { "ForumThreadID" });
+            Index(modelBuilder, "SpringBattles", new[] { "HostAccountID" });
+            Index(modelBuilder, "SpringBattles", new[] { "MapResourceID" });
+            Index(modelBuilder, "SpringBattles", new[] { "ModResourceID" });
+            Index(modelBuilder, "SpringBattles", new[] { "ReplayFileName" });
+            Index(modelBuilder, "SpringBattles", new[] { "StartTime" });
+            Index(modelBuilder, "StructureTypes", new[] { "EffectUnlockID" });
+            Index(modelBuilder, "TreatyEffects", new[] { "EffectTypeID" });
+            Index(modelBuilder, "TreatyEffects", new[] { "FactionTreatyID" });
+            Index(modelBuilder, "TreatyEffects", new[] { "GivingFactionID" });
+            Index(modelBuilder, "TreatyEffects", new[] { "PlanetID" });
+            Index(modelBuilder, "TreatyEffects", new[] { "ReceivingFactionID" });
+            Index(modelBuilder, "Unlocks", new[] { "RequiredUnlockID" });
         }
 
         /// <summary>
@@ -73,6 +258,19 @@ namespace ZkData
         /// where a model property does not match, that is a difference the schema diff
         /// will report rather than something to crash on here.
         /// </summary>
+        /// <summary>Declares an index by table and column names, skipping if the model lacks them.</summary>
+        private static void Index(ModelBuilder modelBuilder, string table, string[] columns)
+        {
+            foreach (var entity in modelBuilder.Model.GetEntityTypes())
+            {
+                if (entity.GetTableName() != table) continue;
+                foreach (var column in columns)
+                    if (entity.FindProperty(column) == null) return;
+                modelBuilder.Entity(entity.ClrType).HasIndex(columns);
+                return;
+            }
+        }
+
         private static void Facet(ModelBuilder modelBuilder, string table, string column,
             System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.PropertyBuilder> configure)
         {

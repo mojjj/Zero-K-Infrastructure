@@ -17,9 +17,22 @@ TARGET = pathlib.Path("ZkData.Core/ZkDataContext.ColumnFacets.cs")
 
 # Tables the EF Core model does not have, or whose names differ - skipping them keeps the
 # generated file compiling while those are dealt with separately.
-SKIP_TABLES = {"__MigrationHistory", "DynamicConfigs", "Words", "ForumPostWords",
-               "AccountCampaignProgresses", "AccountCampaignJournalProgresses",
+SKIP_TABLES = {"__MigrationHistory",
                "EventAccount", "EventClan", "EventFaction", "EventPlanet", "EventSpringBattle"}
+
+
+def indexes():
+    """Non-unique, non-primary indexes, as (table, [columns])."""
+    table = None
+    for line in SCHEMA.read_text(encoding="utf-8").splitlines():
+        if line.startswith("TABLE "):
+            table = line[6:].strip()
+            continue
+        if not table or table in SKIP_TABLES:
+            continue
+        m = re.match(r'  INDEX \(([^)]*)\)\s*$', line)
+        if m and m.group(1).strip():
+            yield table, [c.strip() for c in m.group(1).split(",")]
 
 
 def parse():
@@ -80,6 +93,16 @@ namespace ZkData
         lines.append('            Facet(modelBuilder, "%s", "%s", p => p.HasDefaultValueSql("%s"));'
                      % (table, column, expression.replace('"', '\\"')))
 
+    index_list = list(indexes())
+    lines.append("")
+    lines.append("            // indexes the database has that EF Core would not create (%d)." % len(index_list))
+    lines.append("            // EF6 indexed foreign key columns even when they were already the leading")
+    lines.append("            // columns of the primary key; EF Core treats those as redundant and skips")
+    lines.append("            // them. Declaring them keeps the schema identical.")
+    for table, columns in index_list:
+        lines.append('            Index(modelBuilder, "%s", new[] { %s });'
+                     % (table, ", ".join('"%s"' % c.split()[0] for c in columns)))
+
     lines.append('''        }
 
         /// <summary>
@@ -88,6 +111,19 @@ namespace ZkData
         /// where a model property does not match, that is a difference the schema diff
         /// will report rather than something to crash on here.
         /// </summary>
+        /// <summary>Declares an index by table and column names, skipping if the model lacks them.</summary>
+        private static void Index(ModelBuilder modelBuilder, string table, string[] columns)
+        {
+            foreach (var entity in modelBuilder.Model.GetEntityTypes())
+            {
+                if (entity.GetTableName() != table) continue;
+                foreach (var column in columns)
+                    if (entity.FindProperty(column) == null) return;
+                modelBuilder.Entity(entity.ClrType).HasIndex(columns);
+                return;
+            }
+        }
+
         private static void Facet(ModelBuilder modelBuilder, string table, string column,
             System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.PropertyBuilder> configure)
         {
