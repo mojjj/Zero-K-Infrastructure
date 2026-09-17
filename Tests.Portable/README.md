@@ -15,6 +15,9 @@ docker run --rm -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:9.0 \
 
 23 tests, about 150 ms.
 
+CI runs exactly this on every pull request - `.github/workflows/test_portable.yml`, on a
+stock Linux runner, no Windows and no database.
+
 ## Why it links sources instead of referencing projects
 
 `ZkData` and `PlasmaShared` target .NET Framework 4.8 and cannot be loaded by a .NET 9
