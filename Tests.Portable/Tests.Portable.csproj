@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Phase 3 gate: tests that run on .NET 9 today, on Linux, with `dotnet test`.
+
+    This project does not reference ZkData or PlasmaShared - those are .NET Framework
+    4.8 and cannot load here. It LINKS their source files instead. That has two
+    purposes at once: the tests exercise the real production code, and every file
+    listed below is thereby proven to compile clean on .NET 9. The link list is the
+    running inventory of what the port has already cleared.
+
+    Run it with:
+        docker run (see HOSTING.md) with image mcr.microsoft.com/dotnet/sdk:9.0 and:
+            dotnet test Tests.Portable/Tests.Portable.csproj
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <LangVersion>latest</LangVersion>
+    <!-- linked legacy sources, not new code: do not fail the build on their warnings -->
+    <NoWarn>$(NoWarn);CS0618;CS0649;CS0168;CS1998</NoWarn>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.6.1" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.6.1" />
+  </ItemGroup>
+
+  <!-- Whole History Rating: the Bayesian core, free of Entity Framework -->
+  <ItemGroup>
+    <Compile Include="..\ZkData\Ef\WHR\Game.cs"                Link="Linked\WHR\Game.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\Player.cs"              Link="Linked\WHR\Player.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\PlayerDay.cs"           Link="Linked\WHR\PlayerDay.cs" />
+    <Compile Include="..\ZkData\Ef\WHR\RatingSystems.Dates.cs" Link="Linked\WHR\RatingSystems.Dates.cs" />
+  </ItemGroup>
+
+  <!-- support types the above need -->
+  <ItemGroup>
+    <Compile Include="..\Shared\PlasmaShared\ISpringieService\RatingCategory.cs" Link="Linked\RatingCategory.cs" />
+    <Compile Include="..\Shared\PlasmaShared\GlobalConst.Rating.cs"                Link="Linked\GlobalConst.Rating.cs" />
+    <Compile Include="..\Shared\PlasmaShared\ModeType.cs"                          Link="Linked\ModeType.cs" />
+    <Compile Include="..\Shared\PlasmaShared\Utils.Enumerable.cs"                  Link="Linked\Utils.Enumerable.cs" />
+  </ItemGroup>
+
+</Project>

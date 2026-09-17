@@ -1,0 +1,51 @@
+# The .NET 9 test suite (Tests.Portable), run on Linux.
+#
+# This is the Phase 3 gate made self-enforcing. Tests.Portable links production sources
+# rather than referencing projects, so a green run means two things: the Whole History
+# Rating tests pass, and every file in its link list still compiles on .NET 9. A change
+# that drags a Framework-only dependency into linked code fails here.
+#
+# Unlike test_pullrequest.yml this needs no Windows, no MSBuild and no database - it runs
+# on a stock GitHub-hosted Linux runner in well under a minute.
+
+name: Test .NET 9 portable
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: dotnet test (net9.0, linux)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Test
+        run: >
+          dotnet test Tests.Portable/Tests.Portable.csproj
+          --configuration Release
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory TestResults
+
+      - name: Test report
+        # run even if the tests failed, but not for a PR from a fork
+        if: (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request') && (success() || failure())
+        uses: dorny/test-reporter@v1
+        with:
+          name: Test results .NET 9
+          path: TestResults/test-results.trx
+          reporter: dotnet-trx

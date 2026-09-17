@@ -1,18 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using PlasmaShared;
 
 namespace ZkData
 {
-    public enum ModeType
-    {
-        Local = 0, // localhost debugging
-        Test = 1, // test.zero-k.info
-        Live = 2, // LIVE 
-    }
-
-    public static class GlobalConst
+    public static partial class GlobalConst
     {
         static ModeType mode;
 
@@ -120,13 +113,8 @@ namespace ZkData
         public const int MinDurationForPlanetwars = 0;
         public const int MaxDurationForPlanetwars = 60*60*3; // 3 hours
 
-        public static int LadderAverageDays = 3;
-        public static int LadderActivityDays => mode == ModeType.Live ? 30 : 90;
         public const int LadderSize = 50; // Amount of players shown on ladders
         public const float LadderUpdatePeriod = 1; //Ladder is fully updated every X hours
-        public const float EloToNaturalRatingMultiplierSquared = 0.00003313686f;
-        public static float NaturalRatingVariancePerDay(float games) => EloToNaturalRatingMultiplierSquared * 200000 / (games + 400); //whr expected player rating change over time
-        public const float NaturalRatingVariancePerGame = EloToNaturalRatingMultiplierSquared * 500; //whr expected player rating change per game played
         public const float LadderEloMaxChange = 50;
         public const float LadderEloMinChange = 1;
         public const float LadderEloClassicEloK = 32f; //K value of classic elo

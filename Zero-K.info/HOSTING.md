@@ -87,6 +87,39 @@ CoreWCF, or re-expose their operations as JSON endpoints and ship updated client
 first. This is the reason the modernization plan's "remove WCF" step could not be
 carried out as written.
 
+## Linux and containers: what is done and what is still blocked
+
+The modernization plan puts Linux, containers and CI in Phase 4, after the .NET 9 port.
+Most of it genuinely is blocked on that port - .NET Framework 4.8 does not run on Linux,
+so the website cannot be containerized before it is ported. Two pieces were not blocked
+and are done:
+
+**The case-collision is fixed.** `AutoRegistrator` (the project) and `Autoregistrator`
+(its resources) were two directories differing only in case. Windows sees one directory
+and Linux sees two, and the website referenced `..\Autoregistrator\Autoregistrator.csproj`,
+which on Linux matched neither. Everything is now `AutoRegistrator`, matching the solution
+file, `Fixer.csproj` and the project's own `AssemblyName`. A Linux build no longer needs
+symlinks to get past it.
+
+**CI runs the .NET 9 tests.** `.github/workflows/test_portable.yml` runs
+`Tests.Portable` on a stock Linux runner: no Windows, no MSBuild, no database, well under
+a minute. `test_pullrequest.yml` still does the full Framework build on the self-hosted
+Windows runner, and still has to.
+
+What is still blocked, in the order it has to be unblocked:
+
+1. **EF6.** `ZkDataContext` and 117 migrations. EF Core is a rewrite of the data layer,
+   not a retarget, and everything else waits behind it.
+2. **`System.Drawing`.** Used for image resizing in `Shared/PlasmaShared/Utils.cs`. On
+   .NET 9 it lives in `System.Drawing.Common`, which is Windows-only. Needs ImageSharp or
+   SkiaSharp.
+3. **Server-side WCF.** The two `.svc` endpoints above. CoreWCF, or replace them and ship
+   updated clients first.
+4. **A mono build still needs one workaround**, so it is not CI-able as a Linux check yet:
+   `ZkData.MissionUpdater.UpdateMission` hits a `System.IO.Compression` facade version
+   conflict under mono 6.12. That is a mono artifact rather than a .NET 9 blocker, but it
+   is why there is no Linux compile check of the website in CI.
+
 ## Related work in progress
 
 `ILobbyServerApi` (see `ZkLobbyServer/ILobbyServerApi.cs`) is the seam being

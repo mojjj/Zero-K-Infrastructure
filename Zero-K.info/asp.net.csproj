@@ -400,9 +400,9 @@
     <Content Include="Views\Battles\BattleIndex.cshtml" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Autoregistrator\Autoregistrator.csproj">
+    <ProjectReference Include="..\AutoRegistrator\AutoRegistrator.csproj">
       <Project>{01FAEBBC-02E0-42FE-972C-F17045BA3807}</Project>
-      <Name>Autoregistrator</Name>
+      <Name>AutoRegistrator</Name>
     </ProjectReference>
     <ProjectReference Include="..\Shared\LobbyClient\LobbyClient.csproj">
       <Project>{C91CC692-53FC-40B7-8B9A-2A57EDEE331E}</Project>
