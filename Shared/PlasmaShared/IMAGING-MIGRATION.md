@@ -109,8 +109,24 @@ whether to re-process the existing ones is a decision, not a refactor.
      the interop rewrite described above, not a call-site change.
    - `GetResized` / `GetResizedWithCache` in `ZeroKLobby`: a WinForms client that is not
      part of this port and keeps System.Drawing either way.
-2. Add an ImageSharp implementation beside it; switch the callers that only resize and
-   save. Comparable output can be checked by eye on a test deployment.
+2. **Half done:** `Imaging/ImageSharpImageProcessor.cs` exists and is tested. It is
+   linked into `Tests.Portable` and exercised on **.NET 9, on Linux**, where
+   System.Drawing.Common cannot run at all - real bytes, real files: dimensions, that the
+   output reads back as an image, and that the file extension still chooses the format,
+   which the news upload path depends on.
+
+   It is **not wired up**. `Images.Processor` still defaults to System.Drawing, because
+   switching what the server writes to disk wants comparing on a deployment rather than in
+   a compiler. The two libraries use different resampling kernels, so output will differ
+   slightly by design; whether that difference matters is a question for eyes, not
+   assertions.
+
+   Version, since it is less obvious than it looks: **ImageSharp 2.1.13**. The 2.x line is
+   Apache-2.0 and supports .NET Framework 4.8, so it lives in the codebase *before* the
+   port rather than after - which is what makes an incremental switch possible at all. 3.x
+   and later need .NET 6+ and carry the Six Labors Split Licence. Older 2.1.x patch levels
+   have published high-severity advisories (2.1.9 does, and so does 3.1.6); 2.1.13 is
+   clean. Verified by restoring each on both target frameworks.
 3. `ResizedImageCache` - its key is an `Image`, so it changes with whatever type replaces
    it.
 4. `UnitSync.cs` last, on its own, with map files to hand.
