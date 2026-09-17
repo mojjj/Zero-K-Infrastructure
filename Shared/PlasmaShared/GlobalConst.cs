@@ -269,13 +269,4 @@ namespace ZkData
 
     }
 
-    public enum PlanetWarsModes
-    {
-        [Description("offline")]
-        AllOffline = 0,
-        [Description("pre-game")]
-        PreGame = 1,
-        [Description("running")]
-        Running = 2
-    }
 }

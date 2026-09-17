@@ -32,6 +32,35 @@ it on every pull request, so a migration that changes the schema without updatin
 snapshot is caught rather than noticed months later - which is exactly how the live
 database came to be behind this repository without anything recording it.
 
+### 0b. How far the entity classes already are - measured, not guessed
+
+An EF Core model project was built as an experiment: net9.0, EF Core 9, linking
+`ZkData/Ef/*.cs` the way `Tests.Portable` links sources. It was not kept - it does not
+compile yet, and a broken project in the tree helps nobody - but the measurement is the
+point:
+
+**66 of the 83 entity classes compile unchanged on .NET 9.** The DataAnnotations
+attributes they lean on (`[Key]`, `[Column]`, `[Table]`, `[NotMapped]`, `[StringLength]`)
+exist there and EF Core reads them, so most of the model ports by moving the file.
+
+The 17 that do not, and why:
+
+| Reason | Count | Files |
+|---|---|---|
+| EF6's property-level `[Index]` attribute | 36 uses | across `Account`, `SpringBattle`, `Resource`, `Mission`, `Autohost`, `Word`, others |
+| references `ZkDataContext` from entity logic | 10 uses | `DynamicConfig`, `Punishment` (excluded from the experiment outright) |
+| needs `Ratings.PlayerRating` | 8 uses | `Account`, `AccountRating` |
+| needs `LobbyClient` protocol types (`Say`, `SayPlace`, `UserProfile`, `Welcome`) | 12 uses | `Account`, `LobbyChatHistory`, `Punishment` |
+| needs `Newtonsoft.Json` | 6 uses | package reference, not a port problem |
+
+The `[Index]` attribute is the biggest single item and cannot be fixed before the switch:
+EF6 needs it where it is, and EF Core has no property-level equivalent - it uses a
+class-level `[Index(nameof(Prop), IsUnique = true)]` instead. All 36 have to change in the
+same commit that changes the provider.
+
+The `LobbyClient` dependency is worth noting early: it means porting `ZkData` pulls in the
+lobby protocol, which is a larger surface than the entity classes themselves.
+
 ### 1. The migration history has no EF Core equivalent
 
 117 EF6 migrations plus a `DbMigrationsConfiguration`, applied at startup by
@@ -99,6 +128,12 @@ These were cleared ahead of the migration because they are safe on EF6 today:
 - **`IDbSet<T>` replaced with `DbSet<T>`** in the four extension methods in
   `ZkData/DbExtensions.cs`. EF Core has no `IDbSet<T>`; `DbSet<T>` exists in both, so
   these signatures now port unchanged.
+- **Enums lifted out of files that cannot be ported.** `ModeType` and `PlanetWarsModes`
+  were declared inside `GlobalConst.cs`, which needs WCF and therefore cannot compile on
+  .NET 9 - so anything referencing those enums inherited that. They are now
+  `Shared/PlasmaShared/ModeType.cs` and `PlanetWarsModes.cs`. Same pattern as
+  `GlobalConst.Rating.cs` and `Utils.Enumerable.cs`: the pure part in its own file, the
+  public API unchanged.
 
 ## What is not a problem
 

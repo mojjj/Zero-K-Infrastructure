@@ -82,6 +82,7 @@
     <Compile Include="GlobalConst.cs" />
     <Compile Include="GlobalConst.Rating.cs" />
     <Compile Include="ModeType.cs" />
+    <Compile Include="PlanetWarsModes.cs" />
     <Compile Include="IpHelpers.cs" />
     <Compile Include="ISpringieService\RatingCategory.cs" />
     <Compile Include="PriorityScheduler.cs" />
