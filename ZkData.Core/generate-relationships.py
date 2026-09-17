@@ -83,10 +83,15 @@ def translate(statement):
     names = [n for n, _ in parts if n != "Entity"]
     arg = dict((n, a) for n, a in parts)
 
-    # property facets translate unchanged
+    # property facets translate unchanged - IsUnicode, HasPrecision, IsFixedLength
     if names and names[0] == "Property":
-        tail = "".join(".%s(%s)" % (n, a) for n, a in parts[1:])
-        return "modelBuilder.Entity<%s>().Property(%s)%s;" % (entity, arg["Property"], tail[tail.index(")") + 1:] if False else "".join(".%s(%s)" % (n, a) for n, a in parts[2:])), None
+        # everything after Property is the facet chain; an earlier version sliced this
+        # from parts[2:] and silently dropped single-facet statements such as
+        # Property(e => e.SteamID).HasPrecision(38, 0)
+        facets = "".join(".%s(%s)" % (n, a) for n, a in parts[1:] if n != "Property")
+        if not facets:
+            return None, "Property with no facets"
+        return "modelBuilder.Entity<%s>().Property(%s)%s;" % (entity, arg["Property"], facets), None
 
     if names == ["HasKey"]:
         return "modelBuilder.Entity<%s>().HasKey(%s);" % (entity, arg["HasKey"]), None
