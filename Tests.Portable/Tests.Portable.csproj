@@ -50,6 +50,11 @@
     <Compile Include="..\Shared\PlasmaShared\Diagrams\Vector.cs" Link="Linked\Vector.cs" />
   </ItemGroup>
 
+  <!-- Image target sizing. Pure arithmetic, no System.Drawing.Common. -->
+  <ItemGroup>
+    <Compile Include="..\Shared\PlasmaShared\Imaging\ImageSizing.cs" Link="Linked\ImageSizing.cs" />
+  </ItemGroup>
+
   <!-- support types the above need -->
   <ItemGroup>
     <Compile Include="..\Shared\PlasmaShared\ISpringieService\RatingCategory.cs" Link="Linked\RatingCategory.cs" />

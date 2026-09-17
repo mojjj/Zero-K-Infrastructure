@@ -13,7 +13,7 @@ docker run --rm -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:9.0 \
     dotnet test Tests.Portable/Tests.Portable.csproj
 ```
 
-41 tests, about 150 ms.
+55 tests, about 150 ms.
 
 CI runs exactly this on every pull request - `.github/workflows/test_portable.yml`, on a
 stock Linux runner, no Windows and no database.
@@ -60,6 +60,9 @@ player's displayed rating, and a port that shifts it would do so silently.
   to be inline in three Razor views and emitted as JavaScript, so nothing could check it.
 - `VectorTests` - polar-coordinate maths from the diagram renderer, linked both to test it
   and to demonstrate that `System.Drawing.Point` is fine on .NET 9.
+- `ImageSizingTests` - target sizes for image scaling, including a characterisation of the
+  double-applied aspect ratio in `Utils.ToBytes`. See
+  `Shared/PlasmaShared/IMAGING-MIGRATION.md`.
 
 These were checked against a deliberate mutation: changing the Elo scale constant from
 `ln(10)/400` to `ln(10)/200` fails three of them.

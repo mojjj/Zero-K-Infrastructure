@@ -64,10 +64,36 @@ The awkward one is `UnitSync.cs`. It receives raw pixel buffers from a native li
 wraps them in `Bitmap`. That is not a library swap, it is a rewrite of the interop
 marshalling, and it cannot be tested without unitsync and real map files.
 
+## A defect found while separating the arithmetic
+
+`Utils.ToBytes` is what `AutoRegistrator` uploads every new map's minimap, metal map and
+height map through. It does two things wrong, both preserved for now in
+`ImageSizing.LegacyToBytesSize` and pinned by tests:
+
+1. **It applies the aspect ratio twice.** `UnitSync.GetMinimap` already calls
+   `FixAspectRatio`, which turns unitsync's square minimap into the map's real proportions.
+   `ToBytes` then computes the ratio of *that already-correct image* and applies it again,
+   so a 2:1 minimap is uploaded as 4:1. Square images are unaffected, which is why it has
+   survived.
+2. **It ignores its `size` argument.** `AutoRegistrator` passes `ImageSize = 256`,
+   commented "max size of minimap to be sent to server". Nothing downscales; a 1024-wide
+   minimap is uploaded at 1024.
+
+`ImageSizing.BoundedByLongestSide` is what it was presumably meant to do, and is tested but
+deliberately **not wired up**: switching changes the images uploaded for every new map, and
+whether to re-process the existing ones is a decision, not a refactor.
+
 ## Suggested order
 
-1. Put an interface over the four `Utils.cs` operations; keep `System.Drawing` behind it.
-   Compile-checkable, no behaviour change.
+0. **Done:** the target-size arithmetic is separated into
+   `Shared/PlasmaShared/Imaging/ImageSizing.cs`, linked into `Tests.Portable` and covered
+   by 14 tests. It is pure, uses only `System.Drawing.Primitives`, and therefore already
+   runs on .NET 9. Sizing is where a change silently distorts an image, so it is worth
+   holding still before anything underneath it moves.
+1. Put an interface over the remaining `Utils.cs` pixel operations; keep `System.Drawing`
+   behind it. Note that `GetResized` and `GetResizedWithCache` are used mostly by
+   `ZeroKLobby`, a WinForms client that is not part of this port and keeps System.Drawing
+   either way - so the seam only needs to cover the server-side callers.
 2. Add an ImageSharp implementation beside it; switch the callers that only resize and
    save. Comparable output can be checked by eye on a test deployment.
 3. `ResizedImageCache` - its key is an `Image`, so it changes with whatever type replaces
