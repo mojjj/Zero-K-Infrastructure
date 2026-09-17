@@ -77,22 +77,24 @@ namespace ZeroKWeb.Controllers
                 news.PinnedOrder = nn.PinnedOrder;
                 
 
-                Image im = null;
+                byte[] uploadedImage = null;
                 if (image != null && image.ContentLength > 0)
                 {
-                    im = Image.FromStream(image.InputStream);
+                    uploadedImage = Images.ReadAll(image.InputStream);
                     news.ImageExtension = Path.GetExtension(image.FileName);
                 }
 
                 db.SaveChanges();
 
-                if (im != null)
+                if (uploadedImage != null)
                 {
-                    Image thumb = im.GetResized(256, ImageSizing.ProportionalHeight(im.Width, im.Height, 256), InterpolationMode.HighQualityBicubic);
                     var targetPath = Server.MapPath(news.ImageRelativeUrl);
                     var folder = Path.GetDirectoryName(targetPath);
                     if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
-                    thumb.Save(targetPath);
+                    var uploadedSize = Images.Processor.Measure(uploadedImage);
+                    Images.Processor.SaveResized(uploadedImage,
+                        new Size(256, ImageSizing.ProportionalHeight(uploadedSize.Width, uploadedSize.Height, 256)),
+                        targetPath);
                 }
                 scope.Complete();
             }
