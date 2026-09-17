@@ -23,6 +23,11 @@ namespace ZkData.Core.Ef6Compat
                 var clrType = entity.ClrType;
                 if (clrType == null) continue;
 
+                // EF Core materialises many-to-many join tables as shared-type entities
+                // over Dictionary<string, object>. They carry no [Index] attributes, and
+                // asking modelBuilder.Entity() for them throws.
+                if (entity.HasSharedClrType) continue;
+
                 // name -> the properties carrying that index, with their declared order
                 var named = new Dictionary<string, List<Tuple<int, string, IndexAttribute>>>();
                 var unnamed = new List<Tuple<string, IndexAttribute>>();

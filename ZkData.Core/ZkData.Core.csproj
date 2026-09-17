@@ -65,6 +65,8 @@
     <Compile Include="..\ZkData\Ef\WHR\MapRatings.cs" Link="Linked\WHR\MapRatings.cs" />
     <Compile Include="..\ZkData\SpringFilesUnitsyncAttempt.cs" Link="Linked\SpringFilesUnitsyncAttempt.cs" />
     <Compile Include="..\ZkData\SteamWebApi.cs" Link="Linked\SteamWebApi.cs" />
+    <Compile Include="..\ZkData\Secrets.cs" Link="Linked\Secrets.cs" />
+    <Compile Include="..\Shared\PlasmaShared\PriorityScheduler.cs" Link="Linked\PriorityScheduler.cs" />
     <Compile Include="..\Shared\PlasmaShared\Relation.cs" Link="Linked\Relation.cs" />
     <Compile Include="..\Shared\LobbyClient\Protocol\Messages.cs" Link="Linked\Protocol\Messages.cs" />
     <Compile Include="..\Shared\LobbyClient\Protocol\MatchMakerMessages.cs" Link="Linked\Protocol\MatchMakerMessages.cs" />

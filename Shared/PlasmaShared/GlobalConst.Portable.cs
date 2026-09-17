@@ -55,5 +55,11 @@ namespace ZkData
         public const int XpForMissionOrBotsVictory = 50;
         public static Dictionary<ulong, int> DlcToKudos = new Dictionary<ulong, int>() { { 842950, 100 }, { 842951, 250 }, { 842952, 500 } };
         public const string DefaultEngineOverride = "104.0.1-287-gf7b0fcc"; // hack for ZKL using tasclient's engine - override here for missions etc
+        public const int SteamAppID = 334920;
+        public const int MinDurationForXP = 240;    // seconds
+        public const int LadderSize = 50; // Amount of players shown on ladders
+        public const float LadderUpdatePeriod = 1; //Ladder is fully updated every X hours
+        public const float LadderEloClassicEloK = 32f; //K value of classic elo
+        public const float LadderEloSmoothingFactor = 0.8f; //1 for change as fast as whr, 0 for no change
     }
 }
