@@ -23,7 +23,6 @@ using EntityFramework.Extensions;
 //using LobbyClient;
 //using NightWatch;
 using LobbyClient;
-using Microsoft.Linq.Translations;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PlasmaDownloader;

@@ -7,7 +7,6 @@ using System.IO;
 using System.Linq;
 using System.ServiceModel;
 using LobbyClient;
-using Microsoft.Linq.Translations;
 using PlasmaDownloader;
 using PlasmaShared;
 using ZkData;

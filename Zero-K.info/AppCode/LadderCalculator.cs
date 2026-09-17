@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using EntityFramework.Extensions;
-using Microsoft.Linq.Translations;
 using ZkData;
 using ZkLobbyServer;
 using Ratings;
