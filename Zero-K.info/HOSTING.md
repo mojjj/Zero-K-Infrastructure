@@ -63,6 +63,30 @@ Look at `recycling.periodicRestart`, `processModel.idleTimeout` and `startMode`.
 
       appcmd set apppool /apppool.name:"<pool>" /processModel.shutdownTimeLimit:00:02:00
 
+## Service endpoints that deployed clients depend on
+
+Three endpoints serve the desktop clients. They look interchangeable and are not, so
+before touching any of them:
+
+- **`/ContentService`** - `Controllers/ContentServiceController.cs`, JSON over POST.
+  This is the current path. `PlasmaShared.ContentServiceClient` posts here, and
+  `GlobalConst.GetContentService()` is what `ZeroKLobby` and `ZkLobbyServer` call.
+- **`ContentService.svc`** - WCF, and marked `[Obsolete]` in its own source. Every
+  operation forwards to `GlobalConst.GetContentService()`, which means an HTTP round
+  trip out of the worker process and back into `/ContentService` on the same site.
+  Nothing in this repository calls it; it exists for clients that were deployed
+  before the JSON endpoint. Deciding whether it can go needs production access-log
+  evidence, not a grep.
+- **`MissionService.svc`** - WCF, and live. `MissionEditor` in this repository builds
+  a `ChannelFactory<IMissionService>` against `GlobalConst.BaseSiteUrl +
+  "/MissionService.svc"`. Removing it breaks the mission editor.
+
+**Porting note.** Server-side WCF hosting has no in-box successor on .NET 9. The two
+`.svc` endpoints are therefore a hard constraint on the port: either host them with
+CoreWCF, or re-expose their operations as JSON endpoints and ship updated clients
+first. This is the reason the modernization plan's "remove WCF" step could not be
+carried out as written.
+
 ## Related work in progress
 
 `ILobbyServerApi` (see `ZkLobbyServer/ILobbyServerApi.cs`) is the seam being
