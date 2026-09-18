@@ -16,7 +16,16 @@ namespace ZkData
 
             // EF6: HasRequired(e => e.Resource) with no inverse - a required one-way
             // reference. EF Core needs the inverse spelled, even as none.
-            modelBuilder.Entity<AccountMapBan>().HasOne(e => e.Resource).WithMany()
+            // The foreign key is BannedMapResourceID, not the ResourceID EF Core would
+            // invent from the navigation's type name. Naming it is what stops a shadow
+            // column and a second index appearing.
+            // Both ends have to be named. With WithMany() and no inverse, Resource's own
+            // BansByAccountID collection stays unpaired and EF Core builds a SECOND
+            // relationship for it, with a shadow ResourceID column and its own index -
+            // which is exactly what the schema diff showed.
+            modelBuilder.Entity<AccountMapBan>().HasOne(e => e.Resource)
+                .WithMany(r => r.BansByAccountID)
+                .HasForeignKey(e => e.BannedMapResourceID)
                 .IsRequired(true).OnDelete(DeleteBehavior.Cascade);
 
             // EF6: HasOptional(...).WithRequired(...) is a one-to-one where the dependent
@@ -26,6 +35,17 @@ namespace ZkData
                 .WithOne(e => e.Unlock)
                 .HasForeignKey<CommanderDecorationIcon>(e => e.DecorationUnlockID)
                 .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+
+            // CampaignEvent sits on two relationships that share the CampaignID column: one
+            // to Campaign on CampaignID alone, and one to CampaignPlanet on
+            // (CampaignID, PlanetID). EF6 accepted the overlap. EF Core resolves it by
+            // inventing shadow columns for the composite one unless it is stated last and
+            // in full - which is what this does. Declared here rather than in the generated
+            // file because it has to run after everything the generator emits.
+            modelBuilder.Entity<CampaignEvent>().HasOne(e => e.CampaignPlanet)
+                .WithMany(e => e.CampaignEvents)
+                .HasForeignKey(e => new { e.CampaignID, e.PlanetID })
+                .IsRequired(false).OnDelete(DeleteBehavior.Cascade);
 
             // The five many-to-many joins. EF6 described the join table with
             // Map/MapLeftKey/MapRightKey; EF Core uses UsingEntity. Table and column names

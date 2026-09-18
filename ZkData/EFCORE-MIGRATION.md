@@ -199,7 +199,7 @@ the schema the EF6 migrations produce:
 | indexes | 267 | 224 |
 | foreign keys | 163 | 164 |
 
-**56 differing lines**, down from 353. That is the number the port is working down, and it
+**53 differing lines**, down from 353, with columns and foreign keys now matching in count exactly. That is the number the port is working down, and it
 is a number rather than an impression.
 
 What closed the first half:
@@ -253,17 +253,26 @@ Then, all from the schema rather than from rules:
   says 200 and says nothing about uniqueness. Reading the schema matched it; reading the
   attribute would not have.
 
+One shadow foreign key is fixed, and the reason is worth keeping. `AccountMapBan.Resource`
+was configured as `HasOne(e => e.Resource).WithMany()` - no inverse named. That leaves
+`Resource.BansByAccountID` unpaired, so EF Core builds a **second** relationship for it,
+with a shadow `ResourceID` column, its own index and its own foreign key. Naming both ends
+removed all three. `WithMany()` with no argument is not "this side has no navigation"; it
+is "make me a new relationship".
+
 What remains, in order of size:
 
-1. **17 index lines** and **4 unique index lines**, mostly column ordering within an index,
+1. **16 index lines** and **4 unique index lines**, mostly column ordering within an index,
    plus the indexes on the many-to-many join tables - those are shared-type entities in EF
    Core, over `Dictionary<string, object>`, which `modelBuilder.Entity()` refuses, so the
    facet helpers skip them. Reaching them means going through the metadata API instead.
-2. **12 column lines**, now almost entirely shadow foreign key columns EF Core invented -
-   `CampaignPlanetCampaignID`, `CampaignPlanetPlanetID` - where a relationship is not mapped
-   onto the existing composite key. Each needs a `HasForeignKey` naming the real columns.
-3. **11 foreign key lines**, the same shadow keys seen from the other side.
-4. **7 primary key lines**, column ordering within composite keys, mostly on the join
+2. **11 column lines** and **10 foreign key lines**, the same problem from both sides:
+   `CampaignEvent` sits on two relationships sharing the `CampaignID` column - one to
+   `Campaign` on `CampaignID`, one to `CampaignPlanet` on `(CampaignID, PlanetID)`. EF6
+   accepted the overlap. EF Core still invents `CampaignPlanetCampaignID` and
+   `CampaignPlanetPlanetID` even with both ends and the composite key named, so this needs
+   more than a fluent declaration.
+3. **7 primary key lines**, column ordering within composite keys, mostly on the join
    tables.
 
 Reproduce the comparison:
