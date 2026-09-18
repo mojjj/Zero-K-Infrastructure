@@ -92,6 +92,15 @@ jobs:
           ZK_CONNECTION_STRING: "Data Source=127.0.0.1,14330;Initial Catalog=zk_test;User ID=sa;Password=ZkLocal!Dev2026;MultipleActiveResultSets=true;TrustServerCertificate=true"
         run: ./tools/dotnet.sh run --project ZkData.Core -- read
 
+      # Writing is a third question again: EF6's SaveChanges ran entity hooks and validated
+      # the annotations, and EF Core's does neither by itself. Everything here happens in a
+      # transaction that is rolled back, and the last check confirms the fixture is
+      # untouched - so this step runs before nothing and after anything.
+      - name: Write to the fixture through the EF Core model
+        env:
+          ZK_CONNECTION_STRING: "Data Source=127.0.0.1,14330;Initial Catalog=zk_test;User ID=sa;Password=ZkLocal!Dev2026;MultipleActiveResultSets=true;TrustServerCertificate=true"
+        run: ./tools/dotnet.sh run --project ZkData.Core -- write
+
       - name: SQL Server log
         if: failure()
         run: docker logs zk-db --tail 80

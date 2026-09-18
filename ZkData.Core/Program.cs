@@ -11,6 +11,7 @@ namespace ZkData.Core
     ///
     ///     ZK_CONNECTION_STRING=... dotnet run -- create   build a database from the model
     ///     ZK_CONNECTION_STRING=... dotnet run -- read     read an existing one through it
+    ///     ZK_CONNECTION_STRING=... dotnet run -- write    write to one through it (rolled back)
     ///
     /// The comparison is the point: it is how the port knows whether the model is right,
     /// rather than whether it compiles.
@@ -41,6 +42,9 @@ namespace ZkData.Core
 
                         case "read":
                             return ReadVerification.Run(db);
+
+                        case "write":
+                            return WriteVerification.Run(db);
 
                         case "summary":
                         default:
