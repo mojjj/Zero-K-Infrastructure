@@ -63,6 +63,27 @@ Look at `recycling.periodicRestart`, `processModel.idleTimeout` and `startMode`.
 
       appcmd set apppool /apppool.name:"<pool>" /processModel.shutdownTimeLimit:00:02:00
 
+## Compile-checking on Linux
+
+    ./tools/build-website.sh
+
+Builds this project with msbuild under mono in Docker, in about twenty seconds, with no
+.NET Framework and no Visual Studio. It is what every modernization change in this
+repository has been checked with, and it is worth running before opening a pull request -
+the Windows build in CI runs on a self-hosted runner that a fork cannot claim.
+
+Two things it cannot do, which is why the Windows build still matters:
+
+- **Razor views are not compiled.** mono ships no `aspnet_compiler.exe` (MSB6004), so a
+  mistake in a `.cshtml` file passes this check untouched.
+- **It does not run anything.** Running the site needs Windows, IIS Express and a database.
+
+It works on a copy of the tracked files, so the repository never collects root-owned
+`obj/` directories from the container, and it applies one workaround to that copy:
+`ZkData.MissionUpdater.UpdateMission` uses `ZipFile.Open`, which trips a
+`System.IO.Compression` facade version conflict under mono. That reproduces on unmodified
+`master`, so it is an artefact of the container rather than of any change.
+
 ## Service endpoints that deployed clients depend on
 
 Three endpoints serve the desktop clients. They look interchangeable and are not, so
