@@ -54,6 +54,9 @@ namespace ZkData.Core.Ef6Compat
                 foreach (var single in unnamed)
                 {
                     var index = builder.HasIndex(single.Item1);
+                    // The filter, if any, is set from db/schema/schema.txt afterwards -
+                    // EF Core's default is right for some of these indexes and wrong for
+                    // others, so it is not a decision to make here.
                     if (single.Item2.IsUnique) index.IsUnique();
                 }
 

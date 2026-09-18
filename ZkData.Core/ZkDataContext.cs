@@ -54,12 +54,15 @@ namespace ZkData
             ConfigureRelationships(modelBuilder);
             ConfigureRelationshipsByHand(modelBuilder);
 
+            // Table names first: the facets below are looked up BY table name, so setting
+            // them afterwards means every facet on a renamed table silently does nothing.
+            // That was a real bug - the unique index on Words.Text kept EF Core's filter
+            // because the entity was still called IndexWords when the facet ran.
+            ConfigureTableNames(modelBuilder);
+
             // Column facets read out of db/schema/schema.txt - see
             // ZkDataContext.ColumnFacets.cs and the generator beside it.
             ConfigureColumnFacets(modelBuilder);
-
-            // Table names must be set before the facets are looked up by table name.
-            ConfigureTableNames(modelBuilder);
 
         }
 

@@ -36,6 +36,13 @@ namespace ZkData
                 .HasForeignKey<CommanderDecorationIcon>(e => e.DecorationUnlockID)
                 .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
 
+            // LobbyChatHistory is clustered on Time, not on its key. That is a deliberate
+            // choice in the database - the table is written in time order and read in time
+            // ranges - and EF Core would cluster the primary key instead, which changes the
+            // physical order of the largest chat table.
+            modelBuilder.Entity<LobbyChatHistory>().HasKey(e => e.LobbyChatHistoryID).IsClustered(false);
+            modelBuilder.Entity<LobbyChatHistory>().HasIndex(e => e.Time).IsClustered();
+
             // Two relationships where EF6 inferred the foreign key column and EF Core infers
             // a different name. EF6 used the principal's key name as it stands - EffectTypeID,
             // OptionID - while EF Core prefixes the navigation name, giving
