@@ -136,6 +136,17 @@ namespace ZkData
                         "true" if unique else "false",
                         'null' if not filter_expression else '"%s"' % filter_expression.replace('"', '\\"')))
 
+    expected = {}
+    for table, columns, unique, filter_expression in index_list:
+        expected.setdefault(table, []).append(",".join(c.split()[0] for c in columns))
+    lines.append("")
+    lines.append("            // EF Core indexes every foreign key by default; EF6 did not always.")
+    lines.append("            // Anything not in the schema's own list is removed - two indexes here,")
+    lines.append("            // on AccountMapBans.BannedMapResourceID and CommanderSlots.ChassisID.")
+    for table in sorted(expected):
+        lines.append('            OnlyTheseIndexes(modelBuilder, "%s", new[] { %s });'
+                     % (table, ", ".join('"%s"' % c for c in sorted(expected[table]))))
+
     fks = list(foreign_keys())
     cascading = sum(1 for _, _, c in fks if c)
     lines.append("")
@@ -156,6 +167,27 @@ namespace ZkData
         /// where a model property does not match, that is a difference the schema diff
         /// will report rather than something to crash on here.
         /// </summary>
+        /// <summary>
+        /// Removes any index the database does not have. EF Core creates one for every
+        /// foreign key; EF6 created them by its own rules, and the two disagree in a couple
+        /// of places. The schema decides.
+        /// </summary>
+        private static void OnlyTheseIndexes(ModelBuilder modelBuilder, string table, string[] expected)
+        {
+            foreach (var entity in modelBuilder.Model.GetEntityTypes())
+            {
+                if (entity.GetTableName() != table) continue;
+                if (entity.HasSharedClrType) continue;
+
+                foreach (var index in entity.GetIndexes().ToList())
+                {
+                    var columns = string.Join(",", index.Properties.Select(p => p.Name));
+                    if (!expected.Contains(columns)) entity.RemoveIndex(index.Properties);
+                }
+                return;
+            }
+        }
+
         /// <summary>
         /// Sets a foreign key's delete behaviour, matched by the columns it is on. Skips
         /// quietly when the model has no such relationship - that is a difference the

@@ -139,7 +139,11 @@ def render():
                 bits.append("DEFAULT " + c["default"])
             out.append("  %-34s %s" % (c["column"], " ".join(bits)))
 
-        for i in sorted([x for x in idx if x["table"] == table], key=lambda x: x["index"]):
+        # ordered by the columns, not by the index name: names are generated and differ
+        # between EF6 and EF Core, and sorting by them made identical schemas diff purely
+        # because two tables listed the same indexes in a different order
+        for i in sorted([x for x in idx if x["table"] == table],
+                        key=lambda x: (x.get("columns") or "", bool(x.get("is_primary_key")))):
             kind = "PRIMARY KEY" if i.get("is_primary_key") else ("UNIQUE INDEX" if i.get("is_unique") else "INDEX")
             line = "  %s (%s)" % (kind, i.get("columns") or "")
             if i.get("has_filter"):

@@ -199,9 +199,17 @@ the schema the EF6 migrations produce:
 | indexes | 267 | 224 |
 | foreign keys | 163 | 164 |
 
-**22 differing lines**, down from 353 - a 94% reduction, with foreign keys matching exactly.
-Six of the 22 are `__MigrationHistory`, which EF Core has no reason to create and which the
-baseline replaces anyway, so the real remainder is about sixteen lines and one relationship. That is the number the port is working down, and it
+**15 differing lines**, down from 353 - and they are two things, not fifteen problems:
+
+- **7 lines: `__MigrationHistory`.** EF6's own bookkeeping table. EF Core has no reason to
+  create it, and the baseline replaces it with `__EFMigrationsHistory` anyway.
+- **4 lines: one relationship on `CampaignEvent`**, described below.
+
+The remaining 4 are the header, which counts tables and columns.
+
+Everything else - 91 tables, 746 columns, 267 indexes, 163 foreign keys, their types,
+nullability, defaults, collations, filters, clustering and delete behaviour - is
+reproduced. That is the number the port is working down, and it
 is a number rather than an impression.
 
 What closed the first half:
@@ -313,8 +321,16 @@ So for eleven years `CampaignEvents.PlanetID` has been constrained against
 name, because dropping by column looks for a name that does not exist.
 
 Nothing but building the same schema twice and diffing would have found this.
-2. **A handful of details**: an extra index on `AccountMapBans.BannedMapResourceID` and on
-   `CommanderSlots.ChassisID`, and one primary key EF Core clusters differently.
+2. **Nothing else.** The last two stray indexes were EF Core's automatic foreign key
+   indexes, which it adds during model *finalisation* - after `OnModelCreating`, so removing
+   them there does not stick. Since every index the database has is now declared explicitly
+   from the schema, `ForeignKeyIndexConvention` has nothing left to contribute and is
+   removed in `ConfigureConventions` rather than fought.
+
+   `db/dump-schema.py` also now orders a table's indexes by their columns rather than by
+   their name. Index names are generated and deliberately not compared, and sorting by them
+   made two identical schemas diff purely because they listed the same indexes in a
+   different order.
 
 Two mistakes of mine, both caught by the diff and worth recording because neither would
 have survived review either:
