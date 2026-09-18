@@ -1,5 +1,6 @@
 using System;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using ZkData.Core.Ef6Compat;
 
 namespace ZkData
@@ -31,6 +32,22 @@ namespace ZkData
         protected override void OnConfiguring(DbContextOptionsBuilder options)
         {
             if (!options.IsConfigured) options.UseSqlServer(ConnectionString);
+        }
+
+        /// <summary>
+        /// EF Core adds an index for every foreign key, and does it during model
+        /// finalisation - after OnModelCreating - so removing them there does not stick.
+        /// EF6 created foreign key indexes by its own rules, and the two disagree on
+        /// AccountMapBans.BannedMapResourceID and CommanderSlots.ChassisID.
+        ///
+        /// Every index the database actually has is declared explicitly from
+        /// db/schema/schema.txt, so the convention has nothing left to contribute and is
+        /// switched off rather than fought.
+        /// </summary>
+        protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+        {
+            base.ConfigureConventions(configurationBuilder);
+            configurationBuilder.Conventions.Remove(typeof(ForeignKeyIndexConvention));
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

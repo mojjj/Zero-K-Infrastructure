@@ -12,9 +12,9 @@ TABLE AbuseReports
   ReporterAccountID                  int NOT NULL
   Text                               nvarchar(max) NOT NULL
   Time                               datetime NOT NULL
+  PRIMARY KEY (AbuseReportID)  [clustered]
   INDEX (AccountID)
   INDEX (ReporterAccountID)
-  PRIMARY KEY (AbuseReportID)  [clustered]
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (ReporterAccountID) -> Accounts
 
@@ -25,8 +25,8 @@ TABLE AccountBattleAwards
   SpringBattleID                     int NOT NULL
   Value                              float NULL
   INDEX (AccountID)
-  INDEX (SpringBattleID)
   PRIMARY KEY (AccountID, SpringBattleID, AwardKey)  [clustered]
+  INDEX (SpringBattleID)
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (SpringBattleID) -> SpringBattles ON DELETE CASCADE
 
@@ -36,8 +36,8 @@ TABLE AccountCampaignJournalProgresses
   IsUnlocked                         bit NOT NULL
   JournalID                          int NOT NULL
   INDEX (AccountID)
-  INDEX (CampaignID, JournalID)
   PRIMARY KEY (AccountID, CampaignID, JournalID)  [clustered]
+  INDEX (CampaignID, JournalID)
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (CampaignID, JournalID) -> CampaignJournals ON DELETE CASCADE
   FOREIGN KEY (CampaignID) -> Campaigns
@@ -62,8 +62,8 @@ TABLE AccountCampaignVars
   Value                              nvarchar(max) NOT NULL
   VarID                              int NOT NULL
   INDEX (AccountID)
-  INDEX (CampaignID, VarID)
   PRIMARY KEY (AccountID, CampaignID, VarID)  [clustered]
+  INDEX (CampaignID, VarID)
   FOREIGN KEY (AccountID) -> Accounts ON DELETE CASCADE
   FOREIGN KEY (CampaignID, VarID) -> CampaignVars
   FOREIGN KEY (CampaignID) -> Campaigns
@@ -73,8 +73,8 @@ TABLE AccountForumVotes
   ForumPostID                        int NOT NULL
   Vote                               int NOT NULL
   INDEX (AccountID)
-  INDEX (ForumPostID)
   PRIMARY KEY (AccountID, ForumPostID)  [clustered]
+  INDEX (ForumPostID)
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (ForumPostID) -> ForumPosts ON DELETE CASCADE
 
@@ -117,11 +117,11 @@ TABLE AccountRatings
   RatingCategory                     int NOT NULL
   RealElo                            float NOT NULL
   INDEX (AccountID)
+  PRIMARY KEY (AccountID, RatingCategory)  [clustered]
   INDEX (Elo)
   INDEX (IsRanked)
   INDEX (LadderElo)
   INDEX (RealElo)
-  PRIMARY KEY (AccountID, RatingCategory)  [clustered]
   FOREIGN KEY (AccountID) -> Accounts ON DELETE CASCADE
 
 TABLE AccountRelations
@@ -129,8 +129,8 @@ TABLE AccountRelations
   Relation                           int NOT NULL
   TargetAccountID                    int NOT NULL
   INDEX (OwnerAccountID)
-  INDEX (TargetAccountID)
   PRIMARY KEY (OwnerAccountID, TargetAccountID)  [clustered]
+  INDEX (TargetAccountID)
   FOREIGN KEY (OwnerAccountID) -> Accounts ON DELETE CASCADE
   FOREIGN KEY (TargetAccountID) -> Accounts
 
@@ -141,10 +141,10 @@ TABLE AccountRoles
   Inauguration                       datetime NOT NULL
   RoleTypeID                         int NOT NULL
   INDEX (AccountID)
+  PRIMARY KEY (AccountID, RoleTypeID)  [clustered]
   INDEX (ClanID)
   INDEX (FactionID)
   INDEX (RoleTypeID)
-  PRIMARY KEY (AccountID, RoleTypeID)  [clustered]
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (ClanID) -> Clans ON DELETE CASCADE
   FOREIGN KEY (FactionID) -> Factions
@@ -155,8 +155,8 @@ TABLE AccountUnlocks
   Count                              int NOT NULL
   UnlockID                           int NOT NULL
   INDEX (AccountID)
-  INDEX (UnlockID)
   PRIMARY KEY (AccountID, UnlockID)  [clustered]
+  INDEX (UnlockID)
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (UnlockID) -> Unlocks ON DELETE CASCADE
 
@@ -220,10 +220,10 @@ TABLE Accounts
   SteamName                          nvarchar(200) NULL
   VotesAvailable                     int NULL
   Xp                                 int NOT NULL
+  PRIMARY KEY (AccountID)  [clustered]
   INDEX (ClanID)
   INDEX (FactionID)
   UNIQUE INDEX (Name)
-  PRIMARY KEY (AccountID)  [clustered]
   UNIQUE INDEX (SteamID) WHERE ([SteamID] IS NOT NULL)
   FOREIGN KEY (ClanID) -> Clans
   FOREIGN KEY (FactionID) -> Factions
@@ -286,8 +286,8 @@ TABLE CampaignJournalVars
   RequiredValue                      nvarchar(500) NOT NULL
   RequiredVarID                      int NOT NULL
   INDEX (CampaignID, JournalID)
-  INDEX (CampaignID, RequiredVarID)
   PRIMARY KEY (CampaignID, JournalID, RequiredVarID)  [clustered]
+  INDEX (CampaignID, RequiredVarID)
   FOREIGN KEY (CampaignID, JournalID) -> CampaignJournals ON DELETE CASCADE
   FOREIGN KEY (CampaignID, RequiredVarID) -> CampaignVars
   FOREIGN KEY (CampaignID) -> Campaigns
@@ -303,8 +303,8 @@ TABLE CampaignJournals
   UnlockOnPlanetCompletion           bit NOT NULL
   UnlockOnPlanetUnlock               bit NOT NULL
   INDEX (CampaignID)
-  INDEX (CampaignID, PlanetID)
   PRIMARY KEY (CampaignID, JournalID)  [clustered]
+  INDEX (CampaignID, PlanetID)
   FOREIGN KEY (CampaignID, PlanetID) -> CampaignPlanets
   FOREIGN KEY (CampaignID) -> Campaigns ON DELETE CASCADE
 
@@ -314,8 +314,8 @@ TABLE CampaignLinks
   UnlockingPlanetID                  int NOT NULL
   INDEX (CampaignID)
   INDEX (CampaignID, PlanetToUnlockID)
-  INDEX (CampaignID, UnlockingPlanetID)
   PRIMARY KEY (CampaignID, PlanetToUnlockID, UnlockingPlanetID)  [clustered]
+  INDEX (CampaignID, UnlockingPlanetID)
   FOREIGN KEY (CampaignID, PlanetToUnlockID) -> CampaignPlanets
   FOREIGN KEY (CampaignID, UnlockingPlanetID) -> CampaignPlanets
   FOREIGN KEY (CampaignID) -> Campaigns
@@ -326,8 +326,8 @@ TABLE CampaignPlanetVars
   RequiredValue                      nvarchar(500) NOT NULL
   RequiredVarID                      int NOT NULL
   INDEX (CampaignID, PlanetID)
-  INDEX (CampaignID, RequiredVarID)
   PRIMARY KEY (CampaignID, PlanetID, RequiredVarID)  [clustered]
+  INDEX (CampaignID, RequiredVarID)
   FOREIGN KEY (CampaignID, PlanetID) -> CampaignPlanets
   FOREIGN KEY (CampaignID, RequiredVarID) -> CampaignVars
   FOREIGN KEY (CampaignID) -> Campaigns
@@ -346,8 +346,8 @@ TABLE CampaignPlanets
   X                                  float NOT NULL
   Y                                  float NOT NULL
   INDEX (CampaignID)
-  INDEX (MissionID)
   PRIMARY KEY (CampaignID, PlanetID)  [clustered]
+  INDEX (MissionID)
   FOREIGN KEY (CampaignID) -> Campaigns ON DELETE CASCADE
   FOREIGN KEY (MissionID) -> Missions
 
@@ -381,9 +381,9 @@ TABLE Clans
   Password                           varchar(20) NULL
   SecretTopic                        nvarchar(500) NULL
   Shortcut                           varchar(6) NOT NULL
+  PRIMARY KEY (ClanID)  [clustered]
   INDEX (FactionID)
   INDEX (ForumThreadID)
-  PRIMARY KEY (ClanID)  [clustered]
   FOREIGN KEY (FactionID) -> Factions
   FOREIGN KEY (ForumThreadID) -> ForumThreads
 
@@ -404,9 +404,9 @@ TABLE CommanderDecorations
   DecorationUnlockID                 int NOT NULL
   SlotID                             int NOT NULL
   INDEX (CommanderID)
+  PRIMARY KEY (CommanderID, SlotID)  [clustered]
   INDEX (DecorationUnlockID)
   INDEX (SlotID)
-  PRIMARY KEY (CommanderID, SlotID)  [clustered]
   FOREIGN KEY (SlotID) -> CommanderDecorationSlots ON DELETE CASCADE
   FOREIGN KEY (CommanderID) -> Commanders ON DELETE CASCADE
   FOREIGN KEY (DecorationUnlockID) -> Unlocks
@@ -416,9 +416,9 @@ TABLE CommanderModules
   ModuleUnlockID                     int NOT NULL
   SlotID                             int NOT NULL
   INDEX (CommanderID)
+  PRIMARY KEY (CommanderID, SlotID)  [clustered]
   INDEX (ModuleUnlockID)
   INDEX (SlotID)
-  PRIMARY KEY (CommanderID, SlotID)  [clustered]
   FOREIGN KEY (SlotID) -> CommanderSlots ON DELETE CASCADE
   FOREIGN KEY (CommanderID) -> Commanders ON DELETE CASCADE
   FOREIGN KEY (ModuleUnlockID) -> Unlocks
@@ -450,8 +450,8 @@ TABLE ContributionJars
   IsDefault                          bit NOT NULL
   Name                               nvarchar(100) NOT NULL
   TargetGrossEuros                   float NOT NULL
-  INDEX (GuarantorAccountID)
   PRIMARY KEY (ContributionJarID)  [clustered]
+  INDEX (GuarantorAccountID)
   FOREIGN KEY (GuarantorAccountID) -> Accounts
 
 TABLE Contributions
@@ -475,9 +475,9 @@ TABLE Contributions
   RedeemCode                         nvarchar(100) NULL
   Time                               datetime NOT NULL
   INDEX (AccountID)
+  PRIMARY KEY (ContributionID)  [clustered]
   INDEX (ContributionJarID)
   INDEX (ManuallyAddedAccountID)
-  PRIMARY KEY (ContributionID)  [clustered]
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (ManuallyAddedAccountID) -> Accounts
   FOREIGN KEY (ContributionJarID) -> ContributionJars
@@ -526,8 +526,8 @@ TABLE EventClan
   ClanID                             int NOT NULL
   EventID                            int NOT NULL
   INDEX (ClanID)
-  INDEX (EventID)
   PRIMARY KEY (ClanID, EventID)  [clustered]
+  INDEX (EventID)
   FOREIGN KEY (ClanID) -> Clans ON DELETE CASCADE
   FOREIGN KEY (EventID) -> Events ON DELETE CASCADE
 
@@ -535,8 +535,8 @@ TABLE EventFaction
   EventID                            int NOT NULL
   FactionID                          int NOT NULL
   INDEX (EventID)
-  INDEX (FactionID)
   PRIMARY KEY (EventID, FactionID)  [clustered]
+  INDEX (FactionID)
   FOREIGN KEY (EventID) -> Events ON DELETE CASCADE
   FOREIGN KEY (FactionID) -> Factions ON DELETE CASCADE
 
@@ -544,8 +544,8 @@ TABLE EventPlanet
   EventID                            int NOT NULL
   PlanetID                           int NOT NULL
   INDEX (EventID)
-  INDEX (PlanetID)
   PRIMARY KEY (EventID, PlanetID)  [clustered]
+  INDEX (PlanetID)
   FOREIGN KEY (EventID) -> Events ON DELETE CASCADE
   FOREIGN KEY (PlanetID) -> Planets ON DELETE CASCADE
 
@@ -553,8 +553,8 @@ TABLE EventSpringBattle
   EventID                            int NOT NULL
   SpringBattleID                     int NOT NULL
   INDEX (EventID)
-  INDEX (SpringBattleID)
   PRIMARY KEY (EventID, SpringBattleID)  [clustered]
+  INDEX (SpringBattleID)
   FOREIGN KEY (EventID) -> Events ON DELETE CASCADE
   FOREIGN KEY (SpringBattleID) -> SpringBattles ON DELETE CASCADE
 
@@ -581,9 +581,9 @@ TABLE FactionTreaties
   TurnsTotal                         int NULL
   INDEX (AcceptedAccountID)
   INDEX (AcceptingFactionID)
+  PRIMARY KEY (FactionTreatyID)  [clustered]
   INDEX (ProposingAccountID)
   INDEX (ProposingFactionID)
-  PRIMARY KEY (FactionTreatyID)  [clustered]
   FOREIGN KEY (AcceptedAccountID) -> Accounts
   FOREIGN KEY (ProposingAccountID) -> Accounts
   FOREIGN KEY (AcceptingFactionID) -> Factions
@@ -612,8 +612,8 @@ TABLE ForumCategories
   ParentForumCategoryID              int NULL
   SortOrder                          int NOT NULL
   Title                              nvarchar(500) NOT NULL
-  INDEX (ParentForumCategoryID)
   PRIMARY KEY (ForumCategoryID)  [clustered]
+  INDEX (ParentForumCategoryID)
   FOREIGN KEY (ParentForumCategoryID) -> ForumCategories
 
 TABLE ForumLastReads
@@ -621,8 +621,8 @@ TABLE ForumLastReads
   ForumCategoryID                    int NOT NULL
   LastRead                           datetime NULL
   INDEX (AccountID)
-  INDEX (ForumCategoryID)
   PRIMARY KEY (AccountID, ForumCategoryID)  [clustered]
+  INDEX (ForumCategoryID)
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (ForumCategoryID) -> ForumCategories
 
@@ -634,8 +634,8 @@ TABLE ForumPostEdits
   NewText                            nvarchar(max) NULL
   OriginalText                       nvarchar(max) NULL
   INDEX (EditorAccountID)
-  INDEX (ForumPostID)
   PRIMARY KEY (ForumPostEditID)  [clustered]
+  INDEX (ForumPostID)
   FOREIGN KEY (EditorAccountID) -> Accounts
   FOREIGN KEY (ForumPostID) -> ForumPosts ON DELETE CASCADE
 
@@ -658,8 +658,8 @@ TABLE ForumPosts
   Text                               nvarchar(max) NOT NULL
   Upvotes                            int NOT NULL
   INDEX (AuthorAccountID)
-  INDEX (ForumThreadID)
   PRIMARY KEY (ForumPostID)  [clustered]
+  INDEX (ForumThreadID)
   FOREIGN KEY (AuthorAccountID) -> Accounts
   FOREIGN KEY (ForumThreadID) -> ForumThreads ON DELETE CASCADE
 
@@ -690,11 +690,11 @@ TABLE ForumThreads
   WikiKey                            nvarchar(100) NULL
   INDEX (CreatedAccountID)
   INDEX (ForumCategoryID)
+  PRIMARY KEY (ForumThreadID)  [clustered]
   INDEX (LastPostAccountID)
   INDEX (RestrictedClanID)
   INDEX (Title)
   INDEX (WikiKey)
-  PRIMARY KEY (ForumThreadID)  [clustered]
   FOREIGN KEY (CreatedAccountID) -> Accounts
   FOREIGN KEY (LastPostAccountID) -> Accounts
   FOREIGN KEY (RestrictedClanID) -> Clans ON DELETE CASCADE
@@ -715,8 +715,8 @@ TABLE Galaxies
   Turn                               int NOT NULL
   Width                              int NOT NULL
   WinnerFactionID                    int NULL
-  INDEX (WinnerFactionID)
   PRIMARY KEY (GalaxyID)  [clustered]
+  INDEX (WinnerFactionID)
   FOREIGN KEY (WinnerFactionID) -> Factions
 
 TABLE GameModes
@@ -730,9 +730,9 @@ TABLE GameModes
   MaintainerAccountID                int NOT NULL
   ShortName                          nvarchar(64) NULL
   INDEX (ForumThreadID)
+  PRIMARY KEY (GameModeID)  [clustered]
   INDEX (MaintainerAccountID)
   UNIQUE INDEX (ShortName)
-  PRIMARY KEY (GameModeID)  [clustered]
   FOREIGN KEY (MaintainerAccountID) -> Accounts ON DELETE CASCADE
   FOREIGN KEY (ForumThreadID) -> ForumThreads
 
@@ -743,8 +743,8 @@ TABLE KudosPurchases
   Time                               datetime NOT NULL
   UnlockID                           int NULL
   INDEX (AccountID)
-  INDEX (UnlockID)
   PRIMARY KEY (KudosPurchaseID)  [clustered]
+  INDEX (UnlockID)
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (UnlockID) -> Unlocks ON DELETE CASCADE
 
@@ -754,8 +754,8 @@ TABLE Links
   PlanetID2                          int NOT NULL
   INDEX (GalaxyID)
   INDEX (PlanetID1)
-  INDEX (PlanetID2)
   PRIMARY KEY (PlanetID1, PlanetID2)  [clustered]
+  INDEX (PlanetID2)
   FOREIGN KEY (GalaxyID) -> Galaxies ON DELETE CASCADE
   FOREIGN KEY (PlanetID1) -> Planets
   FOREIGN KEY (PlanetID2) -> Planets
@@ -777,10 +777,10 @@ TABLE LobbyChatHistories
   Text                               nvarchar(max) NULL
   Time                               datetime NOT NULL
   User                               nvarchar(255) NULL
+  PRIMARY KEY (LobbyChatHistoryID)
   INDEX (Target)
   INDEX (Time)  [clustered]
   INDEX (User)
-  PRIMARY KEY (LobbyChatHistoryID)
 
 TABLE LobbyNews
   AuthorAccountID                    int NOT NULL
@@ -809,8 +809,8 @@ TABLE MapPollOptions
   ResourceID                         int NOT NULL
   Votes                              int NOT NULL
   INDEX (MapPollID)
-  INDEX (ResourceID)
   PRIMARY KEY (MapPollOptionID)  [clustered]
+  INDEX (ResourceID)
   FOREIGN KEY (MapPollID) -> MapPollOutcomes ON DELETE CASCADE
   FOREIGN KEY (ResourceID) -> Resources ON DELETE CASCADE
 
@@ -885,8 +885,8 @@ TABLE Missions
   TopScoreLine                       nvarchar(100) NULL
   INDEX (AccountID)
   INDEX (ForumThreadID)
-  UNIQUE INDEX (Name)
   PRIMARY KEY (MissionID)  [clustered]
+  UNIQUE INDEX (Name)
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (ForumThreadID) -> ForumThreads
 
@@ -947,9 +947,9 @@ TABLE PlanetStructures
   TurnsToActivateOverride            int NULL
   INDEX (OwnerAccountID)
   INDEX (PlanetID)
+  PRIMARY KEY (PlanetID, StructureTypeID)  [clustered]
   INDEX (StructureTypeID)
   INDEX (TargetPlanetID)
-  PRIMARY KEY (PlanetID, StructureTypeID)  [clustered]
   FOREIGN KEY (OwnerAccountID) -> Accounts
   FOREIGN KEY (PlanetID) -> Planets ON DELETE CASCADE
   FOREIGN KEY (TargetPlanetID) -> Planets
@@ -983,8 +983,8 @@ TABLE PollOptions
   OptionText                         nvarchar(200) NOT NULL
   PollID                             int NOT NULL
   Votes                              int NOT NULL
-  INDEX (PollID)
   PRIMARY KEY (OptionID)  [clustered]
+  INDEX (PollID)
   FOREIGN KEY (PollID) -> Polls ON DELETE CASCADE
 
 TABLE PollVotes
@@ -992,9 +992,9 @@ TABLE PollVotes
   OptionID                           int NOT NULL
   PollID                             int NOT NULL
   INDEX (AccountID)
+  PRIMARY KEY (AccountID, PollID)  [clustered]
   INDEX (OptionID)
   INDEX (PollID)
-  PRIMARY KEY (AccountID, PollID)  [clustered]
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (OptionID) -> PollOptions
   FOREIGN KEY (PollID) -> Polls ON DELETE CASCADE
@@ -1013,11 +1013,11 @@ TABLE Polls
   RoleTargetAccountID                int NULL
   RoleTypeID                         int NULL
   INDEX (CreatedAccountID)
+  PRIMARY KEY (PollID)  [clustered]
   INDEX (RestrictClanID)
   INDEX (RestrictFactionID)
   INDEX (RoleTargetAccountID)
   INDEX (RoleTypeID)
-  PRIMARY KEY (PollID)  [clustered]
   FOREIGN KEY (CreatedAccountID) -> Accounts
   FOREIGN KEY (RoleTargetAccountID) -> Accounts
   FOREIGN KEY (RestrictClanID) -> Clans
@@ -1119,8 +1119,8 @@ TABLE Resources
   UNIQUE INDEX (InternalName)
   INDEX (MissionID)
   INDEX (RapidTag)
-  INDEX (TaggedByAccountID)
   PRIMARY KEY (ResourceID)  [clustered]
+  INDEX (TaggedByAccountID)
   FOREIGN KEY (TaggedByAccountID) -> Accounts
   FOREIGN KEY (ForumThreadID) -> ForumThreads
   FOREIGN KEY (MissionID) -> Missions ON DELETE CASCADE
@@ -1131,8 +1131,8 @@ TABLE RoleTypeHierarchies
   MasterRoleTypeID                   int NOT NULL
   SlaveRoleTypeID                    int NOT NULL
   INDEX (MasterRoleTypeID)
-  INDEX (SlaveRoleTypeID)
   PRIMARY KEY (MasterRoleTypeID, SlaveRoleTypeID)  [clustered]
+  INDEX (SlaveRoleTypeID)
   FOREIGN KEY (MasterRoleTypeID) -> RoleTypes ON DELETE CASCADE
   FOREIGN KEY (SlaveRoleTypeID) -> RoleTypes
 
@@ -1165,8 +1165,8 @@ TABLE SpringBattleBots
   IsInVictoryTeam                    bit NOT NULL
   SpringBattleBotID                  int NOT NULL IDENTITY
   SpringBattleID                     int NOT NULL
-  INDEX (SpringBattleID)
   PRIMARY KEY (SpringBattleBotID)  [clustered]
+  INDEX (SpringBattleID)
   FOREIGN KEY (SpringBattleID) -> SpringBattles ON DELETE CASCADE
 
 TABLE SpringBattlePlayers
@@ -1213,8 +1213,8 @@ TABLE SpringBattles
   INDEX (MapResourceID)
   INDEX (ModResourceID)
   INDEX (ReplayFileName)
-  INDEX (StartTime)
   PRIMARY KEY (SpringBattleID)  [clustered]
+  INDEX (StartTime)
   FOREIGN KEY (HostAccountID) -> Accounts
   FOREIGN KEY (ForumThreadID) -> ForumThreads
   FOREIGN KEY (MapResourceID) -> Resources

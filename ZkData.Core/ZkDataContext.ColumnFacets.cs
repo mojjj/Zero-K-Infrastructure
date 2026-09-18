@@ -414,6 +414,84 @@ namespace ZkData
             Index(modelBuilder, "Unlocks", new[] { "RequiredUnlockID" }, false, null);
             Index(modelBuilder, "Words", new[] { "Text" }, true, null);
 
+            // EF Core indexes every foreign key by default; EF6 did not always.
+            // Anything not in the schema's own list is removed - two indexes here,
+            // on AccountMapBans.BannedMapResourceID and CommanderSlots.ChassisID.
+            OnlyTheseIndexes(modelBuilder, "AbuseReports", new[] { "AccountID", "ReporterAccountID" });
+            OnlyTheseIndexes(modelBuilder, "AccountBattleAwards", new[] { "AccountID", "SpringBattleID" });
+            OnlyTheseIndexes(modelBuilder, "AccountCampaignJournalProgresses", new[] { "AccountID", "CampaignID,JournalID" });
+            OnlyTheseIndexes(modelBuilder, "AccountCampaignProgresses", new[] { "AccountID", "CampaignID", "CampaignID,PlanetID" });
+            OnlyTheseIndexes(modelBuilder, "AccountCampaignVars", new[] { "AccountID", "CampaignID,VarID" });
+            OnlyTheseIndexes(modelBuilder, "AccountForumVotes", new[] { "AccountID", "ForumPostID" });
+            OnlyTheseIndexes(modelBuilder, "AccountIPs", new[] { "AccountID" });
+            OnlyTheseIndexes(modelBuilder, "AccountMapBans", new[] { "AccountID" });
+            OnlyTheseIndexes(modelBuilder, "AccountPlanets", new[] { "AccountID", "PlanetID" });
+            OnlyTheseIndexes(modelBuilder, "AccountRatings", new[] { "AccountID", "Elo", "IsRanked", "LadderElo", "RealElo" });
+            OnlyTheseIndexes(modelBuilder, "AccountRelations", new[] { "OwnerAccountID", "TargetAccountID" });
+            OnlyTheseIndexes(modelBuilder, "AccountRoles", new[] { "AccountID", "ClanID", "FactionID", "RoleTypeID" });
+            OnlyTheseIndexes(modelBuilder, "AccountUnlocks", new[] { "AccountID", "UnlockID" });
+            OnlyTheseIndexes(modelBuilder, "AccountUserIDs", new[] { "AccountID" });
+            OnlyTheseIndexes(modelBuilder, "Accounts", new[] { "ClanID", "FactionID", "Name", "SteamID" });
+            OnlyTheseIndexes(modelBuilder, "CampaignEvents", new[] { "AccountID", "CampaignID", "CampaignID,PlanetID" });
+            OnlyTheseIndexes(modelBuilder, "CampaignJournalVars", new[] { "CampaignID,JournalID", "CampaignID,RequiredVarID" });
+            OnlyTheseIndexes(modelBuilder, "CampaignJournals", new[] { "CampaignID", "CampaignID,PlanetID" });
+            OnlyTheseIndexes(modelBuilder, "CampaignLinks", new[] { "CampaignID", "CampaignID,PlanetToUnlockID", "CampaignID,UnlockingPlanetID" });
+            OnlyTheseIndexes(modelBuilder, "CampaignPlanetVars", new[] { "CampaignID,PlanetID", "CampaignID,RequiredVarID" });
+            OnlyTheseIndexes(modelBuilder, "CampaignPlanets", new[] { "CampaignID", "MissionID" });
+            OnlyTheseIndexes(modelBuilder, "CampaignVars", new[] { "CampaignID" });
+            OnlyTheseIndexes(modelBuilder, "Clans", new[] { "FactionID", "ForumThreadID" });
+            OnlyTheseIndexes(modelBuilder, "CommanderDecorationIcons", new[] { "DecorationUnlockID" });
+            OnlyTheseIndexes(modelBuilder, "CommanderDecorations", new[] { "CommanderID", "DecorationUnlockID", "SlotID" });
+            OnlyTheseIndexes(modelBuilder, "CommanderModules", new[] { "CommanderID", "ModuleUnlockID", "SlotID" });
+            OnlyTheseIndexes(modelBuilder, "Commanders", new[] { "AccountID", "ChassisUnlockID" });
+            OnlyTheseIndexes(modelBuilder, "ContributionJars", new[] { "GuarantorAccountID" });
+            OnlyTheseIndexes(modelBuilder, "Contributions", new[] { "AccountID", "ContributionJarID", "ManuallyAddedAccountID" });
+            OnlyTheseIndexes(modelBuilder, "EventAccount", new[] { "AccountID", "EventID" });
+            OnlyTheseIndexes(modelBuilder, "EventClan", new[] { "ClanID", "EventID" });
+            OnlyTheseIndexes(modelBuilder, "EventFaction", new[] { "EventID", "FactionID" });
+            OnlyTheseIndexes(modelBuilder, "EventPlanet", new[] { "EventID", "PlanetID" });
+            OnlyTheseIndexes(modelBuilder, "EventSpringBattle", new[] { "EventID", "SpringBattleID" });
+            OnlyTheseIndexes(modelBuilder, "FactionTreaties", new[] { "AcceptedAccountID", "AcceptingFactionID", "ProposingAccountID", "ProposingFactionID" });
+            OnlyTheseIndexes(modelBuilder, "ForumCategories", new[] { "ParentForumCategoryID" });
+            OnlyTheseIndexes(modelBuilder, "ForumLastReads", new[] { "AccountID", "ForumCategoryID" });
+            OnlyTheseIndexes(modelBuilder, "ForumPostEdits", new[] { "EditorAccountID", "ForumPostID" });
+            OnlyTheseIndexes(modelBuilder, "ForumPostWords", new[] { "ForumPostID", "WordID" });
+            OnlyTheseIndexes(modelBuilder, "ForumPosts", new[] { "AuthorAccountID", "ForumThreadID" });
+            OnlyTheseIndexes(modelBuilder, "ForumThreadLastReads", new[] { "AccountID", "ForumThreadID" });
+            OnlyTheseIndexes(modelBuilder, "ForumThreads", new[] { "CreatedAccountID", "ForumCategoryID", "LastPostAccountID", "RestrictedClanID", "Title", "WikiKey" });
+            OnlyTheseIndexes(modelBuilder, "Galaxies", new[] { "WinnerFactionID" });
+            OnlyTheseIndexes(modelBuilder, "GameModes", new[] { "ForumThreadID", "MaintainerAccountID", "ShortName" });
+            OnlyTheseIndexes(modelBuilder, "KudosPurchases", new[] { "AccountID", "UnlockID" });
+            OnlyTheseIndexes(modelBuilder, "Links", new[] { "GalaxyID", "PlanetID1", "PlanetID2" });
+            OnlyTheseIndexes(modelBuilder, "LobbyChatHistories", new[] { "Target", "Time", "User" });
+            OnlyTheseIndexes(modelBuilder, "LobbyNews", new[] { "AuthorAccountID" });
+            OnlyTheseIndexes(modelBuilder, "MapPollOptions", new[] { "MapPollID", "ResourceID" });
+            OnlyTheseIndexes(modelBuilder, "MapRatings", new[] { "AccountID", "ResourceID" });
+            OnlyTheseIndexes(modelBuilder, "MissionScores", new[] { "AccountID", "MissionID" });
+            OnlyTheseIndexes(modelBuilder, "Missions", new[] { "AccountID", "ForumThreadID", "Name" });
+            OnlyTheseIndexes(modelBuilder, "News", new[] { "AuthorAccountID", "ForumThreadID" });
+            OnlyTheseIndexes(modelBuilder, "PlanetFactions", new[] { "FactionID", "PlanetID" });
+            OnlyTheseIndexes(modelBuilder, "PlanetOwnerHistories", new[] { "OwnerAccountID", "OwnerClanID", "OwnerFactionID", "PlanetID" });
+            OnlyTheseIndexes(modelBuilder, "PlanetStructures", new[] { "OwnerAccountID", "PlanetID", "StructureTypeID", "TargetPlanetID" });
+            OnlyTheseIndexes(modelBuilder, "Planets", new[] { "ForumThreadID", "GalaxyID", "MapResourceID", "OwnerAccountID", "OwnerFactionID" });
+            OnlyTheseIndexes(modelBuilder, "PollOptions", new[] { "PollID" });
+            OnlyTheseIndexes(modelBuilder, "PollVotes", new[] { "AccountID", "OptionID", "PollID" });
+            OnlyTheseIndexes(modelBuilder, "Polls", new[] { "CreatedAccountID", "RestrictClanID", "RestrictFactionID", "RoleTargetAccountID", "RoleTypeID" });
+            OnlyTheseIndexes(modelBuilder, "Punishments", new[] { "AccountID", "CreatedAccountID" });
+            OnlyTheseIndexes(modelBuilder, "Ratings", new[] { "AccountID", "MissionID" });
+            OnlyTheseIndexes(modelBuilder, "ResourceContentFiles", new[] { "ResourceID" });
+            OnlyTheseIndexes(modelBuilder, "ResourceDependencies", new[] { "ResourceID" });
+            OnlyTheseIndexes(modelBuilder, "Resources", new[] { "ForumThreadID", "InternalName", "MissionID", "RapidTag", "TaggedByAccountID" });
+            OnlyTheseIndexes(modelBuilder, "RoleTypeHierarchies", new[] { "MasterRoleTypeID", "SlaveRoleTypeID" });
+            OnlyTheseIndexes(modelBuilder, "RoleTypes", new[] { "RestrictFactionID" });
+            OnlyTheseIndexes(modelBuilder, "SpringBattleBots", new[] { "SpringBattleID" });
+            OnlyTheseIndexes(modelBuilder, "SpringBattlePlayers", new[] { "AccountID", "SpringBattleID" });
+            OnlyTheseIndexes(modelBuilder, "SpringBattles", new[] { "EngineGameID", "ForumThreadID", "HostAccountID", "MapResourceID", "ModResourceID", "ReplayFileName", "StartTime" });
+            OnlyTheseIndexes(modelBuilder, "StructureTypes", new[] { "EffectUnlockID" });
+            OnlyTheseIndexes(modelBuilder, "TreatyEffects", new[] { "EffectTypeID", "FactionTreatyID", "GivingFactionID", "PlanetID", "ReceivingFactionID" });
+            OnlyTheseIndexes(modelBuilder, "Unlocks", new[] { "RequiredUnlockID" });
+            OnlyTheseIndexes(modelBuilder, "Words", new[] { "Text" });
+
             // delete behaviour for all 163 foreign keys, 62 of them cascading.
             // Taken from the schema rather than from EF6's configuration: the
             // configuration says nothing for many of them, and inferring EF6's default
@@ -590,6 +668,27 @@ namespace ZkData
         /// where a model property does not match, that is a difference the schema diff
         /// will report rather than something to crash on here.
         /// </summary>
+        /// <summary>
+        /// Removes any index the database does not have. EF Core creates one for every
+        /// foreign key; EF6 created them by its own rules, and the two disagree in a couple
+        /// of places. The schema decides.
+        /// </summary>
+        private static void OnlyTheseIndexes(ModelBuilder modelBuilder, string table, string[] expected)
+        {
+            foreach (var entity in modelBuilder.Model.GetEntityTypes())
+            {
+                if (entity.GetTableName() != table) continue;
+                if (entity.HasSharedClrType) continue;
+
+                foreach (var index in entity.GetIndexes().ToList())
+                {
+                    var columns = string.Join(",", index.Properties.Select(p => p.Name));
+                    if (!expected.Contains(columns)) entity.RemoveIndex(index.Properties);
+                }
+                return;
+            }
+        }
+
         /// <summary>
         /// Sets a foreign key's delete behaviour, matched by the columns it is on. Skips
         /// quietly when the model has no such relationship - that is a difference the
