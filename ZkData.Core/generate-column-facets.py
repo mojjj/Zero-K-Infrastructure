@@ -29,9 +29,10 @@ def indexes():
             continue
         if not table or table in SKIP_TABLES:
             continue
-        m = re.match(r'  (UNIQUE )?INDEX \(([^)]*)\)\s*$', line)
+        m = re.match(r'  (UNIQUE )?INDEX \(([^)]*)\)(?: WHERE (.*?))?(?:  \[.*\])?\s*$', line)
         if m and m.group(2).strip():
-            yield table, [c.strip() for c in m.group(2).split(",")], bool(m.group(1))
+            yield (table, [c.strip() for c in m.group(2).split(",")],
+                   bool(m.group(1)), m.group(3))
 
 
 def foreign_keys():
@@ -129,10 +130,11 @@ namespace ZkData
     lines.append("            // EF6 indexed foreign key columns even when they were already the leading")
     lines.append("            // columns of the primary key; EF Core treats those as redundant and skips")
     lines.append("            // them. Declaring them keeps the schema identical.")
-    for table, columns, unique in index_list:
-        lines.append('            Index(modelBuilder, "%s", new[] { %s }, %s);'
+    for table, columns, unique, filter_expression in index_list:
+        lines.append('            Index(modelBuilder, "%s", new[] { %s }, %s, %s);'
                      % (table, ", ".join('"%s"' % c.split()[0] for c in columns),
-                        "true" if unique else "false"))
+                        "true" if unique else "false",
+                        'null' if not filter_expression else '"%s"' % filter_expression.replace('"', '\\"')))
 
     fks = list(foreign_keys())
     cascading = sum(1 for _, _, c in fks if c)
@@ -176,7 +178,7 @@ namespace ZkData
         }
 
         /// <summary>Declares an index by table and column names, skipping if the model lacks them.</summary>
-        private static void Index(ModelBuilder modelBuilder, string table, string[] columns, bool unique)
+        private static void Index(ModelBuilder modelBuilder, string table, string[] columns, bool unique, string filter)
         {
             foreach (var entity in modelBuilder.Model.GetEntityTypes())
             {
@@ -187,13 +189,14 @@ namespace ZkData
                 foreach (var column in columns)
                     if (entity.FindProperty(column) == null) return;
                 var index = modelBuilder.Entity(entity.ClrType).HasIndex(columns);
-                if (unique)
-                {
-                    // EF Core adds "WHERE [col] IS NOT NULL" to a unique index over a
-                    // nullable column, so that several rows may be null. EF6 did not, and
-                    // the database has the unfiltered form. HasFilter(null) removes it.
-                    index.IsUnique().HasFilter(null);
-                }
+                if (unique) index.IsUnique();
+
+                // EF Core adds "WHERE [col] IS NOT NULL" to a unique index over a nullable
+                // column. Sometimes the database agrees and sometimes it does not - SteamID
+                // is filtered, Text and ShortName are not - so the filter is taken from the
+                // schema per index rather than applied or removed by rule. A first attempt
+                // removed them all and broke the one that was right.
+                index.HasFilter(filter);
                 return;
             }
         }

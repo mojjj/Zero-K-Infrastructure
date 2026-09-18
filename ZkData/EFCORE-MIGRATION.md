@@ -199,8 +199,9 @@ the schema the EF6 migrations produce:
 | indexes | 267 | 224 |
 | foreign keys | 163 | 164 |
 
-**34 differing lines**, down from 353 - a 90% reduction, with foreign keys matching exactly
-and indexes within two. That is the number the port is working down, and it
+**22 differing lines**, down from 353 - a 94% reduction, with foreign keys matching exactly.
+Six of the 22 are `__MigrationHistory`, which EF Core has no reason to create and which the
+baseline replaces anyway, so the real remainder is about sixteen lines and one relationship. That is the number the port is working down, and it
 is a number rather than an impression.
 
 What closed the first half:
@@ -289,10 +290,23 @@ What remains:
    the wrong thing to preserve. A composite foreign key overlapping a simple one on the same
    column is unusual, and it is a lot of complexity for one table. Changing the schema
    instead is a decision rather than a mechanical step, so it is left open.
-2. **A handful of ordering and storage details**: a clustered index on `LobbyChatHistory.Time`
-   where EF Core clusters the primary key instead, and a few index column orders.
-3. **`__MigrationHistory`**, which EF Core has no reason to create and which the baseline
-   will replace anyway.
+2. **A handful of details**: an extra index on `AccountMapBans.BannedMapResourceID` and on
+   `CommanderSlots.ChassisID`, and one primary key EF Core clusters differently.
+
+Two mistakes of mine, both caught by the diff and worth recording because neither would
+have survived review either:
+
+- **Filters are not a rule.** EF Core adds `WHERE [col] IS NOT NULL` to a unique index over
+  a nullable column. Removing that everywhere fixed `Words.Text` and `Factions.ShortName`
+  and *broke* `Accounts.SteamID`, which really is filtered in the database. The filter is
+  now taken from the schema per index.
+- **Order of configuration matters.** The facets are looked up by table name, and
+  `ConfigureTableNames` was running after them - so every facet on the four renamed tables
+  silently did nothing. The unique index on `Words.Text` kept EF Core's filter because the
+  entity was still called `IndexWords` when the facet ran. Moving one call up removed eight
+  lines of difference.
+3. **`__MigrationHistory`**, six lines, which EF Core has no reason to create and which the
+   baseline will replace anyway.
 
 Reproduce the comparison:
 
