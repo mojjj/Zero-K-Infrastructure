@@ -82,12 +82,9 @@ namespace ZkData
             modelBuilder.Entity<CampaignJournal>().HasMany(e => e.CampaignJournalVars).WithOne(e => e.CampaignJournal).HasForeignKey(e => new { e.CampaignID, e.JournalID }).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignPlanet>().HasKey(x => new { x.CampaignID, x.PlanetID });
             modelBuilder.Entity<CampaignPlanet>().Property(e => e.Name).IsUnicode(false);
-            modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.AccountCampaignProgress).WithOne(e => e.CampaignPlanet).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.CampaignEvents).WithOne(e => e.CampaignPlanet).HasForeignKey(e => new { e.CampaignID, e.PlanetID }).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
-            modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.CampaignJournals).WithOne(e => e.CampaignPlanet).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.CampaignLinksByPlanetToUnlock).WithOne(e => e.PlanetToUnlock).HasForeignKey(e => new { e.CampaignID, e.PlanetToUnlockID }).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.CampaignLinksByUnlockingPlanet).WithOne(e => e.UnlockingPlanet).HasForeignKey(e => new { e.CampaignID, e.UnlockingPlanetID }).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
-            modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.CampaignPlanetVars).WithOne(e => e.CampaignPlanet).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignVar>().HasMany(e => e.AccountCampaignVars).WithOne(e => e.CampaignVar).HasForeignKey(e => new { e.CampaignID, e.VarID }).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignVar>().HasMany(e => e.CampaignJournalVars).WithOne(e => e.CampaignVar).HasForeignKey(e => new { e.CampaignID, e.RequiredVarID }).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<CampaignVar>().HasMany(e => e.CampaignPlanetVars).WithOne(e => e.CampaignVar).HasForeignKey(e => new { e.CampaignID, e.RequiredVarID }).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
@@ -161,6 +158,12 @@ namespace ZkData
             // checked against each other:
             //   unrecognised shape: HasRequired
             //     modelBuilder.Entity<AccountMapBan>() .HasRequired(e => e.Resource)
+            //   no foreign key stated and CampaignPlanet has a composite key
+            //     modelBuilder.Entity<CampaignPlanet>() .HasMany(e => e.AccountCampaignProgress) .WithRequired(e => e.CampaignPlanet) .WillCascadeOnDelete(false)
+            //   no foreign key stated and CampaignPlanet has a composite key
+            //     modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.CampaignJournals).WithOptional(e => e.CampaignPlanet)
+            //   no foreign key stated and CampaignPlanet has a composite key
+            //     modelBuilder.Entity<CampaignPlanet>() .HasMany(e => e.CampaignPlanetVars) .WithRequired(e => e.CampaignPlanet) .WillCascadeOnDelete(false)
             //   many-to-many with Map/ToTable needs UsingEntity
             //     modelBuilder.Entity<Clan>() .HasMany(e => e.Events) .WithMany(e => e.Clans) .Map(m => m.ToTable("EventClan").MapLeftKey("ClanID").MapRightKey("EventID
             //   many-to-many with Map/ToTable needs UsingEntity

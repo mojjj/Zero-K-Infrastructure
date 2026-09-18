@@ -7,7 +7,7 @@
 # is skipped never reports, and the pull request waits for it forever.
 #
 # It uses exactly the scripts a developer uses locally (db/README.md). If this job breaks,
-# the same four commands reproduce it on a laptop.
+# the same commands reproduce it on a laptop.
 #
 # Timing, measured locally: 37s from empty build directories with the images and the NuGet
 # cache already warm. On a cold runner add the SQL Server and mono image pulls and, on a
@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   test:
-    name: WHR pipeline (net48 under mono, SQL Server 2022)
+    name: WHR pipeline and EF Core port (SQL Server 2022)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -46,6 +46,15 @@ jobs:
           path: ~/.cache/zk-mono-nuget
           key: zk-mono-nuget-${{ hashFiles('**/*.csproj', '**/packages.config') }}
           restore-keys: zk-mono-nuget-
+
+      # The .NET 9 SDK runs from a container (tools/dotnet.sh) and restores into the
+      # runner's own NuGet directory, which the mono cache above does not cover.
+      - name: Cache NuGet packages for the .NET 9 SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: zk-net9-nuget-${{ hashFiles('ZkData.Core/ZkData.Core.csproj') }}
+          restore-keys: zk-net9-nuget-
 
       - name: Start SQL Server
         run: |
@@ -66,6 +75,18 @@ jobs:
 
       - name: Run the WHR pipeline tests
         run: ./db/run-db-tests.sh
+
+      # The .NET 9 port. Two different questions, and the second one is not implied by the
+      # first: whether the EF Core model would BUILD this schema, and whether it can READ
+      # this data. A relationship with an invented shadow foreign key answers yes to
+      # neither, but only the second one fails loudly - which is how it was found.
+      - name: Check the EF Core model against the EF6 schema
+        run: ./db/efcore-schema.sh --check
+
+      - name: Read the fixture through the EF Core model
+        env:
+          ZK_CONNECTION_STRING: "Data Source=127.0.0.1,14330;Initial Catalog=zk_test;User ID=sa;Password=ZkLocal!Dev2026;MultipleActiveResultSets=true;TrustServerCertificate=true"
+        run: ./tools/dotnet.sh run --project ZkData.Core -- read
 
       - name: SQL Server log
         if: failure()

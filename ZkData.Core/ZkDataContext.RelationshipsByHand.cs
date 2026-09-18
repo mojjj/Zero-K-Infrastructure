@@ -61,6 +61,35 @@ namespace ZkData
                 .HasForeignKey(e => e.OptionID)
                 .IsRequired(true).OnDelete(DeleteBehavior.Restrict);
 
+            // The three relationships into CampaignPlanets that EF6 left without a key.
+            //
+            // CampaignPlanets is keyed on (CampaignID, PlanetID), and EF6 matched that
+            // against the dependent's identically named properties by convention. EF Core's
+            // convention is stricter: it will not use a property whose nullability disagrees
+            // with the relationship, so on CampaignJournals - optional, with a nullable
+            // PlanetID and a NOT NULL CampaignID - it declined the match and invented
+            // CampaignPlanetCampaignID and CampaignPlanetPlanetID instead.
+            //
+            // Shadow foreign keys are the quiet failure in this port. The model builds, it
+            // validates, and every query against that table fails at runtime on a column the
+            // database has never heard of. The other two resolved correctly by convention;
+            // they are written out anyway, because "correct by convention" is what the third
+            // one also looked like until something read from it.
+            modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.AccountCampaignProgress)
+                .WithOne(e => e.CampaignPlanet)
+                .HasForeignKey(e => new { e.CampaignID, e.PlanetID })
+                .IsRequired(true).OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.CampaignJournals)
+                .WithOne(e => e.CampaignPlanet)
+                .HasForeignKey(e => new { e.CampaignID, e.PlanetID })
+                .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<CampaignPlanet>().HasMany(e => e.CampaignPlanetVars)
+                .WithOne(e => e.CampaignPlanet)
+                .HasForeignKey(e => new { e.CampaignID, e.PlanetID })
+                .IsRequired(true).OnDelete(DeleteBehavior.Restrict);
+
             // CampaignEvent sits on two relationships that share the CampaignID column: one
             // to Campaign on CampaignID alone, and one to CampaignPlanet on
             // (CampaignID, PlanetID). EF6 accepted the overlap. EF Core resolves it by
