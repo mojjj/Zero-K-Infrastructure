@@ -199,7 +199,8 @@ the schema the EF6 migrations produce:
 | indexes | 267 | 224 |
 | foreign keys | 163 | 164 |
 
-**53 differing lines**, down from 353, with columns and foreign keys now matching in count exactly. That is the number the port is working down, and it
+**34 differing lines**, down from 353 - a 90% reduction, with foreign keys matching exactly
+and indexes within two. That is the number the port is working down, and it
 is a number rather than an impression.
 
 What closed the first half:
@@ -260,20 +261,38 @@ with a shadow `ResourceID` column, its own index and its own foreign key. Naming
 removed all three. `WithMany()` with no argument is not "this side has no navigation"; it
 is "make me a new relationship".
 
-What remains, in order of size:
+Three more classes closed since:
 
-1. **16 index lines** and **4 unique index lines**, mostly column ordering within an index,
-   plus the indexes on the many-to-many join tables - those are shared-type entities in EF
-   Core, over `Dictionary<string, object>`, which `modelBuilder.Entity()` refuses, so the
-   facet helpers skip them. Reaching them means going through the metadata API instead.
-2. **11 column lines** and **10 foreign key lines**, the same problem from both sides:
-   `CampaignEvent` sits on two relationships sharing the `CampaignID` column - one to
-   `Campaign` on `CampaignID`, one to `CampaignPlanet` on `(CampaignID, PlanetID)`. EF6
-   accepted the overlap. EF Core still invents `CampaignPlanetCampaignID` and
-   `CampaignPlanetPlanetID` even with both ends and the composite key named, so this needs
-   more than a fluent declaration.
-3. **7 primary key lines**, column ordering within composite keys, mostly on the join
-   tables.
+- **The join tables.** `UsingEntity` takes a third lambda that configures the join entity
+  itself, and both parts of it mattered: the key's column *order* is the clustered index's
+  order, so `EventAccount` really is keyed `(EventID, AccountID)` while `EventClan` is
+  `(ClanID, EventID)`; and EF Core indexes only the second key column, the first being the
+  key's own prefix, where EF6 indexed both. No metadata API was needed after all.
+- **Two more inferred foreign keys.** EF6 used the principal's key name as it stands -
+  `EffectTypeID`, `OptionID` - while EF Core prefixes the navigation name, giving
+  `TreatyEffectTypeEffectTypeID` and `PollOptionOptionID` as shadow columns beside the real
+  ones. Only two of the 35 such statements differ; the rest happen to agree.
+- **Two generator faults.** A `varchar(max)` column was being emitted as `nvarchar(max)`,
+  which would have doubled its storage and changed its collation. And EF Core filters a
+  unique index over a nullable column with `WHERE [col] IS NOT NULL`, which EF6 did not -
+  `HasFilter(null)` removes it.
+
+What remains:
+
+1. **~21 lines for one relationship.** `CampaignEvent` sits on two relationships sharing the
+   `CampaignID` column: one to `Campaign` on `CampaignID`, one to `CampaignPlanet` on
+   `(CampaignID, PlanetID)`. EF6 accepted the overlap. EF Core invents
+   `CampaignPlanetCampaignID` and `CampaignPlanetPlanetID` even with both ends named and the
+   composite key given.
+
+   This is the first thing in the port that declaring correctly does not fix, and it may be
+   the wrong thing to preserve. A composite foreign key overlapping a simple one on the same
+   column is unusual, and it is a lot of complexity for one table. Changing the schema
+   instead is a decision rather than a mechanical step, so it is left open.
+2. **A handful of ordering and storage details**: a clustered index on `LobbyChatHistory.Time`
+   where EF Core clusters the primary key instead, and a few index column orders.
+3. **`__MigrationHistory`**, which EF Core has no reason to create and which the baseline
+   will replace anyway.
 
 Reproduce the comparison:
 

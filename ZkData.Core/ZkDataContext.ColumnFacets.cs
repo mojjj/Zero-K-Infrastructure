@@ -109,7 +109,7 @@ namespace ZkData
             Facet(modelBuilder, "ForumThreads", "WikiKey", p => p.HasMaxLength(100));
             Facet(modelBuilder, "Galaxies", "EndMessage", p => p.HasColumnType("nvarchar(max)"));
             Facet(modelBuilder, "Galaxies", "ImageName", p => p.HasMaxLength(100));
-            Facet(modelBuilder, "Galaxies", "MatchMakerState", p => p.HasColumnType("nvarchar(max)"));
+            Facet(modelBuilder, "Galaxies", "MatchMakerState", p => p.HasColumnType("varchar(max)"));
             Facet(modelBuilder, "GameModes", "DisplayName", p => p.HasColumnType("nvarchar(max)"));
             Facet(modelBuilder, "GameModes", "GameModeJson", p => p.HasColumnType("nvarchar(max)"));
             Facet(modelBuilder, "GameModes", "ShortName", p => p.HasMaxLength(64));
@@ -621,7 +621,13 @@ namespace ZkData
                 foreach (var column in columns)
                     if (entity.FindProperty(column) == null) return;
                 var index = modelBuilder.Entity(entity.ClrType).HasIndex(columns);
-                if (unique) index.IsUnique();
+                if (unique)
+                {
+                    // EF Core adds "WHERE [col] IS NOT NULL" to a unique index over a
+                    // nullable column, so that several rows may be null. EF6 did not, and
+                    // the database has the unfiltered form. HasFilter(null) removes it.
+                    index.IsUnique().HasFilter(null);
+                }
                 return;
             }
         }
