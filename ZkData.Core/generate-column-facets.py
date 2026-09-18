@@ -76,7 +76,7 @@ def main():
             unicode_off.append((table, column))
         m_len = re.match(r'n?(?:var)?char\((\d+|max)\)$', ctype)
         if m_len:
-            lengths.append((table, column, m_len.group(1)))
+            lengths.append((table, column, m_len.group(1), base))
         m = re.search(r'DEFAULT \((.*)\)$', rest)
         if m:
             defaults.append((table, column, m.group(1)))
@@ -108,8 +108,13 @@ namespace ZkData
     lines.append("")
     lines.append("            // string lengths, from the schema (%d). Some disagree with the" % len(lengths))
     lines.append("            // entity attributes - migrations widened columns without updating them.")
-    for table, column, length in lengths:
-        setter = "p.HasMaxLength(%s)" % length if length != "max" else "p.HasColumnType(\"nvarchar(max)\")"
+    for table, column, length, ctype in lengths:
+        if length == "max":
+            # the column type carries whether it is unicode; nvarchar(max) for a
+            # varchar(max) column would silently double its storage and change collation
+            setter = 'p.HasColumnType("%s(max)")' % ("nvarchar" if ctype.startswith("n") else "varchar")
+        else:
+            setter = "p.HasMaxLength(%s)" % length
         lines.append('            Facet(modelBuilder, "%s", "%s", p => %s);' % (table, column, setter))
 
     lines.append("")
@@ -182,7 +187,13 @@ namespace ZkData
                 foreach (var column in columns)
                     if (entity.FindProperty(column) == null) return;
                 var index = modelBuilder.Entity(entity.ClrType).HasIndex(columns);
-                if (unique) index.IsUnique();
+                if (unique)
+                {
+                    // EF Core adds "WHERE [col] IS NOT NULL" to a unique index over a
+                    // nullable column, so that several rows may be null. EF6 did not, and
+                    // the database has the unfiltered form. HasFilter(null) removes it.
+                    index.IsUnique().HasFilter(null);
+                }
                 return;
             }
         }

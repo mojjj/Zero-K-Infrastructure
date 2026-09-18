@@ -36,6 +36,24 @@ namespace ZkData
                 .HasForeignKey<CommanderDecorationIcon>(e => e.DecorationUnlockID)
                 .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
 
+            // Two relationships where EF6 inferred the foreign key column and EF Core infers
+            // a different name. EF6 used the principal's key name as it stands - EffectTypeID,
+            // OptionID - while EF Core prefixes the navigation name, giving
+            // TreatyEffectTypeEffectTypeID and PollOptionOptionID, and then creates those as
+            // shadow columns because the real ones are already there.
+            //
+            // Only two of the 35 such statements differ; the rest happen to agree. The
+            // column names come from db/schema/schema.txt.
+            modelBuilder.Entity<TreatyEffectType>().HasMany(e => e.TreatyEffects)
+                .WithOne(e => e.TreatyEffectType)
+                .HasForeignKey(e => e.EffectTypeID)
+                .IsRequired(true).OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<PollOption>().HasMany(e => e.PollVotes)
+                .WithOne(e => e.PollOption)
+                .HasForeignKey(e => e.OptionID)
+                .IsRequired(true).OnDelete(DeleteBehavior.Restrict);
+
             // CampaignEvent sits on two relationships that share the CampaignID column: one
             // to Campaign on CampaignID alone, and one to CampaignPlanet on
             // (CampaignID, PlanetID). EF6 accepted the overlap. EF Core resolves it by
@@ -50,25 +68,68 @@ namespace ZkData
             // The five many-to-many joins. EF6 described the join table with
             // Map/MapLeftKey/MapRightKey; EF Core uses UsingEntity. Table and column names
             // are given explicitly so the schema keeps the names the database already has.
+            //
+            // The third lambda configures the join entity itself, and both parts of it
+            // matter. The key's column ORDER is not cosmetic - it is the clustered index's
+            // order, so EventAccount really is keyed (EventID, AccountID) while EventClan
+            // is (ClanID, EventID). And EF Core indexes only the second key column, the
+            // first being the key's own prefix; EF6 indexed both, so the missing one is
+            // declared here.
+
             modelBuilder.Entity<Clan>().HasMany(e => e.Events).WithMany(e => e.Clans)
-                .UsingEntity("EventClan", l => l.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"),
-                    r => r.HasOne(typeof(Clan)).WithMany().HasForeignKey("ClanID"));
+                .UsingEntity("EventClan",
+                    l => l.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"),
+                    r => r.HasOne(typeof(Clan)).WithMany().HasForeignKey("ClanID"),
+                    j =>
+                    {
+                        j.HasKey("ClanID", "EventID");
+                        j.HasIndex("ClanID");
+                        j.HasIndex("EventID");
+                    });
 
             modelBuilder.Entity<Event>().HasMany(e => e.Accounts).WithMany(e => e.Events)
-                .UsingEntity("EventAccount", l => l.HasOne(typeof(Account)).WithMany().HasForeignKey("AccountID"),
-                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"));
+                .UsingEntity("EventAccount",
+                    l => l.HasOne(typeof(Account)).WithMany().HasForeignKey("AccountID"),
+                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"),
+                    j =>
+                    {
+                        j.HasKey("EventID", "AccountID");
+                        j.HasIndex("AccountID");
+                        j.HasIndex("EventID");
+                    });
 
             modelBuilder.Entity<Event>().HasMany(e => e.Factions).WithMany(e => e.Events)
-                .UsingEntity("EventFaction", l => l.HasOne(typeof(Faction)).WithMany().HasForeignKey("FactionID"),
-                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"));
+                .UsingEntity("EventFaction",
+                    l => l.HasOne(typeof(Faction)).WithMany().HasForeignKey("FactionID"),
+                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"),
+                    j =>
+                    {
+                        j.HasKey("EventID", "FactionID");
+                        j.HasIndex("EventID");
+                        j.HasIndex("FactionID");
+                    });
 
             modelBuilder.Entity<Event>().HasMany(e => e.Planets).WithMany(e => e.Events)
-                .UsingEntity("EventPlanet", l => l.HasOne(typeof(Planet)).WithMany().HasForeignKey("PlanetID"),
-                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"));
+                .UsingEntity("EventPlanet",
+                    l => l.HasOne(typeof(Planet)).WithMany().HasForeignKey("PlanetID"),
+                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"),
+                    j =>
+                    {
+                        j.HasKey("EventID", "PlanetID");
+                        j.HasIndex("EventID");
+                        j.HasIndex("PlanetID");
+                    });
 
             modelBuilder.Entity<Event>().HasMany(e => e.SpringBattles).WithMany(e => e.Events)
-                .UsingEntity("EventSpringBattle", l => l.HasOne(typeof(SpringBattle)).WithMany().HasForeignKey("SpringBattleID"),
-                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"));
+                .UsingEntity("EventSpringBattle",
+                    l => l.HasOne(typeof(SpringBattle)).WithMany().HasForeignKey("SpringBattleID"),
+                    r => r.HasOne(typeof(Event)).WithMany().HasForeignKey("EventID"),
+                    j =>
+                    {
+                        j.HasKey("EventID", "SpringBattleID");
+                        j.HasIndex("EventID");
+                        j.HasIndex("SpringBattleID");
+                    });
         }
     }
 }
