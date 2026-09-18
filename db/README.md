@@ -107,12 +107,18 @@ same pull request.
     ZK_CONNECTION_STRING="$(DB_NAME=zk_test ./db/connection-string.sh)" \
         ./tools/dotnet.sh run --project ZkData.Core -- read   # can it read this data?
 
-Two questions, and the second is not implied by the first - a mapping can name the wrong
+    ZK_CONNECTION_STRING="$(DB_NAME=zk_test ./db/connection-string.sh)" \
+        ./tools/dotnet.sh run --project ZkData.Core -- write  # and write to it?
+
+Three questions, and none implies the next - a mapping can name the wrong
 column consistently, which builds a schema that matches nothing and reads nothing, but
 diffs clean against itself. The first command builds a database from the EF Core model into
 `zk_efcore` and diffs it against the snapshot; the remaining difference is committed as
 `db/schema/efcore-gap.txt`, so it fails when the gap changes in either direction. The second
-selects from every mapped table and runs the queries production issues. CI runs both.
+selects from every mapped table and runs the queries production issues. The third inserts,
+updates and deletes inside a transaction it always rolls back, checking that EF6's save
+hooks and annotation validation - neither of which EF Core does by itself - still happen;
+the fixture is byte-identical afterwards. CI runs all three.
 
 There is no .NET SDK on the build machines or on most laptops here, so `tools/dotnet.sh`
 runs it from a container with the repository mounted.

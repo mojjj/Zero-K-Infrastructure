@@ -373,6 +373,53 @@ it has not earned. The five many-to-many navigations have no rows behind them, s
 translated and executed - the SQL has to name the join table the database actually has, and
 SQL Server has to accept the statement - and then reported as `empty`, not `ok`.
 
+## Writing, which is a third question
+
+EF6's `SaveChanges` was never a plain save. It collected the pending changes, ran
+`IEntityBeforeChange` and a static event on each, saved, then ran `IEntityAfterChange` and a
+second event - and it validated the data annotations first. EF Core's `SaveChanges` does
+none of that.
+
+Dropping the hooks would not have failed anywhere. `Punishment` implements the interface and
+three forum caches subscribe to the events (`ForumListManager`, `ForumPostCache`,
+`ForumPostIndexer`); with the hooks gone they would simply stop being invalidated, which
+shows up as stale forum pages weeks later and nowhere near the cause. They are ported in
+`ZkDataContext.SaveChanges.cs`, on the `(bool)` and `(bool, CancellationToken)` overloads
+because that is where every EF Core save path converges - overriding `SaveChanges()` alone
+leaves `SaveChanges(true)` going straight past.
+
+**Validation is the interesting one**, because the obvious argument for porting it is wrong.
+SQL Server 2022 reports an over-long value better than expected - it names the table, the
+column and the truncated value - so for most columns the database really would catch it.
+
+Two things it does not catch, and they were measured rather than assumed:
+
+- **A column wider than its annotation.** `Accounts.Name` is `varchar(2000)` while
+  `[StringLength(200)]` says 200; the schema drifted past the model years ago. A
+  201-character name is stored with no error at all. It is one column out of 746, and it is
+  the one holding every player's name.
+- **`[Required]` on a string rejects null *and* the empty string**, where the column's
+  `NOT NULL` only rejects null. 39 mapped string properties are `[Required]`.
+
+So `Ef6Compat/EntityValidation.cs` reproduces EF6's validation, with one deliberate
+narrowing: only *mapped* properties are checked. `Validator.TryValidateObject` would also
+walk `[NotMapped]` and computed properties and reject entities EF6 accepted.
+
+`ZkData.Core -- write` is the check:
+
+    ZK_CONNECTION_STRING=...zk_test ./tools/dotnet.sh run --project ZkData.Core -- write
+
+Insert with an identity value coming back, update, `MarkModified` through the compat shim,
+both hooks firing with the *pre-save* state, validation refusing an over-long name, delete -
+all inside one transaction that is always rolled back, with a final check that the fixture
+is exactly as it was found. It also prints what the database would not catch on its own, so
+the shim's value is a number rather than an opinion.
+
+One gap it does not cover, deliberately: the `IEntityAfterChange` interface path. Its only
+implementor is `Punishment`, whose `AfterChange` refreshes a static cache through a context
+of its own, and that second connection would block on this transaction's uncommitted rows.
+The events run through the identical loop, so the dispatch is exercised there instead.
+
 ## A defect the port found
 
 `CampaignEvents` had
