@@ -3,7 +3,7 @@
 # The contract the EF Core port has to reproduce, and the thing that makes schema
 # drift show up as a diff. See ZkData/EFCORE-MIGRATION.md.
 
-migrations applied: 117, through 202604290948595_AddPwPhaseMinutes
+migrations applied: 118, through 202609181200000_FixCampaignEventsCampaignForeignKey
 tables: 91, columns: 746, indexes: 267, foreign keys: 163
 
 TABLE AbuseReports
@@ -278,7 +278,7 @@ TABLE CampaignEvents
   PRIMARY KEY (EventID)  [clustered]
   FOREIGN KEY (AccountID) -> Accounts
   FOREIGN KEY (CampaignID, PlanetID) -> CampaignPlanets ON DELETE CASCADE
-  FOREIGN KEY (PlanetID) -> Campaigns
+  FOREIGN KEY (CampaignID) -> Campaigns
 
 TABLE CampaignJournalVars
   CampaignID                         int NOT NULL
