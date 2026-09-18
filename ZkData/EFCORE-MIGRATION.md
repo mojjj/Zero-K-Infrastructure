@@ -280,16 +280,39 @@ Three more classes closed since:
 
 What remains:
 
-1. **~21 lines for one relationship.** `CampaignEvent` sits on two relationships sharing the
-   `CampaignID` column: one to `Campaign` on `CampaignID`, one to `CampaignPlanet` on
-   `(CampaignID, PlanetID)`. EF6 accepted the overlap. EF Core invents
-   `CampaignPlanetCampaignID` and `CampaignPlanetPlanetID` even with both ends named and the
-   composite key given.
+1. **The `CampaignEvent` relationship.** Half of this turned out to be a defect in the
+   database rather than a difference in the models, and is now fixed - see below.
 
-   This is the first thing in the port that declaring correctly does not fix, and it may be
-   the wrong thing to preserve. A composite foreign key overlapping a simple one on the same
-   column is unusual, and it is a lot of complexity for one table. Changing the schema
-   instead is a decision rather than a mechanical step, so it is left open.
+   What is left of it: `CampaignEvent.CampaignID` is `NOT NULL` and carries the required
+   foreign key to `Campaigns`, while the relationship to `CampaignPlanets` is optional and
+   its key is `(CampaignID, PlanetID)`. EF Core requires every column of an optional
+   foreign key to be nullable, cannot make `CampaignID` nullable because the required key
+   needs it, and so creates nullable shadow columns instead. EF6 simply allowed the
+   overlap. Closing this means either making the composite relationship required, or
+   splitting the reference - both changes to the model rather than to configuration.
+
+## A defect the port found
+
+`CampaignEvents` had
+
+    FOREIGN KEY (PlanetID) -> Campaigns
+
+where every sibling table - `CampaignLinks`, `CampaignJournals`,
+`AccountCampaignProgresses` - has `FOREIGN KEY (CampaignID) -> Campaigns`.
+
+In January 2015, `FixEventPlanetCampaignRelation` swapped the `CampaignID` and `PlanetID`
+columns by renaming them and recreated the indexes, but did not touch the foreign keys.
+The key created on the column originally named `CampaignID` stayed bound to that physical
+column, which is now called `PlanetID`. Its name still says so: the constraint is called
+`FK_dbo.CampaignEvent_dbo.Campaign_CampaignID` - singular, from before the tables were
+pluralised - and sits on `PlanetID`.
+
+So for eleven years `CampaignEvents.PlanetID` has been constrained against
+`Campaigns.CampaignID`, while the actual campaign reference has had none. Fixed by
+`202609181200000_FixCampaignEventsCampaignForeignKey`, which has to drop the constraint by
+name, because dropping by column looks for a name that does not exist.
+
+Nothing but building the same schema twice and diffing would have found this.
 2. **A handful of details**: an extra index on `AccountMapBans.BannedMapResourceID` and on
    `CommanderSlots.ChassisID`, and one primary key EF Core clusters differently.
 

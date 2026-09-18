@@ -453,7 +453,7 @@ namespace ZkData
             Fk(modelBuilder, "Accounts", new[] { "FactionID" }, DeleteBehavior.Restrict);
             Fk(modelBuilder, "CampaignEvents", new[] { "AccountID" }, DeleteBehavior.Restrict);
             Fk(modelBuilder, "CampaignEvents", new[] { "CampaignID", "PlanetID" }, DeleteBehavior.Cascade);
-            Fk(modelBuilder, "CampaignEvents", new[] { "PlanetID" }, DeleteBehavior.Restrict);
+            Fk(modelBuilder, "CampaignEvents", new[] { "CampaignID" }, DeleteBehavior.Restrict);
             Fk(modelBuilder, "CampaignJournalVars", new[] { "CampaignID", "JournalID" }, DeleteBehavior.Cascade);
             Fk(modelBuilder, "CampaignJournalVars", new[] { "CampaignID", "RequiredVarID" }, DeleteBehavior.Restrict);
             Fk(modelBuilder, "CampaignJournalVars", new[] { "CampaignID" }, DeleteBehavior.Restrict);
