@@ -9,7 +9,8 @@ namespace ZkData.Core
     /// Builds a database from the EF Core model so its schema can be compared with the one
     /// the EF6 migrations produce (db/schema/schema.txt).
     ///
-    ///     ZK_CONNECTION_STRING=... dotnet run -- create
+    ///     ZK_CONNECTION_STRING=... dotnet run -- create   build a database from the model
+    ///     ZK_CONNECTION_STRING=... dotnet run -- read     read an existing one through it
     ///
     /// The comparison is the point: it is how the port knows whether the model is right,
     /// rather than whether it compiles.
@@ -37,6 +38,9 @@ namespace ZkData.Core
                             db.Database.EnsureCreated();
                             Console.WriteLine("created");
                             break;
+
+                        case "read":
+                            return ReadVerification.Run(db);
 
                         case "summary":
                         default:

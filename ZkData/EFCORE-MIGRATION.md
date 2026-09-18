@@ -286,18 +286,92 @@ Three more classes closed since:
   unique index over a nullable column with `WHERE [col] IS NOT NULL`, which EF6 did not -
   `HasFilter(null)` removes it.
 
+A fourth class closed after that, and it corrects something written here earlier:
+
+- **Foreign keys EF6 left unstated.** `CampaignPlanets` is keyed `(CampaignID, PlanetID)`,
+  and three relationships into it named no foreign key at all - EF6 matched the principal's
+  composite key against the dependent's identically named properties by convention. EF Core
+  will not use a property whose nullability disagrees with the relationship, so on
+  `CampaignJournals` - optional, nullable `PlanetID`, `NOT NULL` `CampaignID` - it declined
+  the match and invented `CampaignPlanetCampaignID` and `CampaignPlanetPlanetID` instead.
+
+  This page previously said the same shape on `CampaignEvent` could not be configured at
+  all, and that closing it needed a model change - making the relationship required, or
+  splitting the reference. That was wrong. EF Core accepts the overlap perfectly well; it
+  only has to be told which columns to use. All four are written out in
+  `ZkDataContext.RelationshipsByHand.cs`, and no schema change was needed.
+
+  `generate-relationships.py` now refuses this shape rather than translating it: an EF6
+  statement with no `HasForeignKey` whose principal has a composite key goes to the by-hand
+  file, where the key is named.
+
+- **EF Core's automatic foreign key indexes.** It adds them during model *finalisation* -
+  after `OnModelCreating`, so removing them there does not stick. Since every index the
+  database has is now declared explicitly from the schema, `ForeignKeyIndexConvention` has
+  nothing left to contribute and is removed in `ConfigureConventions` rather than fought.
+
+  `db/dump-schema.py` also now orders a table's indexes by their columns rather than by
+  their name. Index names are generated and deliberately not compared, and sorting by them
+  made two identical schemas diff purely because they listed the same indexes in a
+  different order.
+
+Two mistakes of mine, both caught by the diff and worth recording because neither would
+have survived review either:
+
+- **Filters are not a rule.** EF Core adds `WHERE [col] IS NOT NULL` to a unique index over
+  a nullable column. Removing that everywhere fixed `Words.Text` and `Factions.ShortName`
+  and *broke* `Accounts.SteamID`, which really is filtered in the database. The filter is
+  now taken from the schema per index.
+- **Order of configuration matters.** The facets are looked up by table name, and
+  `ConfigureTableNames` was running after them - so every facet on the four renamed tables
+  silently did nothing. The unique index on `Words.Text` kept EF Core's filter because the
+  entity was still called `IndexWords` when the facet ran. Moving one call up removed eight
+  lines of difference.
+
 What remains:
 
-1. **The `CampaignEvent` relationship.** Half of this turned out to be a defect in the
-   database rather than a difference in the models, and is now fixed - see below.
+**`__MigrationHistory`**, and nothing else. It is EF6's own record of which migrations have
+run; EF Core keeps the same information in `__EFMigrationsHistory` and creates it itself, so
+the port replaces the table rather than reproducing it. Everything else matches: 90 tables,
+742 columns, 266 indexes and 163 foreign keys, with their types, nullability, defaults,
+collations, filters, clustering and delete behaviour.
 
-   What is left of it: `CampaignEvent.CampaignID` is `NOT NULL` and carries the required
-   foreign key to `Campaigns`, while the relationship to `CampaignPlanets` is optional and
-   its key is `(CampaignID, PlanetID)`. EF Core requires every column of an optional
-   foreign key to be nullable, cannot make `CampaignID` nullable because the required key
-   needs it, and so creates nullable shadow columns instead. EF6 simply allowed the
-   overlap. Closing this means either making the composite relationship required, or
-   splitting the reference - both changes to the model rather than to configuration.
+Reproduce the comparison:
+
+    ./db/efcore-schema.sh              # print the difference
+    ./db/efcore-schema.sh --check      # fail if it is not the difference we expect
+
+The expected difference is committed as `db/schema/efcore-gap.txt` and checked in CI, so a
+gap that closes is as loud as one that opens. There is no .NET SDK on the build machines -
+`tools/dotnet.sh` runs it from a container.
+
+## Reading the data, not just building the schema
+
+The diff above answers one question: would this model *build* the database Zero-K has. It
+cannot answer the other one: can this model *read* the database Zero-K has. Nothing about a
+wrong column name changes the schema the model emits - the model simply emits the wrong
+schema consistently - so a mapping can be wrong in a way the diff shows as agreement.
+
+`ZkData.Core -- read` is the second question:
+
+    ZK_CONNECTION_STRING=...zk_test ./tools/dotnet.sh run --project ZkData.Core -- read
+
+It selects from every mapped table, which makes SQL Server check every column name the
+model believes in, and materialises whatever rows it finds, which checks the conversions
+those rows exercise. Then it runs the shapes production issues - the WHR loader's query
+above all, filter and `Include` and `AsNoTracking` and `OrderBy` in one statement - because
+a model can map every column correctly and still fail to translate a join.
+
+It earned its place immediately. The three unstated foreign keys described above produced a
+model that built a byte-perfect schema and threw `Invalid column name
+'CampaignPlanetCampaignID'` on the first read of `CampaignJournals`. Shadow foreign keys are
+the quiet failure in this port: the model builds, it validates, and every query against that
+table fails at runtime.
+
+The fixture does not cover everything, and the harness says so rather than reporting a pass
+it has not earned. The five many-to-many navigations have no rows behind them, so each is
+translated and executed - the SQL has to name the join table the database actually has, and
+SQL Server has to accept the statement - and then reported as `empty`, not `ok`.
 
 ## A defect the port found
 
@@ -321,48 +395,22 @@ So for eleven years `CampaignEvents.PlanetID` has been constrained against
 name, because dropping by column looks for a name that does not exist.
 
 Nothing but building the same schema twice and diffing would have found this.
-2. **Nothing else.** The last two stray indexes were EF Core's automatic foreign key
-   indexes, which it adds during model *finalisation* - after `OnModelCreating`, so removing
-   them there does not stick. Since every index the database has is now declared explicitly
-   from the schema, `ForeignKeyIndexConvention` has nothing left to contribute and is
-   removed in `ConfigureConventions` rather than fought.
-
-   `db/dump-schema.py` also now orders a table's indexes by their columns rather than by
-   their name. Index names are generated and deliberately not compared, and sorting by them
-   made two identical schemas diff purely because they listed the same indexes in a
-   different order.
-
-Two mistakes of mine, both caught by the diff and worth recording because neither would
-have survived review either:
-
-- **Filters are not a rule.** EF Core adds `WHERE [col] IS NOT NULL` to a unique index over
-  a nullable column. Removing that everywhere fixed `Words.Text` and `Factions.ShortName`
-  and *broke* `Accounts.SteamID`, which really is filtered in the database. The filter is
-  now taken from the schema per index.
-- **Order of configuration matters.** The facets are looked up by table name, and
-  `ConfigureTableNames` was running after them - so every facet on the four renamed tables
-  silently did nothing. The unique index on `Words.Text` kept EF Core's filter because the
-  entity was still called `IndexWords` when the facet ran. Moving one call up removed eight
-  lines of difference.
-3. **`__MigrationHistory`**, six lines, which EF Core has no reason to create and which the
-   baseline will replace anyway.
-
-Reproduce the comparison:
-
-    ZK_CONNECTION_STRING=...zk_efcore dotnet ZkData.Core/bin/Debug/net9.0/ZkData.Core.dll create
-    DB_NAME=zk_efcore ./db/dump-schema.py --out /tmp/efcore-schema.txt
-    diff db/schema/schema.txt /tmp/efcore-schema.txt
 
 ## How the relationships were translated
 
 `ZkData.Core/generate-relationships.py` reads EF6's `OnModelCreating` and emits
-`ZkDataContext.Relationships.cs`. It translated **131 of 138 statements**; the other 7 - five
-many-to-many joins with explicit join tables, and two irregular shapes - are in
-`ZkDataContext.RelationshipsByHand.cs`, which regeneration does not touch.
+`ZkDataContext.Relationships.cs`. It translates **128 of 138 statements**; the other 10 - five
+many-to-many joins with explicit join tables, three whose foreign key EF6 never stated, and
+two irregular shapes - are in `ZkDataContext.RelationshipsByHand.cs`, which regeneration
+does not touch.
 
-Generated rather than typed because 139 statements is 139 chances to transpose a lambda,
+Generated rather than typed because 138 statements is 138 chances to transpose a lambda,
 while a rule is one chance to be wrong and can be re-read. The generator refuses to guess:
-anything it does not recognise is reported, not skipped.
+anything it does not recognise is reported, not skipped. To know when a foreign key was
+left unstated it has to know which entities have composite keys, and this model declares
+those two ways - `[Key]` on two properties, or a fluent `HasKey` over an anonymous type - so
+it reads both. Reading only the attributes would have missed `CampaignPlanet`, which is the
+one case that mattered.
 
 **The old next-chunk note, for reference.** EF Core used to stop at:
 

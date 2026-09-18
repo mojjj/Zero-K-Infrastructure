@@ -101,6 +101,22 @@ that class of surprise.
 If a migration changes the schema on purpose, regenerate and commit the snapshot in the
 same pull request.
 
+## The EF Core port, measured against it
+
+    ./db/efcore-schema.sh --check    # does the EF Core model build this same schema?
+    ZK_CONNECTION_STRING="$(DB_NAME=zk_test ./db/connection-string.sh)" \
+        ./tools/dotnet.sh run --project ZkData.Core -- read   # can it read this data?
+
+Two questions, and the second is not implied by the first - a mapping can name the wrong
+column consistently, which builds a schema that matches nothing and reads nothing, but
+diffs clean against itself. The first command builds a database from the EF Core model into
+`zk_efcore` and diffs it against the snapshot; the remaining difference is committed as
+`db/schema/efcore-gap.txt`, so it fails when the gap changes in either direction. The second
+selects from every mapped table and runs the queries production issues. CI runs both.
+
+There is no .NET SDK on the build machines or on most laptops here, so `tools/dotnet.sh`
+runs it from a container with the repository mounted.
+
 ## The committed test fixture
 
 `db/fixture/fixture.sql` is a small, anonymised slice of the real database that **is**

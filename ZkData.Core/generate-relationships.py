@@ -32,6 +32,62 @@ UNSPECIFIED = "DeleteBehavior.Restrict"
 TARGET = pathlib.Path("ZkData.Core/ZkDataContext.Relationships.cs")
 
 
+ENTITIES = pathlib.Path("ZkData/Ef")
+
+
+def entity_model():
+    """
+    (classes with a composite key, {(class, navigation property): type}) read from the
+    entity sources.
+
+    The generator needs this to know when EF6 left a foreign key unstated. EF6 could infer
+    the key from the principal's composite key and the dependent's matching property names;
+    EF Core cannot, and invents shadow columns instead - silently, because a model with
+    shadow foreign keys builds and validates perfectly well. See the CampaignJournals note
+    in ZkDataContext.RelationshipsByHand.cs for what that looks like when it reaches a
+    database.
+    """
+    composite, navigations = set(), {}
+
+    # A composite key is declared either way in this model: [Key] on two properties, or a
+    # fluent HasKey over an anonymous type. CampaignPlanet uses the fluent form, so reading
+    # only the attributes would miss exactly the case this exists to catch.
+    for m in re.finditer(r'modelBuilder\.Entity<([A-Za-z0-9_]+)>\(\)\.HasKey\([^;]*?new\s*\{',
+                         SOURCE.read_text(encoding="utf-8-sig")):
+        composite.add(m.group(1))
+
+    for path in sorted(ENTITIES.glob("*.cs")):
+        text = path.read_text(encoding="utf-8-sig")
+        for match in re.finditer(r'\n\s*public class ([A-Za-z0-9_]+)', text):
+            name = match.group(1)
+            body = text[match.end():]
+            if len(re.findall(r'\[Key\]', body)) > 1:
+                composite.add(name)
+            for nav in re.finditer(r'public virtual ([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\s*\{', body):
+                navigations[(name, nav.group(2))] = nav.group(1)
+    return composite, navigations
+
+
+COMPOSITE_KEYS, NAVIGATIONS = entity_model()
+
+
+def navigation_target(entity, lambda_argument):
+    """The type a navigation lambda such as `e => e.CampaignPlanet` points at."""
+    m = re.search(r'=>\s*[A-Za-z0-9_]+\.([A-Za-z0-9_]+)', lambda_argument or "")
+    return NAVIGATIONS.get((entity, m.group(1))) if m else None
+
+
+def unstated_composite_key(principal, arg):
+    """
+    True when EF6 named no foreign key and the principal's key is composite.
+
+    That combination is the one EF6 resolved by convention and EF Core does not, so it is
+    refused rather than translated: the statement goes to the by-hand file, where the key
+    is written out.
+    """
+    return principal in COMPOSITE_KEYS and "HasForeignKey" not in arg
+
+
 def statements(text):
     block = re.search(r'protected override void OnModelCreating.*?\n(        \})', text, re.S)
     if not block:
@@ -103,6 +159,8 @@ def translate(statement):
     # the common case: HasMany(...).WithRequired|WithOptional(...)[.HasForeignKey(...)][.WillCascadeOnDelete(...)]
     if names and names[0] == "HasMany" and len(names) > 1 and names[1] in ("WithRequired", "WithOptional"):
         required = names[1] == "WithRequired"
+        if unstated_composite_key(entity, arg):
+            return None, "no foreign key stated and %s has a composite key" % entity
         out = "modelBuilder.Entity<%s>().HasMany(%s).WithOne(%s)" % (entity, arg["HasMany"], arg[names[1]])
         if "HasForeignKey" in arg:
             out += ".HasForeignKey(%s)" % arg["HasForeignKey"]
@@ -115,6 +173,9 @@ def translate(statement):
     # the inverse spelling: HasOptional|HasRequired(...).WithMany(...)
     if names and names[0] in ("HasOptional", "HasRequired") and len(names) > 1 and names[1] == "WithMany":
         required = names[0] == "HasRequired"
+        principal = navigation_target(entity, arg[names[0]])
+        if unstated_composite_key(principal, arg):
+            return None, "no foreign key stated and %s has a composite key" % principal
         out = "modelBuilder.Entity<%s>().HasOne(%s).WithMany(%s)" % (entity, arg[names[0]], arg["WithMany"])
         if "HasForeignKey" in arg:
             out += ".HasForeignKey(%s)" % arg["HasForeignKey"]
