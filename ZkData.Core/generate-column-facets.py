@@ -17,8 +17,7 @@ TARGET = pathlib.Path("ZkData.Core/ZkDataContext.ColumnFacets.cs")
 
 # Tables the EF Core model does not have, or whose names differ - skipping them keeps the
 # generated file compiling while those are dealt with separately.
-SKIP_TABLES = {"__MigrationHistory",
-               "EventAccount", "EventClan", "EventFaction", "EventPlanet", "EventSpringBattle"}
+SKIP_TABLES = {"__MigrationHistory"}
 
 
 def indexes():
@@ -30,9 +29,24 @@ def indexes():
             continue
         if not table or table in SKIP_TABLES:
             continue
-        m = re.match(r'  INDEX \(([^)]*)\)\s*$', line)
-        if m and m.group(1).strip():
-            yield table, [c.strip() for c in m.group(1).split(",")]
+        m = re.match(r'  (UNIQUE )?INDEX \(([^)]*)\)\s*$', line)
+        if m and m.group(2).strip():
+            yield table, [c.strip() for c in m.group(2).split(",")], bool(m.group(1))
+
+
+def foreign_keys():
+    """(table, [columns], cascade?) for every foreign key in the snapshot."""
+    table = None
+    for line in SCHEMA.read_text(encoding="utf-8").splitlines():
+        if line.startswith("TABLE "):
+            table = line[6:].strip()
+            continue
+        if not table or table in SKIP_TABLES:
+            continue
+        m = re.match(r'  FOREIGN KEY \(([^)]*)\) -> (\S+)(.*)$', line)
+        if m:
+            columns = [c.strip() for c in m.group(1).split(",")]
+            yield table, columns, "ON DELETE CASCADE" in m.group(3)
 
 
 def parse():
@@ -53,13 +67,16 @@ def parse():
 
 
 def main():
-    unicode_off, defaults = [], []
+    unicode_off, defaults, lengths = [], [], []
     for table, column, ctype, rest in parse():
         if table in SKIP_TABLES:
             continue
         base = ctype.split("(")[0]
         if base in ("varchar", "char"):
             unicode_off.append((table, column))
+        m_len = re.match(r'n?(?:var)?char\((\d+|max)\)$', ctype)
+        if m_len:
+            lengths.append((table, column, m_len.group(1)))
         m = re.search(r'DEFAULT \((.*)\)$', rest)
         if m:
             defaults.append((table, column, m.group(1)))
@@ -74,6 +91,7 @@ def main():
 // EF6's own configuration declares IsUnicode(false) in 19 places. The schema has many
 // more, the rest having arrived through 117 migrations - which is why this is read from
 // the schema rather than translated from the fluent configuration.
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 
 namespace ZkData
@@ -88,6 +106,13 @@ namespace ZkData
         lines.append('            Facet(modelBuilder, "%s", "%s", p => p.IsUnicode(false));' % (table, column))
 
     lines.append("")
+    lines.append("            // string lengths, from the schema (%d). Some disagree with the" % len(lengths))
+    lines.append("            // entity attributes - migrations widened columns without updating them.")
+    for table, column, length in lengths:
+        setter = "p.HasMaxLength(%s)" % length if length != "max" else "p.HasColumnType(\"nvarchar(max)\")"
+        lines.append('            Facet(modelBuilder, "%s", "%s", p => %s);' % (table, column, setter))
+
+    lines.append("")
     lines.append("            // default constraints (%d)" % len(defaults))
     for table, column, expression in defaults:
         lines.append('            Facet(modelBuilder, "%s", "%s", p => p.HasDefaultValueSql("%s"));'
@@ -99,9 +124,22 @@ namespace ZkData
     lines.append("            // EF6 indexed foreign key columns even when they were already the leading")
     lines.append("            // columns of the primary key; EF Core treats those as redundant and skips")
     lines.append("            // them. Declaring them keeps the schema identical.")
-    for table, columns in index_list:
-        lines.append('            Index(modelBuilder, "%s", new[] { %s });'
-                     % (table, ", ".join('"%s"' % c.split()[0] for c in columns)))
+    for table, columns, unique in index_list:
+        lines.append('            Index(modelBuilder, "%s", new[] { %s }, %s);'
+                     % (table, ", ".join('"%s"' % c.split()[0] for c in columns),
+                        "true" if unique else "false"))
+
+    fks = list(foreign_keys())
+    cascading = sum(1 for _, _, c in fks if c)
+    lines.append("")
+    lines.append("            // delete behaviour for all %d foreign keys, %d of them cascading." % (len(fks), cascading))
+    lines.append("            // Taken from the schema rather than from EF6's configuration: the")
+    lines.append("            // configuration says nothing for many of them, and inferring EF6's default")
+    lines.append("            // produces cascade paths SQL Server rejects outright. The database cannot")
+    lines.append("            // contain a cycle, because it exists.")
+    for table, columns, cascade in fks:
+        lines.append('            Fk(modelBuilder, "%s", new[] { %s }, DeleteBehavior.%s);'
+                     % (table, ", ".join('"%s"' % c for c in columns), "Cascade" if cascade else "Restrict"))
 
     lines.append('''        }
 
@@ -111,15 +149,40 @@ namespace ZkData
         /// where a model property does not match, that is a difference the schema diff
         /// will report rather than something to crash on here.
         /// </summary>
-        /// <summary>Declares an index by table and column names, skipping if the model lacks them.</summary>
-        private static void Index(ModelBuilder modelBuilder, string table, string[] columns)
+        /// <summary>
+        /// Sets a foreign key's delete behaviour, matched by the columns it is on. Skips
+        /// quietly when the model has no such relationship - that is a difference the
+        /// schema diff reports, not something to crash on here.
+        /// </summary>
+        private static void Fk(ModelBuilder modelBuilder, string table, string[] columns, DeleteBehavior behavior)
         {
             foreach (var entity in modelBuilder.Model.GetEntityTypes())
             {
                 if (entity.GetTableName() != table) continue;
+                foreach (var foreignKey in entity.GetForeignKeys())
+                {
+                    var names = foreignKey.Properties.Select(p => p.Name).ToArray();
+                    if (names.Length != columns.Length) continue;
+                    if (names.Except(columns).Any()) continue;
+                    foreignKey.DeleteBehavior = behavior;
+                    return;
+                }
+            }
+        }
+
+        /// <summary>Declares an index by table and column names, skipping if the model lacks them.</summary>
+        private static void Index(ModelBuilder modelBuilder, string table, string[] columns, bool unique)
+        {
+            foreach (var entity in modelBuilder.Model.GetEntityTypes())
+            {
+                if (entity.GetTableName() != table) continue;
+                // join tables are shared-type entities over Dictionary<string, object>;
+                // modelBuilder.Entity() cannot take them
+                if (entity.HasSharedClrType) continue;
                 foreach (var column in columns)
                     if (entity.FindProperty(column) == null) return;
-                modelBuilder.Entity(entity.ClrType).HasIndex(columns);
+                var index = modelBuilder.Entity(entity.ClrType).HasIndex(columns);
+                if (unique) index.IsUnique();
                 return;
             }
         }
@@ -130,6 +193,9 @@ namespace ZkData
             foreach (var entity in modelBuilder.Model.GetEntityTypes())
             {
                 if (entity.GetTableName() != table) continue;
+                // join tables are shared-type entities over Dictionary<string, object>;
+                // modelBuilder.Entity() cannot take them
+                if (entity.HasSharedClrType) continue;
                 var property = entity.FindProperty(column);
                 if (property == null) continue;
                 configure(modelBuilder.Entity(entity.ClrType).Property(column));

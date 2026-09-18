@@ -199,7 +199,7 @@ the schema the EF6 migrations produce:
 | indexes | 267 | 224 |
 | foreign keys | 163 | 164 |
 
-**74 differing lines**, down from 353. That is the number the port is working down, and it
+**56 differing lines**, down from 353. That is the number the port is working down, and it
 is a number rather than an impression.
 
 What closed the first half:
@@ -242,20 +242,29 @@ Where the two schemas now stand:
 | indexes | 267 | 263 |
 | foreign keys | 163 | 164 |
 
+Then, all from the schema rather than from rules:
+
+- **Delete behaviour for all 163 foreign keys**, 62 of them cascading. EF6's configuration
+  says nothing for many, and inferring its default produces cascade paths SQL Server
+  rejects outright - but the database cannot contain a cycle, because it exists. Taking the
+  answer from it is both safer and shorter than reasoning about it.
+- **Unique indexes and string lengths.** This is where the `Name` drift resolved itself: the
+  column is `varchar(2000)` and uniquely indexed in the database, while the entity attribute
+  says 200 and says nothing about uniqueness. Reading the schema matched it; reading the
+  attribute would not have.
+
 What remains, in order of size:
 
-1. **27 foreign key lines**, largely delete behaviour. The generator defaults to `Restrict`
-   where EF6 said nothing, because assuming EF6's cascade default produced cascade paths
-   SQL Server refuses outright. The real schema cascades 62 of its 163; the diff names
-   which, and they should be set from it rather than from a rule.
-2. **18 index lines** and **5 unique index lines** - the remainder after declaring the
-   schema's own, mostly differences in column order within an index.
-3. **12 column lines.** Two are drift rather than port work: `Name` is `varchar(200)` in the
-   entity attribute and `varchar(2000)` in the database, a migration having widened it
-   without updating the model. The rest are shadow foreign key columns EF Core invented,
-   such as `CampaignPlanetCampaignID`, where a relationship is not mapped onto the existing
-   key - those need a `HasForeignKey` naming the real columns.
-4. **7 primary key lines**, column ordering within composite keys.
+1. **17 index lines** and **4 unique index lines**, mostly column ordering within an index,
+   plus the indexes on the many-to-many join tables - those are shared-type entities in EF
+   Core, over `Dictionary<string, object>`, which `modelBuilder.Entity()` refuses, so the
+   facet helpers skip them. Reaching them means going through the metadata API instead.
+2. **12 column lines**, now almost entirely shadow foreign key columns EF Core invented -
+   `CampaignPlanetCampaignID`, `CampaignPlanetPlanetID` - where a relationship is not mapped
+   onto the existing composite key. Each needs a `HasForeignKey` naming the real columns.
+3. **11 foreign key lines**, the same shadow keys seen from the other side.
+4. **7 primary key lines**, column ordering within composite keys, mostly on the join
+   tables.
 
 Reproduce the comparison:
 
