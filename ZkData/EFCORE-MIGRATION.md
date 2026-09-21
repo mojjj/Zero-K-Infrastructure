@@ -541,12 +541,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **24** | compile against ASP.NET Core today |
+| **25** | compile against ASP.NET Core today |
 | **34** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **49** | something else missing, and it is overwhelmingly one thing - see below |
+| **48** | something else missing, and it is overwhelmingly one thing - see below |
 
-**Read the 24 carefully: it is not 37.** The first version of this report said 37, and 37
+**Read the 25 carefully: it is not 37.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.
@@ -680,6 +680,33 @@ assumed - which is what `ZeroKWeb.Render` is for.
 
 Two of the 29 have no equivalent at all: `Html.Action` and `Html.RenderAction` are child
 actions, which ASP.NET Core replaced with view components.
+
+#### Ten of them are ported, and the exercise is instructive
+
+The pure formatters first - `PrintEnergy`, `PrintMetal`, `PrintBombers`, `PrintWarps`,
+`PrintDate`, `PrintLines` and their overloads - whose whole body is a `string.Format` over
+their arguments. `MvcHtmlString` becomes `HtmlString`; both mean "already-encoded HTML, do
+not escape".
+
+**Transcribing ten methods by eye produced two defects.** `PrintWarps(double?)` gained a
+`Math.Floor` its original does not have, and `PrintMetal(double?)` lost the
+`style='color:#00FFFF;'` its original does have. Both were found by reading the source again,
+not by a test - and neither would have shown up as anything but slightly wrong HTML on a
+page. That is the standing risk in this part of the port, which is why
+`ZeroKWeb.Render` now asserts each helper's **exact bytes** against what MVC 5 emits, with
+the expected strings written out in full rather than computed.
+
+**One difference does not survive the move at all.** `PrintLines` is
+`helper.Encode(text).Replace("\n", "<br/>")`. MVC 5's `Encode` is `HttpUtility.HtmlEncode`,
+which leaves a newline alone, so the `Replace` finds it. ASP.NET Core's encoder escapes it to
+`&#xA;` first, so the `Replace` matches nothing and **every line break vanishes** - silently,
+in forum posts and descriptions, with no error anywhere. Splitting before encoding restores
+the original output.
+
+A related difference is left alone on purpose: ASP.NET Core's encoder escapes non-ASCII too,
+so a player called "Müller" comes out as `M&#xFC;ller` where MVC 5 wrote it through. Browsers
+render both identically, and changing it means configuring a custom `HtmlEncoder` for the
+whole application - a decision, not a transcription.
 
 ### Fixing a blocker reveals the next one
 

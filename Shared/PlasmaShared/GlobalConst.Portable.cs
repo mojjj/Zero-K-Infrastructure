@@ -73,5 +73,7 @@ namespace ZkData
         public const int PostVoteHideThreshold = -6;
         public const string NightwatchName = "Nightwatch";
         public const string LobbyAccessCookieName = "zk_lobby";
+        public const string BomberIcon = "/img/fleets/neutral.png";
+        public const string WarpIcon = "/img/warpcore.png";
     }
 }

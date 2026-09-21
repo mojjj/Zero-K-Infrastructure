@@ -156,8 +156,6 @@ namespace ZkData
         public const double MaxPwEloDifference = 120;
 
 
-        public const string BomberIcon = "/img/fleets/neutral.png";
-        public const string WarpIcon = "/img/warpcore.png";
 
         public const bool VpnCheckEnabled = true; 
 
