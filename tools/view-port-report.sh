@@ -34,7 +34,17 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 MODE="${1:-show}"
 EXPECTED=Zero-K.info/view-port-inventory.txt
-BATCH=15
+# One batch, not fifteen views at a time. Batch SIZE was never the safeguard - a
+# declaration error silences a compilation of any size - so the candidate set being
+# declaration-clean is what makes the second pass trustworthy, and that is a property of
+# which views are in it, not how many. Size only bounds the blast radius if the assumption
+# fails, and the re-split below handles that: a batch that turns out to contain a
+# declaration error is re-run one view at a time.
+#
+# At 15 this was five builds and six and a half minutes; at 999 it is two builds. It grows
+# back as more views compile, which is the wrong direction for a check that runs on every
+# pull request.
+BATCH=999
 WORK="$(mktemp -d)"
 PROPS=ZeroKWeb.Core/view-batch.props
 trap 'rm -rf "$WORK"; rm -f "$PROPS"' EXIT
@@ -58,7 +68,11 @@ build() {
             echo "</ItemGroup></Project>"
         } > "$PROPS"
     fi
-    ./tools/dotnet.sh build ZeroKWeb.Core/ZeroKWeb.Core.csproj -v q --nologo --no-incremental \
+    # Incremental on purpose. view-batch.props is imported by the project, so MSBuild treats
+    # it as an input and the Razor generator re-runs when the view set changes - which is the
+    # only thing that changes between these builds. Verified by running the report twice and
+    # getting the same inventory, and by checking a changed view set actually reclassifies.
+    ./tools/dotnet.sh build ZeroKWeb.Core/ZeroKWeb.Core.csproj -v q --nologo \
         > "$out" 2>&1 && return 0 || return $?
 }
 
@@ -97,15 +111,21 @@ for ((i = 0; i < total; i += BATCH)); do
         exit 2
     fi
 
-    # A declaration error anywhere in the batch means no body in it was bound, so every other
-    # view's silence is worthless. Should not happen - pass 1 reports declaration errors and
-    # these views had none - but the whole point of this rewrite is not to trust silence.
-    if grep -qE 'Zero-K\.info/Views/[^(]+\([0-9]+,[0-9]+\): error CS(0246|0234)' "$WORK/batch.txt"; then
-        echo "   batch has a declaration error; re-running its views one at a time" >&2
-        for view in "${keep_arr[@]}"; do
-            build "$view" "$WORK/single.txt" || true
-            cat "$WORK/single.txt" >> "$WORK/pass2.txt"
-        done
+    # A declaration error in the batch means no body in it was bound, so every other view's
+    # silence is worthless. Rather than re-run the batch in ever smaller pieces - which cost
+    # six builds and four minutes when a single body-level CS0246 tripped it - take the views
+    # that reported the error out and re-run the remainder once. Those views keep the errors
+    # they just reported; the rest get a compilation with nothing suppressing them.
+    offenders=$(grep -oE 'Zero-K\.info/Views/[^(]+\([0-9]+,[0-9]+\): error CS(0246|0234)' "$WORK/batch.txt" \
+                | sed -E 's/\(.*//' | sort -u)
+    if [ -n "$offenders" ]; then
+        echo "   $(echo "$offenders" | wc -l) view(s) reported a type error; re-running the rest without them" >&2
+        remainder=$(comm -23 <(printf '%s\n' "${keep_arr[@]}" | sort) <(printf '%s\n' "$offenders" | sort))
+        cat "$WORK/batch.txt" >> "$WORK/pass2.txt"
+        if [ -n "$remainder" ]; then
+            build "$remainder" "$WORK/remainder.txt" || true
+            cat "$WORK/remainder.txt" >> "$WORK/pass2.txt"
+        fi
     else
         cat "$WORK/batch.txt" >> "$WORK/pass2.txt"
     fi
