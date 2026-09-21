@@ -72,5 +72,6 @@ namespace ZkData
         public const int PlanetWarsVictoryPointsToWin = 50;
         public const int PostVoteHideThreshold = -6;
         public const string NightwatchName = "Nightwatch";
+        public const string LobbyAccessCookieName = "zk_lobby";
     }
 }

@@ -541,12 +541,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **21** | compile against ASP.NET Core today |
+| **24** | compile against ASP.NET Core today |
 | **34** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **52** | something else missing, and it is overwhelmingly one thing - see below |
+| **49** | something else missing, and it is overwhelmingly one thing - see below |
 
-**Read the 21 carefully: it is not 37.** The first version of this report said 37, and 37
+**Read the 24 carefully: it is not 37.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.
@@ -648,14 +648,38 @@ What is left across the 46 body-blocked views:
 
 MVC 5 let the application expose the current user as a **static**, and 46 views read it that
 way. ASP.NET Core has no equivalent and deliberately so: per-request state belongs to the
-request, reached through `HttpContext` or a scoped service. A shim `Global` backed by
-`IHttpContextAccessor` would let all 46 compile unchanged, and that is probably the right
-move - but it is a decision about how identity flows through the ported application, not a
-file move, and it wants making deliberately rather than as a side effect of chasing a
-compiler error.
+request.
 
-`Zero-K.info/AppCode/Global.cs` is also where `Global.LobbyApi` lives, which is Phase 1's
-subject. The view port and the lobby-server split turn out to be gated on the same object.
+That is now shimmed, and the shim **deliberately keeps a pattern ASP.NET Core dropped on
+purpose**. It is still the right move for a port: it changes one thing at a time, leaves 46
+view files untouched and the MVC 5 build alone. Removing the ambient is a worthwhile second
+step and a separate one - it means deciding what those 46 views read instead, and editing
+every one of them.
+
+One detail did not survive translation. The original reads `HttpContext.Current.User` and
+casts it to `Account`, because MVC 5 accepted any `IPrincipal`. ASP.NET Core's `User` is a
+`ClaimsPrincipal` and cannot be an entity, so the shim carries the account in
+`HttpContext.Items`, to be put there by the authentication middleware the ported application
+will have. Until that exists it answers `null` - which is what the original answers for an
+anonymous request.
+
+`Global.LobbyApi` is the one member left unshimmed, and it is Phase 1's subject: the view
+port and the lobby-server split are gated on the same object.
+
+### The next wall: the view helper library
+
+With `Global` answered, what 55 views want is `Html.PrintAccount`, `Html.BBCodeCached`,
+`Html.PrintMetal` and 26 more - **29 distinct extension methods** out of the 49 in
+`Zero-K.info/AppCode/HtmlHelperExtensions.cs`, 837 lines written against MVC 5's
+`HtmlHelper` and returning `MvcHtmlString`.
+
+This is the first thing in the view port that is neither a file move nor a shim. Porting it
+means rewriting those methods against `IHtmlHelper` and `IHtmlContent`, and they emit the
+HTML the site is made of, so it is work where behaviour has to be checked rather than
+assumed - which is what `ZeroKWeb.Render` is for.
+
+Two of the 29 have no equivalent at all: `Html.Action` and `Html.RenderAction` are child
+actions, which ASP.NET Core replaced with view components.
 
 ### Fixing a blocker reveals the next one
 

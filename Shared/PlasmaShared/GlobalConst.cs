@@ -135,7 +135,6 @@ namespace ZkData
         public const string UserLogChannel = "zklog";
         public const string CoreChannel = "zkcore";
         
-        public const string LobbyAccessCookieName = "zk_lobby";
 
         public const int VictoryPointDecay = 1;
         public const int BaseInfluencePerBattle = 32;
