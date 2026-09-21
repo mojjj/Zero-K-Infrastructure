@@ -1,10 +1,10 @@
 @{
-    // The site's own _ViewStart does not compile yet: it reads ViewContext.IsChildAction,
-    // which MVC 5 exposes as a PROPERTY, and C# has no extension properties - so the shim
-    // that answers IsChildAction() cannot satisfy it without editing the view. And the
-    // layout it would choose, Shared/_SiteLayout.cshtml, does not compile either.
+    // The site's own _ViewStart chooses between _AjaxLayout and _SiteLayout using
+    // ViewContext.IsChildAction and Request.IsAjaxRequest(). IsChildAction is a PROPERTY on
+    // MVC 5's ViewContext, and C# has no extension properties, so no shim can supply it -
+    // that file needs an edit, which has not been made.
     //
-    // So the host runs views without the site layout for now. That is a real limitation,
-    // not a simplification: what is served here is the view, not the page.
-    Layout = null;
+    // This picks the same layout that file picks for an ordinary, non-ajax request, which is
+    // every request this host serves.
+    Layout = "~/Views/Shared/_SiteLayout.cshtml";
 }

@@ -44,6 +44,57 @@ namespace System.Web.Mvc
     /// </summary>
     public static class HtmlHelperExtensionsPorted
     {
+
+        /// <summary>
+        /// The name, flag, rank, clan and moderator badge of an account - the single most
+        /// used helper on the site, and the one LoginBar needs before the site layout can
+        /// render.
+        ///
+        /// Transcribed literally, including the parts that look like mistakes and are not:
+        /// two spaces before class='icon16' in the rank and admin images, an empty colour
+        /// when colorize is false rather than the colour omitted, and the user link built
+        /// from a hand-written "/Users/Detail/{0}" rather than from routing, which is why it
+        /// does not need the UrlHelper the clan link does.
+        /// </summary>
+        public static IHtmlContent PrintAccount(this IHtmlHelper helper, Account account,
+            bool colorize = true, bool ignoreDeleted = false, bool makeLinks = true)
+        {
+            if (account == null) return new HtmlString("Nobody");
+            if (account.IsDeleted && !ignoreDeleted && !Global.IsModerator) return new HtmlString(account.Name);
+
+            var clanStr = "";
+            if (account.Clan != null)
+            {
+                clanStr = string.Format("<img src='{0}' width='16'/>", account.Clan.GetImageUrl());
+                if (makeLinks)
+                    clanStr = string.Format("<a href='{1}' nicetitle='$clan${2}'>{0}</a>",
+                        clanStr, Url(helper).Action("Detail", "Clans", new { id = account.ClanID }), account.ClanID);
+            }
+            else if (account.Faction != null)
+                clanStr = string.Format("<img src='{0}' width='16'/>", account.Faction.GetImageUrl());
+
+            var dudeStr = "";
+            if (account.AdminLevel >= AdminLevel.Moderator)
+                dudeStr = "<img src='/img/police.png'  class='icon16' alt='Admin' />";
+
+            var color = Faction.FactionColor(account.Faction, Global.FactionID);
+            if (string.IsNullOrEmpty(color)) color = "#B0D0C0";
+
+            var flag = string.Format("<img src='/img/flags/{0}.png' class='flag' height='11' width='16' alt='{0}'/>",
+                (account.Country != "??" && !account.HideCountry) ? account.Country : "unknown");
+            var rank = string.Format("<img src='/img/ranks/{0}.png'  class='icon16' alt='rank' />",
+                account.GetIconName());
+
+            var name = account.Name;
+            if (account.IsDeleted) name += "(REDACTED)";
+            var user = name;
+            if (makeLinks)
+                user = string.Format("<a href='/Users/Detail/{0}' style='color:{1}' nicetitle='$user${0}'>{2}</a>",
+                    account.AccountID, colorize ? color : "", name);
+
+            return new HtmlString(string.Format("{0}{1}{2}{3}{4}", flag, rank, clanStr, dudeStr, user));
+        }
+
         public static IHtmlContent PrintDate(this IHtmlHelper helper, DateTime? dateTime)
             => new HtmlString($"<span nicetitle=\"{dateTime}\">{dateTime.ToAgoString()}</span>");
 

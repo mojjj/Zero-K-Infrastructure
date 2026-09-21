@@ -479,9 +479,40 @@ The action is one out of the real `ForumController` - the breadcrumb, built exac
 `ForumController.cs:234` builds it, handed to `Views/Forum/ForumPath.cshtml`. The category
 comes out of the fixture through EF Core; the links come out of routing.
 
-**What it does not do yet** is serve a *page*. `Shared/_SiteLayout.cshtml` does not compile,
-and neither does the site's `_ViewStart.cshtml`, so the host supplies its own with
-`Layout = null`. What is served is the view, not the page.
+### It serves a page
+
+    GET /Home/NotLoggedIn -> 200, 10024 bytes
+       ok    the view's own content is there
+       ok    Page.Title reached the layout's <title>
+       ok    it is a whole document
+       ok    the script bundle rendered its files
+       ok    the style bundle rendered its files
+       ok    TopMenu rendered inside the layout
+
+Ten kilobytes of Zero-K, on .NET 9. `Home/NotLoggedIn.cshtml` is the site's own view,
+unmodified; returning a `ViewResult` rather than a partial runs `_ViewStart`, which picks up
+`Shared/_SiteLayout.cshtml`, which pulls in `TopMenu`, `LoginBar`, the bundles and every
+helper behind them. `Page.Title` is set in the view and read back in the layout's `<title>`,
+so the MVC 5 ambient works across that boundary too.
+
+Three things had to be true first, and two were found by the page failing rather than by
+reading:
+
+- `PrintAccount` - forty lines, the most-used helper on the site - and porting it took
+  `compiles` from 29 to **35**, because six views were waiting on that one method.
+- `_SiteLayout` writes `Path.GetFileName(...)`, and ASP.NET Core's `RazorPage` has its own
+  `Path` property, a string, which shadows `System.IO.Path`. Fully qualifying it in the view
+  is **the first edit to a production view in this port** - safe to reason about without
+  compiling, because the name already resolves to that type on MVC 5.
+- The host had no web root, so `Server.MapPath("~/img/screenshots")` threw. The site's static
+  content lives in `Zero-K.info/`, and the host now points at it. That one was a missing
+  configuration rather than a porting problem, and it only showed up because a page was
+  actually requested.
+
+**What it still does not do** is choose its layout the way the site does. The site's
+`_ViewStart.cshtml` reads `ViewContext.IsChildAction` - a property, so no shim reaches it -
+and the host supplies its own, picking the layout that file picks for an ordinary non-ajax
+request. That is every request this host serves, and it is still a difference.
 
 `_ViewStart` is worth a note, because it is where a shim stopped being enough. It reads
 `ViewContext.IsChildAction`, and MVC 5 exposes that as a **property**. C# has no extension
@@ -650,12 +681,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **28** | compile against ASP.NET Core today |
+| **35** | compile against ASP.NET Core today |
 | **34** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **45** | something else missing, and it is overwhelmingly one thing - see below |
+| **38** | something else missing |
 
-**Read the 28 carefully: it is not 37.** The first version of this report said 37, and 37
+**Read the 35 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.
