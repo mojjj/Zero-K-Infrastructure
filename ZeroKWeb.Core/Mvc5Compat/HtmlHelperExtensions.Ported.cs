@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Extensions.DependencyInjection;
+using PlasmaShared;
 using ZeroKWeb;
 using ZkData;
 
@@ -93,6 +95,57 @@ namespace System.Web.Mvc
                     account.AccountID, colorize ? color : "", name);
 
             return new HtmlString(string.Format("{0}{1}{2}{3}{4}", flag, rank, clanStr, dudeStr, user));
+        }
+
+
+        public static IHtmlContent AccountAvatar(this IHtmlHelper helper, Account account)
+        {
+            // no null check on account in the original - it dereferences straight away
+            if (account.IsDeleted) return null;
+            return new HtmlString(string.Format("<img src='/img/avatars/{0}.png' class='avatar'>", account.Avatar));
+        }
+
+        public static IHtmlContent PrintBadges(this IHtmlHelper helper, Account account,
+            int? maxWidth = null, bool newlines = true)
+        {
+            if (account == null || account.IsDeleted) return new HtmlString("");
+            var badges = account.GetBadges();
+            return new HtmlString(string.Join("\n", badges.Select(x =>
+                $"<img src='/img/badges/{x}.png' nicetitle='{x.Description()}' {(maxWidth != null ? $"style='width:{maxWidth}px;'" : "")}/>{(newlines ? "<br/>" : "")}")));
+        }
+
+        public static IHtmlContent PrintInfluence(this IHtmlHelper helper, PlanetFaction planetFaction)
+            => PrintInfluence(helper, planetFaction.Faction, planetFaction.Influence);
+
+        public static IHtmlContent PrintInfluence(this IHtmlHelper helper, Faction fac, double influence)
+            => new HtmlString(string.Format("<span style='color:{0}'>{1:0.#} ({2:0.#}%)</span>",
+                Faction.FactionColor(fac, Global.FactionID), influence,
+                100 * influence / GlobalConst.PlanetWarsMaximumIP));
+
+        public static IHtmlContent PrintInfluence(this IHtmlHelper helper, Faction faction, int influence, int shadowInfluence)
+        {
+            // the original builds the format string conditionally, and the non-breaking
+            // spaces are written as &nbsp without the semicolon - kept as found
+            var formatString = "<span style='color:{0}'>{1}</span>";
+            if (shadowInfluence > 0) formatString += "&nbsp({2}&nbsp+&nbsp<span style='color:gray'>{3}</span>)";
+            return new HtmlString(string.Format(formatString, faction.Color,
+                influence + shadowInfluence, influence, shadowInfluence));
+        }
+
+        public static IHtmlContent Stars(this IHtmlHelper helper, StarType type, double? rating)
+        {
+            if (rating.HasValue)
+            {
+                var totalWidth = 5 * 14;
+                var starWidth = (int)(rating * 14.0);
+                // {2} is passed and never used by the format string - kept, since removing
+                // an unused argument is still a change to a literal being transcribed
+                return new HtmlString(string.Format(
+                    "<span class='{0}' style='width:{1}px'></span><span style='width:{3}px'></span>",
+                    type, starWidth, rating, totalWidth - starWidth));
+            }
+            return new HtmlString(string.Format("<span class='{0}' style='width:70px' title='No votes'></span>",
+                type == StarType.RedSkull ? StarType.WhiteSkull : StarType.WhiteStarSmall));
         }
 
         public static IHtmlContent PrintDate(this IHtmlHelper helper, DateTime? dateTime)
