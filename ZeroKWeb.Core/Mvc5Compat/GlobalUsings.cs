@@ -32,3 +32,8 @@ global using EntityState = Microsoft.EntityFrameworkCore.EntityState;
 // The Request/Response/page shims live in ZeroKWeb.Compat, and linked controllers have no
 // using for it - they were written when these members were on the framework's own types.
 global using ZeroKWeb.Compat;
+
+// MVC 5's ActionFilterAttribute, ActionExecutingContext and friends sit in System.Web.Mvc;
+// ASP.NET Core keeps the same names in Microsoft.AspNetCore.Mvc.Filters. MapsController
+// declares a filter, and AuthAttribute implements one.
+global using Microsoft.AspNetCore.Mvc.Filters;
