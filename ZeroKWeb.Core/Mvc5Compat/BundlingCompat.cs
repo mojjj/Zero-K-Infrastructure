@@ -1,0 +1,91 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using Microsoft.AspNetCore.Html;
+
+namespace System.Web.Optimization
+{
+    /// <summary>
+    /// The two bundling calls Shared/_SiteLayout.cshtml makes, which is every page on the
+    /// site.
+    ///
+    /// System.Web.Optimization is .NET Framework only and has no ASP.NET Core successor -
+    /// §3 of the modernization plan lists it as "Replace". The eventual answer is a build
+    /// step (esbuild, or ASP.NET Core's own bundling), and choosing one is a decision about
+    /// the frontend toolchain, not about this port.
+    ///
+    /// So this emits the bundle's files individually, unminified, in the order BundleConfig
+    /// declares them. That is exactly what the real bundler does in debug mode, so it is a
+    /// faithful development-time answer rather than a stub - and it is deliberately NOT a
+    /// production answer: 13 script tags where the site serves one, uncombined and
+    /// unminified. Whoever picks the build step replaces this.
+    ///
+    /// The file list is duplicated from BundleConfig.cs because that file cannot be linked -
+    /// it is written against BundleCollection, which does not exist here. Duplicated lists
+    /// drift, so the check in ZeroKWeb.Host compares the two.
+    /// </summary>
+    public static class Bundles
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> Contents =
+            new Dictionary<string, string[]>
+            {
+                ["~/bundles/main"] = new[]
+                {
+                    "~/Scripts/jquery-{version}.js",
+                    "~/Scripts/jquery.unobtrusive-ajax.js",
+                    "~/Scripts/browser-css.js",
+                    "~/Scripts/jquery-ui.min.js",
+                    "~/Scripts/jquery.ui.stars.js",
+                    "~/Scripts/jquery.qtip.min.js",
+                    "~/Scripts/jquery.ba-bbq.js",
+                    "~/Scripts/jquery.history.js",
+                    "~/Scripts/jquery.expand.js",
+                    "~/Scripts/jquery.datetimepicker.full.min.js",
+                    "~/Scripts/nicetitle.js",
+                    "~/Scripts/grid.js",
+                    "~/Scripts/site_main.js",
+                },
+                ["~/bundles/maincss"] = new[]
+                {
+                    "~/Styles/fonts.css",
+                    "~/Styles/base.css",
+                    "~/Styles/jquery.datetimepicker.min.css",
+                    "~/Styles/menu.css",
+                    "~/Styles/stars.css",
+                    "~/Styles/levelrank.css",
+                    "~/Styles/jquery.ui.stars.css",
+                    "~/Styles/style.css",
+                    "~/Styles/jquery.qtip.min.css",
+                    "~/Styles/dark-hive/jquery-ui.css",
+                    "~/Styles/nicetitle.css",
+                },
+            };
+
+        internal static IEnumerable<string> Files(string bundle)
+            => Contents.TryGetValue(bundle, out var files) ? files : Enumerable.Empty<string>();
+
+        internal static string Href(string tildePath) => tildePath.TrimStart('~');
+    }
+
+    public static class Scripts
+    {
+        public static IHtmlContent Render(params string[] bundles)
+        {
+            var sb = new StringBuilder();
+            foreach (var file in bundles.SelectMany(Bundles.Files))
+                sb.Append($"<script src=\"{Bundles.Href(file)}\"></script>");
+            return new HtmlString(sb.ToString());
+        }
+    }
+
+    public static class Styles
+    {
+        public static IHtmlContent Render(params string[] bundles)
+        {
+            var sb = new StringBuilder();
+            foreach (var file in bundles.SelectMany(Bundles.Files))
+                sb.Append($"<link href=\"{Bundles.Href(file)}\" rel=\"stylesheet\"/>");
+            return new HtmlString(sb.ToString());
+        }
+    }
+}

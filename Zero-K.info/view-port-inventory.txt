@@ -7,10 +7,10 @@
 # other                  a package reference or an MVC 5 API
 
 total 116
-compiles                 25
+compiles                 27
 waiting-on-controllers   34
 razor-language           9
-other                    48
+other                    46
 
 waiting-on-controllers   Admin/TraceLogs.cshtml  [CS0234]
 waiting-on-controllers   Battles/BattleDetail.cshtml  [CS0117 CS0234 CS1061 CS1929]
@@ -65,7 +65,6 @@ other                    Factions/Index.cshtml  [CS1061]
 other                    Forum/DeletePostPrompt.cshtml  [CS1061]
 other                    Forum/ForumVotesForPost.cshtml  [CS1061]
 other                    Forum/Preview.cshtml  [CS1061]
-other                    Home/PlanetTooltip.cshtml  [CS1061]
 other                    Home/PlanetTooltipCampaign.cshtml  [CS1061]
 other                    Home/UnlockTooltip.cshtml  [CS1061]
 other                    Home/UserTooltip.cshtml  [CS1061]
@@ -91,11 +90,10 @@ other                    Shared/DisplayTemplates/TreatyEffect.cshtml  [CS1061]
 other                    Shared/InfluenceList.cshtml  [CS1061]
 other                    Shared/InfluenceListShort.cshtml  [CS1061]
 other                    Shared/LoginBar.cshtml  [CS0021 CS1061]
-other                    Shared/PlanetDropships.cshtml  [CS1061]
 other                    Shared/PlanetSummary.cshtml  [CS1061]
 other                    Shared/TopMenu.cshtml  [CS1061]
 other                    Shared/UserDetail.cshtml  [CS0103 CS0117 CS0246 CS1061 CS1929]
-other                    Shared/_SiteLayout.cshtml  [CS0246]
+other                    Shared/_SiteLayout.cshtml  [CS0103 CS1061]
 other                    Static/Index.cshtml  [CS1061]
 other                    Users/AdminUserDetail.cshtml  [CS1061]
 other                    Users/ReportLog.cshtml  [CS1061]
