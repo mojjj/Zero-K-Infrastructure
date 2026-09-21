@@ -827,13 +827,6 @@ namespace PlasmaShared
 
 
 
-        public static string StripInvalidLobbyNameChars(string name)
-        {
-            if (String.IsNullOrEmpty(name)) return name;
-            var sb = new StringBuilder();
-            foreach (var c in name.Where(Utils.ValidLobbyNameCharacter)) sb.Append(c);
-            return sb.ToString();
-        }
 
         public static string GetMyInstallID()
         {
