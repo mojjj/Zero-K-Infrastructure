@@ -19,6 +19,12 @@ namespace ZeroKWeb.Compat
     public abstract class ZkRazorPage<TModel> : RazorPage<TModel>
     {
         public dynamic Page => ViewBag;
+
+        /// <summary>
+        /// MVC 5 put Request straight on the view page; ASP.NET Core reaches it through
+        /// Context. Five views ask for it by the short name.
+        /// </summary>
+        public HttpRequest Request => Context.Request;
     }
 
     public static class Mvc5RequestCompat

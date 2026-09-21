@@ -129,7 +129,6 @@ namespace ZkData
         public const string MissionScriptFileName = "_missionScript.txt";
         public const string MissionSlotsFileName = "_missionSlots.xml";
 
-        public const string NightwatchName = "Nightwatch";
 
         public const string ModeratorChannel = "zkadmin";
         public const string Top20Channel = "zktop20";
@@ -138,7 +137,6 @@ namespace ZkData
         
         public const string LobbyAccessCookieName = "zk_lobby";
 
-        public const int PlanetWarsVictoryPointsToWin = 50;
         public const int VictoryPointDecay = 1;
         public const int BaseInfluencePerBattle = 32;
         public const int InfluencePerAttacker = 1;
@@ -170,7 +168,6 @@ namespace ZkData
 
         public const int ForumPostsPerPage = 20;
         public const int MinNetKarmaToVote = -30;
-        public const int PostVoteHideThreshold = -6;
         public const bool OnlyAdminsSeePostVoters = false;
         public const int PlanetWarsMinutesToAttackIfNoOption = 2;
         public const int PlanetWarsDropshipsStayForMinutes = 2*60;
