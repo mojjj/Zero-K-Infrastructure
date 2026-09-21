@@ -459,6 +459,40 @@ implementor is `Punishment`, whose `AfterChange` refreshes a static cache throug
 of its own, and that second connection would block on this transaction's uncommitted rows.
 The events run through the identical loop, so the dispatch is exercised there instead.
 
+## Serving a page
+
+`ZeroKWeb.Core` asks whether the views compile. `ZeroKWeb.Render` asks whether one renders.
+Neither has routing, a controller or a request - and the views are full of
+`Html.ActionLink`, which needs all three.
+
+`ZeroKWeb.Host` is an ASP.NET Core application that answers one:
+
+    ZK_CONNECTION_STRING=...zk_test ./tools/run-host.sh
+
+    GET /Forum/Path/9 -> 200
+    <h2>
+        <a href="/Forum">Forum index</a>&nbsp; &gt;
+        <a href="/Forum?categoryID=9">Help and bugs</a> &nbsp; &gt;
+    </h2>
+
+The action is one out of the real `ForumController` - the breadcrumb, built exactly as
+`ForumController.cs:234` builds it, handed to `Views/Forum/ForumPath.cshtml`. The category
+comes out of the fixture through EF Core; the links come out of routing.
+
+**What it does not do yet** is serve a *page*. `Shared/_SiteLayout.cshtml` does not compile,
+and neither does the site's `_ViewStart.cshtml`, so the host supplies its own with
+`Layout = null`. What is served is the view, not the page.
+
+`_ViewStart` is worth a note, because it is where a shim stopped being enough. It reads
+`ViewContext.IsChildAction`, and MVC 5 exposes that as a **property**. C# has no extension
+properties, so the shim - which can only be a method - cannot satisfy it. That file needs an
+edit rather than a shim, and it is the first place in the view port where that is true.
+
+The route table defaults to `Home/Index`, as MVC 5's does. That detail matters more than it
+looks: with `Forum` as the default, `Html.ActionLink("Forum index", "Index")` renders as `/`
+because routing elides the defaults - correct, and indistinguishable from a broken link. The
+first version of this check asserted the wrong URL for exactly that reason.
+
 ## A defect the port found
 
 `CampaignEvents` had

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    An ASP.NET Core application that serves a real Zero-K page over HTTP.
+    
+    ZeroKWeb.Core asks whether the views compile. ZeroKWeb.Render asks whether one renders.
+    Neither has routing, a controller, or a request - and the views are full of
+    Html.ActionLink, which needs all three. This is the first thing here that answers a
+    request.
+
+        ./tools/run-host.sh             serve it and check the response
+        ./tools/run-host.sh (with 'serve') leave it running on http://localhost:5199
+
+    Only the views the inventory says compile are included, for the same reason as
+    ZeroKWeb.Render: a project that does not build serves nothing.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <LangVersion>13.0</LangVersion>
+    <RootNamespace>ZeroKWeb.Host</RootNamespace>
+    <NoWarn>$(NoWarn);CS0618;CS0649;CS0168;CS1998;CS0108;CS0114;CS0169;CS0067</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ZkData.Core\ZkData.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Zero-K.info\AppCode\HtmlHelperExtensions.Portable.cs" Link="Linked\HtmlHelperExtensions.Portable.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\GalaxyMapGeometry.cs" Link="Linked\GalaxyMapGeometry.cs" />
+    <Compile Include="..\ZeroKWeb.Core\Mvc5Compat\*.cs" Link="Linked\%(Filename).cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Zero-K.info\Views\**\*.cshtml" Link="Views\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <Import Project="view-set.props" Condition="Exists('view-set.props')" />
+
+</Project>

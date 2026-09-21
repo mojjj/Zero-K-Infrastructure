@@ -1,0 +1,10 @@
+@{
+    // The site's own _ViewStart does not compile yet: it reads ViewContext.IsChildAction,
+    // which MVC 5 exposes as a PROPERTY, and C# has no extension properties - so the shim
+    // that answers IsChildAction() cannot satisfy it without editing the view. And the
+    // layout it would choose, Shared/_SiteLayout.cshtml, does not compile either.
+    //
+    // So the host runs views without the site layout for now. That is a real limitation,
+    // not a simplification: what is served here is the view, not the page.
+    Layout = null;
+}
