@@ -16,6 +16,9 @@ namespace Tests.Database
     {
         public static int Main(string[] args)
         {
+            // Not a test run: produce the rating table for the cross-stack comparison.
+            if (args.FirstOrDefault() == "--dump-ratings") return RatingDump.Run(args.Skip(1).FirstOrDefault());
+
             var filter = args.FirstOrDefault();
             int passed = 0, failed = 0, skipped = 0;
 

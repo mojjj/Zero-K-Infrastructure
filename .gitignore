@@ -234,3 +234,5 @@ Thumbs.db
 **/.idea/**/contentModel.xml
 **/.idea/**/modules.xml
 **/.idea/**/indexLayout.xml
+# db/compare-ratings.sh scratch (removed on exit; listed in case of a crash)
+.ratings-compare/

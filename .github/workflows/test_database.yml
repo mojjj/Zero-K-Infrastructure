@@ -101,6 +101,13 @@ jobs:
           ZK_CONNECTION_STRING: "Data Source=127.0.0.1,14330;Initial Catalog=zk_test;User ID=sa;Password=ZkLocal!Dev2026;MultipleActiveResultSets=true;TrustServerCertificate=true"
         run: ./tools/dotnet.sh run --project ZkData.Core -- write
 
+      # The check §7 of the modernization plan asks for by name: EF6 -> EF Core behaviour
+      # drift, measured on the heaviest query in the system rather than argued about. Both
+      # runs use the same pipeline source and the same fixture; only the data layer differs.
+      # Runs last because each run clears and recomputes AccountRatings.
+      - name: Compare the ratings the two stacks compute
+        run: ./db/compare-ratings.sh
+
       - name: SQL Server log
         if: failure()
         run: docker logs zk-db --tail 80
