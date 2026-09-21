@@ -2,7 +2,10 @@ using System;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
-namespace ZeroKWeb.Compat
+// In System.Web.Mvc rather than ZeroKWeb.Compat: the ForumParser calls Html.Action from
+// files that import the MVC 5 namespace and know nothing about this port's own.
+
+namespace System.Web.Mvc
 {
     /// <summary>
     /// MVC 5's child actions, which ASP.NET Core removed outright. 14 call sites across 11

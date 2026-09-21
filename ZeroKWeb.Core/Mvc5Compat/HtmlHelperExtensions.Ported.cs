@@ -148,6 +148,70 @@ namespace System.Web.Mvc
                 type == StarType.RedSkull ? StarType.WhiteSkull : StarType.WhiteStarSmall));
         }
 
+
+        /// <summary>
+        /// The forum/wiki BBCode renderer. The parser itself - 40 files, 2000 lines under
+        /// Zero-K.info/ForumParser - is linked rather than rewritten: it takes an HtmlHelper
+        /// only to pass it to five helper calls, and a global using alias maps that name onto
+        /// IHtmlHelper so the whole subsystem compiles unedited.
+        ///
+        /// BBCodeCached is not here. It reads Global.ForumPostCache, which is the web
+        /// project's cache object rather than anything about rendering.
+        /// </summary>
+        public static IHtmlContent BBCode(this IHtmlHelper helper, string str)
+        {
+            if (str == null) return null;
+            return new HtmlString(new ZeroKWeb.ForumParser.ForumWikiParser().TranslateToHtml(str, helper));
+        }
+
+
+        public static IHtmlContent PrintMap(this IHtmlHelper helper, string name)
+            => new HtmlString(string.Format("<a href='{0}' title='$map${1}'>{1}</a>",
+                Url(helper).Action("DetailName", "Maps", new { name }), name));
+
+        public static IHtmlContent PrintBattle(this IHtmlHelper helper, SpringBattlePlayer battlePlayer)
+        {
+            if (battlePlayer == null) return null;
+            return PrintBattle(helper, battlePlayer.SpringBattle,
+                battlePlayer.IsSpectator ? null : (bool?)battlePlayer.IsInVictoryTeam);
+        }
+
+        public static IHtmlContent PrintBattle(this IHtmlHelper helper, SpringBattle battle, bool? isVictory = null)
+        {
+            var icon = "";
+            if (isVictory == true) icon = "battlewon.png";
+            else if (isVictory == null) icon = "spec.png";
+            else icon = "battlelost.png";
+
+            icon = string.Format("<img src='/img/battles/{0}' class='vcenter' />", icon);
+
+            if (battle.IsMission) icon += " <img src='/img/battles/mission.png' alt='Mission' class='vcenter' />";
+            if (battle.HasBots) icon += " <img src='/img/battles/robot.png' alt='Bots' class='vcenter' />";
+
+            if (battle.BattleType == "Multiplayer")
+                icon += " <img src='/img/battles/multiplayer.png' alt='Multiplayer' class='vcenter' />";
+            else if (battle.BattleType == "Singleplayer")
+                icon += " <img src='/img/battles/singleplayer.png' alt='Singleplayer' class='vcenter' />";
+
+            // PrintMap returns HTML that is interpolated into this format string, so it has to
+            // be rendered to a string here rather than handed over as IHtmlContent.
+            var map = Render(PrintMap(helper, battle.ResourceByMapResourceID?.InternalName));
+
+            return new HtmlString(string.Format("<span><a href='{0}'>{4} B{1}</a> {2} on {3}</span>",
+                Url(helper).Action("Detail", "Battles", new { id = battle.SpringBattleID }),
+                battle.SpringBattleID, battle.PlayerCount, map, icon));
+        }
+
+        private static string Render(IHtmlContent content)
+        {
+            if (content == null) return null;
+            using (var writer = new System.IO.StringWriter())
+            {
+                content.WriteTo(writer, System.Text.Encodings.Web.HtmlEncoder.Default);
+                return writer.ToString();
+            }
+        }
+
         public static IHtmlContent PrintDate(this IHtmlHelper helper, DateTime? dateTime)
             => new HtmlString($"<span nicetitle=\"{dateTime}\">{dateTime.ToAgoString()}</span>");
 

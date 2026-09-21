@@ -106,5 +106,14 @@ namespace PlasmaShared
             var da = (DescriptionAttribute[])(e.GetType().GetField(e.ToString()).GetCustomAttributes(typeof(DescriptionAttribute), false));
             return da.Length > 0 ? da[0].Description : e.ToString();
         }
+
+        // Wanted by ForumParser/Tags/HeaderTag.cs, which the .NET 9 projects link.
+        public static string StripInvalidLobbyNameChars(string name)
+        {
+            if (String.IsNullOrEmpty(name)) return name;
+            var sb = new StringBuilder();
+            foreach (var c in name.Where(Utils.ValidLobbyNameCharacter)) sb.Append(c);
+            return sb.ToString();
+        }
     }
 }

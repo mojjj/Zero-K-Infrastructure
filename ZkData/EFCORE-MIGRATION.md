@@ -588,6 +588,37 @@ With those, `TopMenu.cshtml` compiles. Two blockers stand between here and a ren
   Portable, but exactly the shape that produced two transcription defects out of ten far
   simpler methods.
 
+### The forum parser, linked whole
+
+`Html.BBCode` renders every forum post and wiki page, and it is not a formatter: it calls
+`new ForumWikiParser().TranslateToHtml(str, helper)`, and that parser is **40 files and 2000
+lines** under `Zero-K.info/ForumParser`.
+
+It did not need rewriting. The `HtmlHelper` appears in only five places in the whole
+subsystem, and only to be passed to helper calls - four of which were already ported. So a
+**global using alias** maps MVC 5's type name onto ASP.NET Core's interface:
+
+    global using HtmlHelper = Microsoft.AspNetCore.Mvc.Rendering.IHtmlHelper;
+
+and 2000 lines compile unedited. The alternative was changing the parameter type in
+production code, which would break the build that still runs the site.
+
+Linking it surfaced a trail of stale imports, each of which is one dead line holding up a
+subsystem: `System.Web.Mvc.Html` and `Microsoft.Ajax.Utilities` in `WikiLinkTag`,
+`ZkData.Migrations` in `Tag`, and - the odd one - `Antlr.Runtime.Misc.Func<T, bool>` as a
+parameter type in `ParserExtensions`, four times. That is Antlr's own delegate rather than
+`System.Func`, resolved by an IDE years ago and carried since. All are supplied as namespaces
+rather than deleted, for the reason WebGrease is.
+
+`JetBrains.Annotations` was different: not missing, but present *and internal*, shipped inside
+one of the port's own package dependencies, so `[StringFormatMethod]` resolved and then failed
+as inaccessible. A public declaration settles it.
+
+    compiles   39 -> 46
+
+`BBCodeCached` is still blocked, on `Global.ForumPostCache` - the web project's cache object,
+not anything about rendering.
+
 ### A measurement project cannot measure itself
 
 `Mvc5Request.IsAjaxRequest` was written as `request?.Headers[...] == "XMLHttpRequest"`, which
@@ -597,7 +628,16 @@ already been made and fixed once in `Mvc5PageCompat`.
 It survived because **`ZeroKWeb.Core` cannot report it**: its views carry declaration errors,
 so no method body in that project is bound - including the shims' own. Only `ZeroKWeb.Render`
 and `ZeroKWeb.Host`, which contain just the views that compile, ever type-check the shim code
-at all. Worth knowing before trusting a green build from the measurement project.
+at all.
+
+This is not a small caveat. Linking the forum parser produced an inventory of **46 compiling
+views while the parser itself did not compile** - `PrintBattle` and
+`Utils.StripInvalidLobbyNameChars` were missing, and `ZeroKWeb.Core` reported none of it. The
+number was true and useless at the same time.
+
+Nothing new is needed to catch this - `tools/render-view.sh` and `tools/run-host.sh` build
+exactly those projects and both run in CI. What is needed is the habit: **after touching a
+shim or linking new code, run those two before believing the inventory.**
 
 ## A defect the port found
 
@@ -681,12 +721,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **39** | compile against ASP.NET Core today |
+| **46** | compile against ASP.NET Core today |
 | **34** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **34** | something else missing |
+| **27** | something else missing |
 
-**Read the 39 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
+**Read the 46 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.
