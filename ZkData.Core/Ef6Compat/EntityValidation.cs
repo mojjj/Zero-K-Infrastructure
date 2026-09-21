@@ -48,7 +48,7 @@ namespace ZkData.Core.Ef6Compat
             {
                 // EF6 did not validate what it was about to delete, and neither does this:
                 // a row on its way out does not have to be well formed.
-                if (change.State == System.Data.Entity.EntityState.Deleted) continue;
+                if (change.State == EntityState.Deleted) continue;
 
                 var entry = db.Entry(change.Entity);
                 foreach (var validated in ValidatedProperties(db, change.Entity.GetType()))

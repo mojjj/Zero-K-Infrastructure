@@ -81,5 +81,7 @@ namespace ZkData
         // Only the DECLARATION moves. GlobalConst.cs assigns it from the mode switch, which
         // also builds the Steam and content-service clients and cannot come across.
         public static string ZkDataContextConnectionString;
+        public const int ForumPostsPerPage = 20;
+        public const int MinNetKarmaToVote = -30;
     }
 }

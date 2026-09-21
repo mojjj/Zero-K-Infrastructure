@@ -27,6 +27,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      DbCloner and ForumPostIndexer use System.Data.SqlClient directly. On .NET 9 that
+      namespace lives in a compatibility package rather than the framework, and the package is
+      deprecated in favour of Microsoft.Data.SqlClient.
+      
+      Referenced anyway, and deliberately: changing those files to Microsoft.Data.SqlClient is
+      a production edit that would break the Framework build, which has no such package. The
+      package is how the linked sources compile unedited today; migrating them is a separate
+      change for when the Framework build no longer has to work.
+    -->
+    <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
     <ProjectReference Include="..\ZkData.Core\ZkData.Core.csproj" />
   </ItemGroup>
 
@@ -46,7 +57,9 @@
     <Compile Include="..\Zero-K.info\Models\CommentList.cs" Link="Linked\Models\CommentList.cs" />
     <Compile Include="..\Zero-K.info\Controllers\ModsController.cs" Link="Linked\Controllers\ModsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\MyController.cs" Link="Linked\Controllers\MyController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\ForumController.cs" Link="Linked\Controllers\ForumController.cs" />
     <Compile Include="..\Zero-K.info\AppCode\MemCache.cs" Link="Linked\MemCache.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\ForumPostIndexer.cs" Link="Linked\ForumPostIndexer.cs" />
     <Compile Include="..\Zero-K.info\Controllers\ChartsController.cs" Link="Linked\Controllers\ChartsController.cs" />
     <Compile Include="..\ZeroKWeb.Core\Mvc5Compat\*.cs" Link="Linked\%(Filename).cs" />
   </ItemGroup>

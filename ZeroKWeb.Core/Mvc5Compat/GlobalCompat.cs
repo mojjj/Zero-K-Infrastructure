@@ -62,6 +62,14 @@ namespace ZeroKWeb
 
         public static bool IsLobbyAccess => Context?.Request?.Cookies[GlobalConst.LobbyAccessCookieName] != null;
 
+        /// <summary>
+        /// The forum's full-text indexer. The real Global constructs one at application
+        /// start; nothing starts an application here, so this is created on first use and
+        /// never indexes anything the site would not. ForumController only ever calls into
+        /// it to say a post changed.
+        /// </summary>
+        public static ForumPostIndexer ForumPostIndexer { get; } = new ForumPostIndexer();
+
         // Session is opt-in in ASP.NET Core and the ported application has not decided about
         // it yet. False is what an unconfigured request would answer anyway.
         public static bool IsWebLobbyAccess => false;

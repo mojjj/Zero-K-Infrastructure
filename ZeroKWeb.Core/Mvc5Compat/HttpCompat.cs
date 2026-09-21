@@ -22,6 +22,13 @@ namespace ZeroKWeb.Compat
 
         public static void Flush(this HttpResponse response) => response.Body.Flush();
 
+        /// <summary>
+        /// The twin of Zero-K.info/AppCode/HttpCompat.cs. MVC 5 had Request.UserHostAddress;
+        /// ASP.NET Core keeps the client address on the connection.
+        /// </summary>
+        public static string UserHostAddressCompat(this HttpRequest request)
+            => request?.HttpContext?.Connection?.RemoteIpAddress?.ToString();
+
         // AllKeys is deliberately absent. MyController uses Request.Form.AllKeys as a
         // PROPERTY, and C# has no extension properties - the fifth time that has decided
         // something in this port. It is fixed in the controller instead, which unlike a view

@@ -102,10 +102,10 @@ namespace ZkData
         public class EntityEntry
         {
             public object Entity { get; private set; }
-            public System.Data.Entity.EntityState State { get; private set; }
+            public EntityState State { get; private set; }
             public ZkDataContext Context { get; private set; }
 
-            public EntityEntry(object entity, System.Data.Entity.EntityState state, ZkDataContext context)
+            public EntityEntry(object entity, EntityState state, ZkDataContext context)
             {
                 Entity = entity;
                 State = state;
