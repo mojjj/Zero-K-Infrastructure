@@ -541,12 +541,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **14** | compile against ASP.NET Core today, with only `ZkData.Core` referenced |
+| **15** | compile against ASP.NET Core today, with only `ZkData.Core` referenced |
 | **66** | fail only on model types from the unported web project - waiting on their controllers |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **27** | a missing member, name or package - `Html.BBCodeCached`, `ViewContext.IsChildAction`, `DiffPlex`, `WebGrease`, `System.Web.Mvc` |
+| **26** | a missing member, name or package - `Page`, `ToAgoString`, `ViewContext.IsChildAction`, `DiffPlex`, `WebGrease`, `System.Web.Mvc` |
 
-**Read the 14 carefully: it is not 37.** The first version of this report said 37, and 37
+**Read the 15 carefully: it is not 37.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.
@@ -579,6 +579,31 @@ failed before touching a view produced no diagnostics, and then this. Both failu
 the same way - silence read as success - and both now fail loudly instead. A batch that
 compiles nothing exits 2, and a view reported clean without having been re-batched is counted
 under `UNVERIFIED` rather than under `compiles`.
+
+### What the blocked views actually want
+
+Compiled in a declaration-clean batch, the 23 views whose only trouble is inside a method
+body name five things between them, and they divide cleanly:
+
+| | |
+|---|---|
+| `GlobalConst.MetalIcon`, `.EnergyIcon`, `.CanChangeClanFaction` | existed already, just not in the portable half of `GlobalConst` - **moved** |
+| `Utils.Description(this Enum)` | pure reflection, stranded in the half of `Utils.cs` that needs .NET Framework - **moved** |
+| `ToAgoString`, `StarType` | pure, but declared in `namespace System.Web.Mvc` inside the web project, which is how MVC 5 views see them without a `using` |
+| `ViewContext.IsChildAction` | child actions were **removed** in ASP.NET Core; view components replace them |
+| `HttpRequest.IsAjaxRequest` | removed; the replacement is a one-line check of `X-Requested-With` |
+| `Page` | MVC 5's dynamic page object, 5 uses; no ASP.NET Core equivalent |
+
+The first two rows moved between files of the same partial class in the same namespace, so no
+call site anywhere notices and the Framework build is unaffected. That is the whole of what
+is mechanical here, and it moved one view.
+
+The rest is not mechanical, and the reason is the same for all of it: those symbols reach
+views through `namespace System.Web.Mvc`, and `HtmlHelperExtensions.cs` - 800 lines of it -
+is written against MVC 5 types. Porting them means deciding where the ASP.NET Core helper
+layer lives and which namespace views import it from, which changes how *every* MVC 5 view
+resolves names. That is a change nothing in this repository can currently verify, because the
+Framework views still cannot be rendered by anything here.
 
 ### One of them now renders
 

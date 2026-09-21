@@ -5,6 +5,8 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 
+using System.ComponentModel;
+
 namespace PlasmaShared
 {
     /// <summary>
@@ -22,20 +24,34 @@ namespace PlasmaShared
                 action(item);
             }
         }
-        public static IEnumerable<Type> GetAllTypesWithAttribute<T>()
-        {
-            var allowedAssemblies = new string[]
-            {
-                typeof(T).Assembly.GetName().Name,
-                Assembly.GetEntryAssembly()?.GetName().Name, Assembly.GetExecutingAssembly().GetName().Name,
-                Assembly.GetCallingAssembly().GetName().Name
-            };
-            
-            return from a in AppDomain.CurrentDomain.GetAssemblies().Where(x=> allowedAssemblies.Contains(x.GetName().Name)).ToList().AsParallel()
-                   from t in a.GetLoadableTypes()
-                   let attributes = t.GetCustomAttributes(typeof(T), true)
-                   where attributes != null && attributes.Length > 0
-                   select t;
+        public static IEnumerable<Type> GetAllTypesWithAttribute<T>()
+
+        {
+
+            var allowedAssemblies = new string[]
+
+            {
+
+                typeof(T).Assembly.GetName().Name,
+
+                Assembly.GetEntryAssembly()?.GetName().Name, Assembly.GetExecutingAssembly().GetName().Name,
+
+                Assembly.GetCallingAssembly().GetName().Name
+
+            };
+
+            
+
+            return from a in AppDomain.CurrentDomain.GetAssemblies().Where(x=> allowedAssemblies.Contains(x.GetName().Name)).ToList().AsParallel()
+
+                   from t in a.GetLoadableTypes()
+
+                   let attributes = t.GetCustomAttributes(typeof(T), true)
+
+                   where attributes != null && attributes.Length > 0
+
+                   select t;
+
         }
         public static IEnumerable<Type> GetLoadableTypes(this Assembly assembly)
         {
@@ -79,6 +95,16 @@ namespace PlasmaShared
             if (c == '_') return true;
             if (c == '[' || c == ']') return true;
             return false;
+        }
+
+        /// <summary>
+        /// The [Description] of an enum value. Moved here from Utils.cs, which cannot
+        /// compile outside .NET Framework; this is pure reflection and several views use it.
+        /// </summary>
+        public static string Description(this Enum e)
+        {
+            var da = (DescriptionAttribute[])(e.GetType().GetField(e.ToString()).GetCustomAttributes(typeof(DescriptionAttribute), false));
+            return da.Length > 0 ? da[0].Description : e.ToString();
         }
     }
 }
