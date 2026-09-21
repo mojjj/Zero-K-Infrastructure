@@ -541,22 +541,45 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **37** | compile against ASP.NET Core today, with only `ZkData.Core` referenced |
-| **66** | fail only on types from the unported web project - waiting on their controllers, not view problems |
+| **14** | compile against ASP.NET Core today, with only `ZkData.Core` referenced |
+| **66** | fail only on model types from the unported web project - waiting on their controllers |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **4** | a package reference or an MVC 5 API - `DiffPlex`, `WebGrease` in `_SiteLayout`, `System.Web.Mvc` |
+| **27** | a missing member, name or package - `Html.BBCodeCached`, `ViewContext.IsChildAction`, `DiffPlex`, `WebGrease`, `System.Web.Mvc` |
 
-**The views are in better shape than the fear suggested.** The view-specific work is nine
-files plus the layout's bundling call; the other 66 are fallout from controllers that have
-not moved yet and should resolve when they do.
+**Read the 14 carefully: it is not 37.** The first version of this report said 37, and 37
+was wrong - see below. What is true is that the *view-language* work is small: nine files
+use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
+to the web project rather than to the views.
+
+### The number was wrong the first time, and why
+
+The C# compiler stops binding method bodies once a compilation has produced about a hundred
+errors. A single build of all 116 views passes that easily - 66 of them fail on their
+`@model` type alone - and every view bound after the limit reports **nothing at all**, which
+this report read as "compiles". A view deliberately broken with
+`ThisTypeDoesNotExistAnywhere` sat in the clean bucket without a murmur.
+
+Declaration-level errors survive the limit (a bad `@model` becomes a field declaration, bound
+before any body), which is why the 66 and the 9 were right all along and the "clean" bucket
+was not. So the report now compiles twice: once for everything, then again over just the
+apparently-clean views in batches of 15, small enough that nothing is silenced. **23 views
+moved out of "compiles" the moment they were actually compiled** - almost all of them calling
+`Html.BBCodeCached`, a helper that lives in the unported web project, or
+`ViewContext.IsChildAction`, which ASP.NET Core removed.
+
+Twice now this harness has reported health it had not measured: first when a build that
+failed before touching a view produced no diagnostics, and then this. Both failure modes end
+the same way - silence read as success - and both now fail loudly instead. A batch that
+compiles nothing exits 2, and a view reported clean without having been re-batched is counted
+under `UNVERIFIED` rather than under `compiles`.
 
 Two things this does **not** establish, and they matter:
 
 - **It measures compilation, not rendering.** None of these views has been rendered by
   anything. A view that compiles can still throw on its first request.
-- **It does not clear Phase 0's edits.** All nine views using the `PostLink` helper are in
-  the blocked 66, because the helper itself lives in the unported web project. The report
-  says *why* they are unverified; it does not verify them.
+- **It does not clear Phase 0's edits.** All nine views using the `PostLink` helper are
+  blocked, because the helper itself lives in the unported web project. The report says *why*
+  they are unverified; it does not verify them.
 
 `_ViewStart.cshtml` is worth singling out, because every view runs through it and it uses
 `ViewContext.IsChildAction` and `Request.IsAjaxRequest()` - both removed in ASP.NET Core.

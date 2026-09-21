@@ -6,54 +6,109 @@
 #     ./tools/view-port-report.sh --check    fail if it no longer matches the committed one
 #     ./tools/view-port-report.sh --update   re-record it
 #
-# The views have never been compiled by anything in this repository: mono ships no
-# aspnet_compiler.exe, so tools/build-website.sh covers C# only. This is the first thing
-# that looks at them, and it exists to turn "117 views, condition unknown" into a number.
+# The views had never been compiled by anything in this repository: mono ships no
+# aspnet_compiler.exe, so tools/build-website.sh covers C# only. This turns "117 views,
+# condition unknown" into a number.
 #
 # It measures compilation, NOT rendering. A view that compiles can still throw on the first
-# request, and none of these have been rendered by anything.
+# request, and none of these has been rendered by anything.
+#
+# WHY IT COMPILES MORE THAN ONCE. The C# compiler stops binding method bodies once a
+# compilation has produced about a hundred errors. One build of all 116 views reaches that
+# easily - 66 fail on model types from the unported web project - and every view bound after
+# the limit reports nothing, which a naive report reads as "compiles". The first version of
+# this script did exactly that: a deliberately broken view sat in its "37 clean" without a
+# murmur.
+#
+# So: one build of everything, which reliably yields the Razor diagnostics and the
+# declaration-level ones (a bad @model is a field declaration, bound before any body), then
+# a second pass over only the views that came back clean, in batches small enough to stay
+# under the limit.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 MODE="${1:-show}"
 EXPECTED=Zero-K.info/view-port-inventory.txt
+BATCH=15
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+PROPS=ZeroKWeb.Core/view-batch.props
+trap 'rm -rf "$WORK"; rm -f "$PROPS"' EXIT
 
 # Always the container, never whatever SDK the machine happens to have - including on a
 # runner that has one. The Razor compiler ships inside the SDK, so its diagnostics are an
-# SDK-version artefact: the CI runner carries SDK 10.0.12 next to the 9.0.318 its workflow
-# installs and, with no global.json, picks the higher one. The inventory would then differ
-# from the committed one for a reason that has nothing to do with the views. One SDK, named
-# in tools/dotnet.sh, everywhere.
-./tools/dotnet.sh build ZeroKWeb.Core/ZeroKWeb.Core.csproj -v q --nologo --no-incremental \
-    > "$WORK/build.txt" 2>&1 && rc=0 || rc=$?
+# SDK-version artefact: the CI runner carries SDK 10.0.12 beside the 9.0.318 its workflow
+# installs and, with no global.json, picks the higher one.
+#
+# $1: newline-separated views to KEEP, or empty for all of them. The subset arrives as a
+# generated props file rather than a -p: property because an MSBuild command-line property
+# cannot carry semicolons, and a list of paths is nothing but semicolons.
+build() {
+    local keep="$1" out="$2"
+    rm -f "$PROPS"
+    if [ -n "$keep" ]; then
+        {
+            echo "<Project><ItemGroup>"
+            comm -23 <(find Zero-K.info/Views -name '*.cshtml' | sort) <(printf '%s\n' "$keep" | sort) \
+              | sed 's|/|\\|g; s|^|    <Content Remove="..\\|; s|$|" />|'
+            echo "</ItemGroup></Project>"
+        } > "$PROPS"
+    fi
+    ./tools/dotnet.sh build ZeroKWeb.Core/ZeroKWeb.Core.csproj -v q --nologo --no-incremental \
+        > "$out" 2>&1 && return 0 || return $?
+}
+
+build "" "$WORK/pass1.txt" && rc=0 || rc=$?
 
 # A build that failed for a reason this report cannot see - no SDK, a restore failure, a
 # broken csproj - yields zero view diagnostics, and zero diagnostics reads as a clean bill
 # of health. Refuse to report one.
-if [ "${rc:-0}" -ne 0 ] && ! grep -qE 'Zero-K\.info/Views/[^(]+\([0-9]+,[0-9]+\): error ' "$WORK/build.txt"; then
+if [ "${rc:-0}" -ne 0 ] && ! grep -qE 'Zero-K\.info/Views/[^(]+\([0-9]+,[0-9]+\): error ' "$WORK/pass1.txt"; then
     echo "the build failed for a reason this report cannot classify:" >&2
-    tail -20 "$WORK/build.txt" >&2
+    tail -20 "$WORK/pass1.txt" >&2
     exit 2
 fi
 
-python3 - "$WORK/build.txt" > "$WORK/report.txt" <<'PY'
+python3 - "$WORK/pass1.txt" > "$WORK/clean-after-pass1.txt" <<'PYEOF'
+import re, sys, pathlib
+text = pathlib.Path(sys.argv[1]).read_text()
+blamed = set(re.findall(r'[^\s(]*?(Zero-K\.info/Views/[^(]+)\(\d+,\d+\): error ', text))
+for view in sorted(str(p) for p in pathlib.Path("Zero-K.info/Views").rglob("*.cshtml")):
+    if view not in blamed:
+        print(view)
+PYEOF
+
+: > "$WORK/pass2.txt"
+mapfile -t CANDIDATES < "$WORK/clean-after-pass1.txt"
+total=${#CANDIDATES[@]}
+for ((i = 0; i < total; i += BATCH)); do
+    keep=$(printf '%s\n' "${CANDIDATES[@]:i:BATCH}")
+    build "$keep" "$WORK/batch.txt" || true
+    # A batch that compiled nothing tells us nothing, and its silence would be read as every
+    # view in it being clean. That is the same mistake twice, so it stops here.
+    if ! grep -qE 'CSC : |Build succeeded|Zero-K\.info/Views/' "$WORK/batch.txt"; then
+        echo "a batch build produced no compilation at all:" >&2
+        tail -10 "$WORK/batch.txt" >&2
+        exit 2
+    fi
+    cat "$WORK/batch.txt" >> "$WORK/pass2.txt"
+done
+rm -f "$PROPS"
+
+cat "$WORK/pass1.txt" "$WORK/pass2.txt" > "$WORK/all.txt"
+
+python3 - "$WORK/all.txt" "$WORK/clean-after-pass1.txt" > "$WORK/report.txt" <<'PYEOF'
 import re, sys, pathlib, collections
 
 text = pathlib.Path(sys.argv[1]).read_text()
+rebatched = set(pathlib.Path(sys.argv[2]).read_text().split())
+
 errors = collections.defaultdict(list)
-# The path prefix differs between the container (/repo/...) and a CI runner's checkout,
-# so match from Zero-K.info onwards and ignore whatever sits in front of it.
 for m in re.finditer(r'[^\s(]*?(Zero-K\.info/Views/[^(]+)\((\d+),\d+\): error ([A-Z]+\d+): ([^[]+)', text):
     errors[m.group(1)].append((m.group(3), m.group(4).strip()))
 
 views = sorted(str(p) for p in pathlib.Path("Zero-K.info/Views").rglob("*.cshtml"))
 
-# Razor stopped accepting these outright; they need rewriting whatever happens elsewhere.
 RAZOR_LANGUAGE = {"RZ1002", "RZ1031"}
-# Types that live in the web project itself, which is not ported. Not view problems - these
-# views are waiting on their controllers and will resolve when those move.
 UNPORTED = ("ZeroKWeb", "Controller", "AwardCalculator", "PwLadder")
 
 def classify(view):
@@ -71,11 +126,15 @@ buckets = collections.defaultdict(list)
 for view in views:
     buckets[classify(view)].append(view)
 
+# A view called clean without having been recompiled in a batch was only ever judged by the
+# pass the error limit can silence. There should be none; say so loudly if there are.
+unverified = [v for v in buckets["compiles"] if v not in rebatched]
+
 order = ["compiles", "waiting-on-controllers", "razor-language", "other"]
 print("# Razor views compiled against ASP.NET Core on .NET 9.")
 print("# GENERATED - run tools/view-port-report.sh --update.")
 print("#")
-print("# compiles               nothing stops this view today")
+print("# compiles               nothing stops this view today, verified in a small batch")
 print("# waiting-on-controllers only missing types from the unported web project")
 print("# razor-language         Razor itself rejects it; needs rewriting regardless")
 print("# other                  a package reference or an MVC 5 API")
@@ -83,6 +142,8 @@ print()
 print("total %d" % len(views))
 for name in order:
     print("%-24s %d" % (name, len(buckets[name])))
+if unverified:
+    print("UNVERIFIED               %d" % len(unverified))
 print()
 for name in order:
     if name == "compiles":
@@ -90,7 +151,7 @@ for name in order:
     for view in buckets[name]:
         detail = sorted({c for c, _ in errors[view]})
         print("%-24s %s  [%s]" % (name, view.replace("Zero-K.info/Views/", ""), " ".join(detail)))
-PY
+PYEOF
 
 case "$MODE" in
   --update)

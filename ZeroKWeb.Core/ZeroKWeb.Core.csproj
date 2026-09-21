@@ -40,4 +40,17 @@
     <Content Include="..\Zero-K.info\Views\**\*.cshtml" Link="Views\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!--
+    tools/view-port-report.sh writes view-batch.props here to compile a subset, and deletes
+    it afterwards. It has to compile subsets: the C# compiler stops binding method bodies
+    once a compilation has produced about a hundred errors, so in a single build of all 116
+    views the ones bound after that report nothing at all - which a report reads as
+    "compiles". The list arrives as a file rather than a -p: property because an MSBuild
+    property on the command line cannot carry semicolons, and a list of paths is nothing but
+    semicolons.
+
+    The import sits after the ItemGroup above because it removes from it.
+  -->
+  <Import Project="view-batch.props" Condition="Exists('view-batch.props')" />
+
 </Project>
