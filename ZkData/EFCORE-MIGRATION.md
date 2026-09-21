@@ -681,12 +681,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **35** | compile against ASP.NET Core today |
+| **39** | compile against ASP.NET Core today |
 | **34** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **38** | something else missing |
+| **34** | something else missing |
 
-**Read the 35 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
+**Read the 39 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.
@@ -843,10 +843,18 @@ which leaves a newline alone, so the `Replace` finds it. ASP.NET Core's encoder 
 in forum posts and descriptions, with no error anywhere. Splitting before encoding restores
 the original output.
 
-A related difference is left alone on purpose: ASP.NET Core's encoder escapes non-ASCII too,
-so a player called "Müller" comes out as `M&#xFC;ller` where MVC 5 wrote it through. Browsers
-render both identically, and changing it means configuring a custom `HtmlEncoder` for the
-whole application - a decision, not a transcription.
+**And a claim made here earlier was wrong.** This page said ASP.NET Core's encoder escapes
+non-ASCII "where MVC 5 wrote it through". MVC 5 does not write it through:
+`HttpUtility.HtmlEncode("Müller")` is `M&#252;ller`, and `WebUtility.HtmlEncode` gives exactly
+the same string. Run side by side under mono:
+
+    HttpUtility: M&#252;ller a\nb &lt;x&gt;
+    WebUtility:  M&#252;ller a\nb &lt;x&gt;
+
+So the fix is byte-faithful after all, and there is no remaining difference to leave alone -
+only `IHtmlHelper.Encode`, which is a third function again and the one to avoid. The mistake
+was caught by writing the expected bytes down and running them, which is the argument for
+writing them down.
 
 ### Fixing a blocker reveals the next one
 

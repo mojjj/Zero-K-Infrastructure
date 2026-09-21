@@ -135,6 +135,19 @@ namespace ZeroKWeb.Render
             failures += Same("PrintMetal((Account)null)", html.PrintMetal((Account)null), null);
             failures += Same("PrintLines(a\\nb)", html.PrintLines("a\nb"), "a<br/>b");
             failures += Same("PrintLines(list)", html.PrintLines(new object[] { 1, 2 }), "1<br/>2<br/>");
+            // M&#252;ller, not Müller: HttpUtility.HtmlEncode escapes non-ASCII too, so this is
+            // what MVC 5 emits. Verified by running both encoders under mono side by side -
+            // an earlier commit claimed MVC 5 wrote it through, and that was wrong.
+            failures += Same("PrintLines(Müller)", html.PrintLines("Müller"), "M&#252;ller");
+            failures += Same("Stars(RedStarSmall, 3.5)", html.Stars(StarType.RedStarSmall, 3.5),
+                "<span class='RedStarSmall' style='width:49px'></span><span style='width:21px'></span>");
+            failures += Same("Stars(RedSkull, null)", html.Stars(StarType.RedSkull, null),
+                "<span class='WhiteSkull' style='width:70px' title='No votes'></span>");
+            // FactionColor returns empty for no faction, and this overload does NOT substitute
+            // a default the way PrintAccount and PrintClan do - so an empty colour is correct.
+            failures += Same("PrintInfluence(null, 25)", html.PrintInfluence((Faction)null, 25.0),
+                "<span style='color:'>25 (25%)</span>");
+            failures += Same("PrintBadges((Account)null)", html.PrintBadges(null), "");
             return failures;
         }
 
