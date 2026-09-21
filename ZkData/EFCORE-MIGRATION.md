@@ -553,19 +553,26 @@ to the web project rather than to the views.
 
 ### The number was wrong the first time, and why
 
-The C# compiler stops binding method bodies once a compilation has produced about a hundred
-errors. A single build of all 116 views passes that easily - 66 of them fail on their
-`@model` type alone - and every view bound after the limit reports **nothing at all**, which
-this report read as "compiles". A view deliberately broken with
-`ThisTypeDoesNotExistAnywhere` sat in the clean bucket without a murmur.
+**Roslyn does not bind method bodies at all if the compilation has a declaration-level
+error.** A single build of all 116 views has 66 of them - a view whose `@model` type is
+missing is a broken field declaration - so *no* view's body is ever bound, and every
+body-level mistake in the other 50 goes unreported. This report read that silence as
+"compiles", and a view rewritten to call `ThisTypeDoesNotExistAnywhere` sat in the clean
+bucket without a murmur.
 
-Declaration-level errors survive the limit (a bad `@model` becomes a field declaration, bound
-before any body), which is why the 66 and the 9 were right all along and the "clean" bucket
-was not. So the report now compiles twice: once for everything, then again over just the
-apparently-clean views in batches of 15, small enough that nothing is silenced. **23 views
-moved out of "compiles" the moment they were actually compiled** - almost all of them calling
-`Html.BBCodeCached`, a helper that lives in the unported web project, or
-`ViewContext.IsChildAction`, which ASP.NET Core removed.
+It is not an error-budget effect. This page said so first, describing a limit of about a
+hundred errors, and that was wrong: two views are enough to show it. `_ViewStart.cshtml`
+compiled alone reports its two `CS1061`s; add a single view with a missing `@model` type and
+both disappear, with twenty-odd errors in the compilation.
+
+Declaration errors are reported regardless, which is why the 66 and the 9 were right all
+along and only the "clean" bucket was fiction. So the report compiles twice: once for
+everything, then again over just the apparently-clean views - a set with no declaration
+errors in it by construction, so bodies *are* bound. Batches of 15 keep the blast radius
+small if that ever stops holding, and a batch that turns out to contain a declaration error
+is re-run one view at a time. **23 views moved out of "compiles" the moment they were
+actually compiled** - almost all calling `Html.BBCodeCached`, a helper in the unported web
+project, or `ViewContext.IsChildAction`, which ASP.NET Core removed.
 
 Twice now this harness has reported health it had not measured: first when a build that
 failed before touching a view produced no diagnostics, and then this. Both failure modes end
