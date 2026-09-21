@@ -123,6 +123,18 @@ the fixture is byte-identical afterwards. CI runs all three.
 There is no .NET SDK on the build machines or on most laptops here, so `tools/dotnet.sh`
 runs it from a container with the repository mounted.
 
+A fourth question sits on top of those three, and it is the one the plan names as the real
+risk of an EF6 → EF Core port:
+
+    ./db/compare-ratings.sh    # do both stacks compute the same ratings?
+
+It runs the Whole History Rating pipeline twice against the same fixture — once on .NET
+Framework over EF6, once on .NET 9 over EF Core — and diffs the result. Both runs use the
+same pipeline source, linked rather than copied, so the only difference between them is the
+data layer. WHR is iterative and order-sensitive: a LINQ translation that quietly started
+returning rows in a different order shows up here as a rating that moved, and nowhere else.
+CI runs it on every pull request.
+
 ## The committed test fixture
 
 `db/fixture/fixture.sql` is a small, anonymised slice of the real database that **is**

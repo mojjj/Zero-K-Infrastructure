@@ -345,6 +345,45 @@ The expected difference is committed as `db/schema/efcore-gap.txt` and checked i
 gap that closes is as loud as one that opens. There is no .NET SDK on the build machines -
 `tools/dotnet.sh` runs it from a container.
 
+## Do both stacks compute the same answer?
+
+Schema equality says the two models describe the same database. Reading and writing say the
+mapping works. None of that says EF Core's LINQ translation returns the same **rows in the
+same order** as EF6's — which is the risk §7 of the modernization plan names, and the one
+that fails silently.
+
+Whole History Rating is where that would show. It is iterative, it is order-sensitive, and
+it is the heaviest query in the system: a filter over a date range with a collection
+`Include`, run month by month across ten years.
+
+    ./db/compare-ratings.sh
+
+It runs the pipeline twice against the same fixture — .NET Framework over EF6, then .NET 9
+over EF Core — and diffs the two rating tables. Both runs drive `RatingSystems.Init`, the
+entry point the website calls at startup, over the same source files: `ZkData/Ef/WHR/*.cs`
+are *linked* into `ZkData.Core`, not copied, so the only difference between the runs is the
+data layer underneath. Reads, 150 Newton iterations and the write-back of `AccountRatings`
+all happen on both stacks.
+
+**Result: identical for all 33 accounts, bit for bit.**
+
+Two things had to be got right before that claim meant anything, and both were wrong first:
+
+- **The number format was hiding the answer.** `float.ToString("F6")` carries about seven
+  significant digits on .NET Framework and pads the rest with zeros, so `1458.3042f` printed
+  as `1458.304000` there and `1458.304199` on .NET 9. That is a difference in the *printing*.
+  `G9` round-trips a float exactly on both runtimes, so equal strings now mean equal bits.
+- **The harness was racing itself.** `Init()` already queues the full 150-iteration pass;
+  the first version also called `ForceRatingsUpdate()`, which queues a *second* one. The two
+  runs then sampled after different numbers of iterations and disagreed by about 1e-4 —
+  scheduling noise in the costume of a porting bug. Waiting for the numbers to stop moving
+  does not fix it either: they are perfectly still before the background task starts. Both
+  harnesses now drive exactly one pass and wait on `completelyInitialized`, read by
+  reflection because the class exposes no public equivalent.
+
+A check that reports a difference at random is worse than no check. This one was rerun four
+times before it was believed.
+
 ## Reading the data, not just building the schema
 
 The diff above answers one question: would this model *build* the database Zero-K has. It
