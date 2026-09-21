@@ -526,6 +526,48 @@ folder, and a changed call site. **The site layout cannot render until a view in
 rewritten**, so the first genuine view rewrite of this port is now identified rather than
 guessed at - and it sits on the page every other page inherits.
 
+### Two more places a shim cannot reach
+
+`Request` and `Server` were properties on the MVC 5 view page, and two of their members -
+`Request.Params[...]` and `Request.Url` - are an indexer and a property. C# has no extension
+indexers or properties, so no extension method supplies them however it is written. The only
+way to keep the views unedited is to hand them an object of a different type, so the shim
+base page now returns a wrapper rather than the real `HttpRequest`. Its surface is only what
+the views use, counted rather than guessed: `Request.Url` three times, `Request.Params` once,
+`Request.IsAjaxRequest` once, `Server.MapPath` four times, `Server.HtmlEncode` once.
+
+Child actions are shimmed as **tripwires that throw**. Invoking the action and rendering its
+result would skip the filter pipeline, and one of the 14 call sites is
+`LobbyController.ChatNotification`, which carries `[Auth]` - a shim that quietly rendered an
+authorization-protected action to an anonymous visitor is the failure mode this port has
+already produced three times in measurement and must not produce in behaviour. `TopMenu`
+guards its call with `Global.IsAccountAuthorized`, which is why the layout can render at all
+before this is resolved.
+
+With those, `TopMenu.cshtml` compiles. Two blockers stand between here and a rendered page:
+
+- **`_SiteLayout` writes `Path.GetFileName(...)`, and ASP.NET Core's `RazorPage` has a
+  `Path` property of its own** - the view's path, a string. It shadows `System.IO.Path`, so
+  the call binds to a string and fails. Hiding the framework's property would be worse than
+  the problem. The fix is to write `System.IO.Path.GetFileName(...)` in the view, which means
+  **the first edit to a production view in this port** - and, unusually, one that can be
+  reasoned about without compiling: fully qualifying a name that already resolves to that
+  type on MVC 5 changes nothing there.
+- **`LoginBar` wants `Html.PrintAccount`**, forty lines of formatting and URL generation.
+  Portable, but exactly the shape that produced two transcription defects out of ten far
+  simpler methods.
+
+### A measurement project cannot measure itself
+
+`Mvc5Request.IsAjaxRequest` was written as `request?.Headers[...] == "XMLHttpRequest"`, which
+is ambiguous (`CS0034`) because `Headers[...]` is `StringValues`. The same mistake had
+already been made and fixed once in `Mvc5PageCompat`.
+
+It survived because **`ZeroKWeb.Core` cannot report it**: its views carry declaration errors,
+so no method body in that project is bound - including the shims' own. Only `ZeroKWeb.Render`
+and `ZeroKWeb.Host`, which contain just the views that compile, ever type-check the shim code
+at all. Worth knowing before trusting a green build from the measurement project.
+
 ## A defect the port found
 
 `CampaignEvents` had
@@ -608,12 +650,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **27** | compile against ASP.NET Core today |
+| **28** | compile against ASP.NET Core today |
 | **34** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **46** | something else missing, and it is overwhelmingly one thing - see below |
+| **45** | something else missing, and it is overwhelmingly one thing - see below |
 
-**Read the 27 carefully: it is not 37.** The first version of this report said 37, and 37
+**Read the 28 carefully: it is not 37.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.
