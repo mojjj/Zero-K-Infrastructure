@@ -20,15 +20,14 @@ EXPECTED=Zero-K.info/view-port-inventory.txt
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# A real SDK where there is one (CI), the container otherwise (every machine here).
-# `command -v dotnet` is not the test: the binary is present on machines with no SDK
-# installed, where it exits with "No .NET SDKs were found" - a failed build that produces
-# no view diagnostics, which this report would otherwise read as every view compiling.
-if dotnet --list-sdks >/dev/null 2>&1 && [ -n "$(dotnet --list-sdks 2>/dev/null)" ]; then
-    dotnet build ZeroKWeb.Core/ZeroKWeb.Core.csproj -v q --nologo > "$WORK/build.txt" 2>&1 && rc=0 || rc=$?
-else
-    ./tools/dotnet.sh build ZeroKWeb.Core/ZeroKWeb.Core.csproj -v q --nologo > "$WORK/build.txt" 2>&1 && rc=0 || rc=$?
-fi
+# Always the container, never whatever SDK the machine happens to have - including on a
+# runner that has one. The Razor compiler ships inside the SDK, so its diagnostics are an
+# SDK-version artefact: the CI runner carries SDK 10.0.12 next to the 9.0.318 its workflow
+# installs and, with no global.json, picks the higher one. The inventory would then differ
+# from the committed one for a reason that has nothing to do with the views. One SDK, named
+# in tools/dotnet.sh, everywhere.
+./tools/dotnet.sh build ZeroKWeb.Core/ZeroKWeb.Core.csproj -v q --nologo --no-incremental \
+    > "$WORK/build.txt" 2>&1 && rc=0 || rc=$?
 
 # A build that failed for a reason this report cannot see - no SDK, a restore failure, a
 # broken csproj - yields zero view diagnostics, and zero diagnostics reads as a clean bill

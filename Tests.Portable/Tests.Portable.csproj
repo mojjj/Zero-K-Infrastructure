@@ -18,7 +18,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>disable</Nullable>
     <IsPackable>false</IsPackable>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>13.0</LangVersion>
     <!-- linked legacy sources, not new code: do not fail the build on their warnings -->
     <NoWarn>$(NoWarn);CS0618;CS0649;CS0168;CS1998</NoWarn>
     <EnableDefaultCompileItems>true</EnableDefaultCompileItems>

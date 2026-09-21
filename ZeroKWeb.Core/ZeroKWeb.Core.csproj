@@ -21,7 +21,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>disable</Nullable>
     <IsPackable>false</IsPackable>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>13.0</LangVersion>
     <RootNamespace>ZeroKWeb</RootNamespace>
     <!-- the point is to collect errors, so do not stop at the first handful -->
     <ErrorReportMaxErrors>9999</ErrorReportMaxErrors>

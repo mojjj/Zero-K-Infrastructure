@@ -561,6 +561,44 @@ Two things this does **not** establish, and they matter:
 `_ViewStart.cshtml` is worth singling out, because every view runs through it and it uses
 `ViewContext.IsChildAction` and `Request.IsAjaxRequest()` - both removed in ASP.NET Core.
 
+### What this found on its first CI run, which was not about views
+
+The check failed, and not on a view. `ZkData.Core` itself would not compile:
+
+    ZkData/Ef/WHR/WholeHistoryRating.cs(567,69): error CS0023:
+    Operator '.' cannot be applied to operand of type 'void'
+
+It built here and failed there on identical source, with the same SDK version in the
+workflow file. The reason is that the version in the workflow file is not the version that
+ran. **The runner has SDK 10.0.12 installed beside the 9.0.318 `setup-dotnet` installs, and
+with no `global.json` the build takes the higher one** - so CI was compiling this port as
+C# 14 while every local check compiled it as C# 13.
+
+Under C# 14 an array converts to `Span<T>`, which brings `MemoryExtensions.Reverse` - an
+in-place reverse returning `void` - into overload resolution ahead of `Enumerable.Reverse`.
+`Ranks.Percentiles` is a `float[]`, so `Ranks.Percentiles.Reverse().ToArray()` stopped
+meaning what it says.
+
+Here that is a compile error, which is the lucky case. **The same expression with its result
+discarded would silently start mutating the array in place instead of returning a reversed
+copy** - no diagnostic, changed behaviour. One call site in the linked sources was exposed;
+`WholeHistoryRating.cs:586` writes `.Select(x => x).Reverse()`, which reads like someone
+already met this and worked around it.
+
+Two fixes, because there are two problems:
+
+- The call site now says `Enumerable.Reverse(Ranks.Percentiles)` by name. Verified to compile
+  under **both** SDK 9 and SDK 10, and `db/compare-ratings.sh` confirms the ratings are
+  unchanged on both stacks - which is what that check is for.
+- `LangVersion` was `latest` in all three net9 projects, meaning "whichever C# the newest
+  SDK on this machine supports". It is now `13.0`. A project whose entire purpose is the
+  claim *compiles on .NET 9* cannot leave the language version to whatever is installed.
+  `tools/view-port-report.sh` likewise always builds through `tools/dotnet.sh`, because the
+  Razor compiler ships inside the SDK and its diagnostics would otherwise vary by runner.
+
+No `global.json` was added: it would apply to the Windows build too, on a machine I cannot
+test.
+
 ## Order of work
 
 1. Baseline the schema as one EF Core initial migration, and diff the result against

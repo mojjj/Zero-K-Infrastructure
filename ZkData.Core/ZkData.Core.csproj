@@ -22,7 +22,16 @@
     <OutputType>Exe</OutputType>
     <Nullable>disable</Nullable>
     <IsPackable>false</IsPackable>
-    <LangVersion>latest</LangVersion>
+    <!--
+      Pinned, not "latest". "latest" means whichever C# the machine's newest SDK happens to
+      support, and that is not a property this port can leave to chance: the CI runner has
+      SDK 10.0.12 installed alongside the 9.0.318 the workflow asks for, picks the higher one
+      because nothing says otherwise, and compiles as C# 14. Under C# 14 an array converts to
+      Span, which changes which extension method `array.Reverse()` binds to - it built here
+      and failed there, on identical source. The claim this project exists to make is
+      "compiles on .NET 9", so it compiles as C# 13 wherever it is built.
+    -->
+    <LangVersion>13.0</LangVersion>
     <RootNamespace>ZkData.Core</RootNamespace>
     <!-- linked legacy sources: their warnings belong to the original project -->
     <NoWarn>$(NoWarn);CS0618;CS0649;CS0168;CS1998;CS0108;CS0114;CS0169;CS0067</NoWarn>
