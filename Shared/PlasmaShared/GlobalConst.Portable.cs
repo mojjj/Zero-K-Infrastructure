@@ -75,5 +75,11 @@ namespace ZkData
         public const string LobbyAccessCookieName = "zk_lobby";
         public const string BomberIcon = "/img/fleets/neutral.png";
         public const string WarpIcon = "/img/warpcore.png";
+        public const int CommanderProfileCount = 6;
+        public const int MaxCommanderNameLength = 20;
+
+        // Only the DECLARATION moves. GlobalConst.cs assigns it from the mode switch, which
+        // also builds the Steam and content-service clients and cannot come across.
+        public static string ZkDataContextConnectionString;
     }
 }

@@ -28,3 +28,7 @@ global using Microsoft.AspNetCore.Mvc;
 // State really is the EF6-shaped type. Both readings are right in their own project, and a
 // global alias in this one settles it for linked controllers without touching that.
 global using EntityState = Microsoft.EntityFrameworkCore.EntityState;
+
+// The Request/Response/page shims live in ZeroKWeb.Compat, and linked controllers have no
+// using for it - they were written when these members were on the framework's own types.
+global using ZeroKWeb.Compat;
