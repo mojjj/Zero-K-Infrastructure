@@ -7,10 +7,10 @@
 # other                  a package reference or an MVC 5 API
 
 total 116
-compiles                 20
+compiles                 21
 waiting-on-controllers   34
 razor-language           9
-other                    53
+other                    52
 
 waiting-on-controllers   Admin/TraceLogs.cshtml  [CS0234]
 waiting-on-controllers   Battles/BattleDetail.cshtml  [CS0103 CS0117 CS0234 CS1061 CS1929]
@@ -88,14 +88,13 @@ other                    Shared/DisplayTemplates/AccountRole.cshtml  [CS0103 CS1
 other                    Shared/DisplayTemplates/Diff.cshtml  [CS0246]
 other                    Shared/DisplayTemplates/DiffPiece.cshtml  [CS0246]
 other                    Shared/DisplayTemplates/FactionTreaty.cshtml  [CS0103 CS1061]
-other                    Shared/DisplayTemplates/ForumPost.cshtml  [CS0103 CS0117 CS1061]
-other                    Shared/DisplayTemplates/Punishment.cshtml  [CS0103 CS0117 CS1061]
+other                    Shared/DisplayTemplates/ForumPost.cshtml  [CS0103 CS1061]
+other                    Shared/DisplayTemplates/Punishment.cshtml  [CS0103 CS1061]
 other                    Shared/DisplayTemplates/StructureType.cshtml  [CS1061]
 other                    Shared/DisplayTemplates/TreatyEffect.cshtml  [CS1061]
-other                    Shared/FactionList.cshtml  [CS0117]
 other                    Shared/InfluenceList.cshtml  [CS1061]
 other                    Shared/InfluenceListShort.cshtml  [CS1061]
-other                    Shared/LoginBar.cshtml  [CS0103 CS1061]
+other                    Shared/LoginBar.cshtml  [CS0021 CS0103 CS1061]
 other                    Shared/PlanetDropships.cshtml  [CS1061]
 other                    Shared/PlanetSummary.cshtml  [CS1061]
 other                    Shared/TopMenu.cshtml  [CS0103 CS1061]

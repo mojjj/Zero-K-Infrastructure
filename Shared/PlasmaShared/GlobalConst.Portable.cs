@@ -68,5 +68,9 @@ namespace ZkData
         public const bool CanChangeClanFaction = true;
         public const string MetalIcon = "/img/luaui/ibeam.png";
         public const string EnergyIcon = "/img/luaui/energy.png";
+
+        public const int PlanetWarsVictoryPointsToWin = 50;
+        public const int PostVoteHideThreshold = -6;
+        public const string NightwatchName = "Nightwatch";
     }
 }

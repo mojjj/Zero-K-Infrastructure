@@ -541,12 +541,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **20** | compile against ASP.NET Core today |
+| **21** | compile against ASP.NET Core today |
 | **34** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **53** | something else missing - `Global`, `GlobalConst.BaseSiteUrl`, `DiffPlex`, `WebGrease`, `System.Web.Mvc` |
+| **52** | something else missing, and it is overwhelmingly one thing - see below |
 
-**Read the 20 carefully: it is not 37.** The first version of this report said 37, and 37
+**Read the 21 carefully: it is not 37.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.
@@ -619,6 +619,43 @@ decision three times: **give the views the MVC 5 surface instead of editing it o
   actions and with them the reason for the question - `_ViewStart` does not run for partials
   or view components - so `false` is the faithful answer rather than a stub. It lives in the
   shim where it can be argued with, not buried in a view.
+
+### Where the mechanical tail runs out
+
+Three more `GlobalConst` members moved, `GalaxyMapGeometry` turned out to be pure and
+standalone and was linked as it stands, and `Request` joined the shim base page. That took
+`compiles` to 21, and it is about the end of what moving files can do.
+
+What is left across the 46 body-blocked views:
+
+| uses | symbol |
+|---:|---|
+| 69 | **`Global`** |
+| 4 | `Request.Url` |
+| 2 | `Server` |
+| 1 | `File` |
+
+**`Global` is the wall, and what the views want from it is the signed-in user.**
+
+| uses | member |
+|---:|---|
+| 87 | `Global.Account` |
+| 31 | `Global.IsModerator` |
+| 24 | `Global.AccountID` |
+| 15 | `Global.IsAccountAuthorized` |
+| 15 | `Global.GetAjaxOptions` |
+| 10 | `Global.IsLobbyAccess` |
+
+MVC 5 let the application expose the current user as a **static**, and 46 views read it that
+way. ASP.NET Core has no equivalent and deliberately so: per-request state belongs to the
+request, reached through `HttpContext` or a scoped service. A shim `Global` backed by
+`IHttpContextAccessor` would let all 46 compile unchanged, and that is probably the right
+move - but it is a decision about how identity flows through the ported application, not a
+file move, and it wants making deliberately rather than as a side effect of chasing a
+compiler error.
+
+`Zero-K.info/AppCode/Global.cs` is also where `Global.LobbyApi` lives, which is Phase 1's
+subject. The view port and the lobby-server split turn out to be gated on the same object.
 
 ### Fixing a blocker reveals the next one
 
