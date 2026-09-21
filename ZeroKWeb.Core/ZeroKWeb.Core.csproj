@@ -41,6 +41,14 @@
   </ItemGroup>
 
   <!--
+    The MVC-free half of the web project's view helpers, linked rather than copied. Its
+    namespace really is System.Web.Mvc - see the note in the file.
+  -->
+  <ItemGroup>
+    <Compile Include="..\Zero-K.info\AppCode\HtmlHelperExtensions.Portable.cs" Link="Linked\HtmlHelperExtensions.Portable.cs" />
+  </ItemGroup>
+
+  <!--
     tools/view-port-report.sh writes view-batch.props here to compile a subset, and deletes
     it afterwards. It has to compile subsets: the C# compiler stops binding method bodies
     once a compilation has produced about a hundred errors, so in a single build of all 116

@@ -34,6 +34,15 @@
     <Content Include="..\Zero-K.info\Views\**\*.cshtml" Link="Views\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!--
+    The MVC-free half of the web project's view helpers, linked rather than copied. Its
+    namespace really is System.Web.Mvc - see the note in the file.
+  -->
+  <ItemGroup>
+    <Compile Include="..\Zero-K.info\AppCode\HtmlHelperExtensions.Portable.cs" Link="Linked\HtmlHelperExtensions.Portable.cs" />
+    <Compile Include="..\ZeroKWeb.Core\Mvc5Compat\*.cs" Link="Linked\%(Filename).cs" />
+  </ItemGroup>
+
   <!-- Removes every view the inventory says does not compile; written by tools/render-view.sh. -->
   <Import Project="view-set.props" Condition="Exists('view-set.props')" />
 

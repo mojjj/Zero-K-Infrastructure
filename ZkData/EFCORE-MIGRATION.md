@@ -541,12 +541,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **15** | compile against ASP.NET Core today, with only `ZkData.Core` referenced |
-| **66** | fail only on model types from the unported web project - waiting on their controllers |
+| **20** | compile against ASP.NET Core today |
+| **34** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **26** | a missing member, name or package - `Page`, `ToAgoString`, `ViewContext.IsChildAction`, `DiffPlex`, `WebGrease`, `System.Web.Mvc` |
+| **53** | something else missing - `Global`, `GlobalConst.BaseSiteUrl`, `DiffPlex`, `WebGrease`, `System.Web.Mvc` |
 
-**Read the 15 carefully: it is not 37.** The first version of this report said 37, and 37
+**Read the 20 carefully: it is not 37.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.
@@ -598,12 +598,45 @@ The first two rows moved between files of the same partial class in the same nam
 call site anywhere notices and the Framework build is unaffected. That is the whole of what
 is mechanical here, and it moved one view.
 
-The rest is not mechanical, and the reason is the same for all of it: those symbols reach
-views through `namespace System.Web.Mvc`, and `HtmlHelperExtensions.cs` - 800 lines of it -
-is written against MVC 5 types. Porting them means deciding where the ASP.NET Core helper
-layer lives and which namespace views import it from, which changes how *every* MVC 5 view
-resolves names. That is a change nothing in this repository can currently verify, because the
-Framework views still cannot be rendered by anything here.
+That paragraph originally continued "the rest is not mechanical", and for two of the five
+that was too cautious. `ToAgoString` and `StarType` are pure, and the trick already used
+three times over works on them too: split them into a sibling file **keeping the namespace
+`System.Web.Mvc`**, which looks absurd in a file that no longer mentions MVC and is exactly
+the point - MVC 5 views see them without a `using` because `Views/Web.config` imports that
+namespace, so keeping it leaves the Framework build byte-identical. The .NET 9 side imports
+it explicitly.
+
+The other three needed a decision rather than a move, and it turned out to be the same
+decision three times: **give the views the MVC 5 surface instead of editing it out of them.**
+
+- **`Page`** is System.Web.WebPages' dynamic per-page bag, and 43 views write
+  `Page.Title = "..."` for the layout to read back. ASP.NET Core's `ViewBag` does precisely
+  that job, so a Razor base class exposing `public dynamic Page => ViewBag;`, set for every
+  view by `@inherits` in `_ViewImports.cshtml`, means 43 files need no edit at all.
+- **`Request.IsAjaxRequest()`** was dropped but the convention it reads was not; one line
+  restores it.
+- **`ViewContext.IsChildAction`** is the one genuine judgement. ASP.NET Core removed child
+  actions and with them the reason for the question - `_ViewStart` does not run for partials
+  or view components - so `false` is the faithful answer rather than a stub. It lives in the
+  shim where it can be argued with, not buried in a view.
+
+### Fixing a blocker reveals the next one
+
+`compiles` went 15 → 20. `other` went 26 → **53**, and that is not a regression: binding stops
+at the first problem in an expression, so a view reporting one missing symbol is reporting a
+floor. `Battles/BattleDetail.cshtml` reported a single `CS0246` while `Page` was unresolved;
+with `Page` supplied it reports five errors, having got far enough to find `Global`,
+`GlobalConst.BaseSiteUrl` and three more.
+
+So "14 compile" was a floor in a second sense, beyond the measurement bug that produced it.
+Every shim uncovers more work, and the totals will keep moving in both directions for a
+while. That is the shape of this port, and a report that only ever went up would be lying.
+
+The bucket rule changed with it. `waiting-on-controllers` used to require that *every* error
+name an unported type; once binding got further those views began reporting other errors too
+and the bucket emptied while nothing about them had changed. It now means *any* reference to
+a type the port does not have - because such a view cannot compile until that type moves,
+whatever else is also wrong, and what else is wrong is not knowable until then.
 
 ### One of them now renders
 
