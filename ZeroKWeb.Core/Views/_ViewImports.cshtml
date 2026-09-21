@@ -1,0 +1,9 @@
+@* MVC 5 imported these through Views/Web.config <pages><namespaces>; ASP.NET Core uses
+   this file instead. System.Web.Mvc, System.Web.Mvc.Ajax, System.Web.Mvc.Html and
+   System.Web.Routing have no ASP.NET Core equivalent to import - the helpers they carried
+   are on IHtmlHelper or are gone. *@
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@using ZkData
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers

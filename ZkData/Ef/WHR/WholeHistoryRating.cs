@@ -1,4 +1,4 @@
-// Implementation of WHR " + category +" based on original by Pete Schwamb httpsin//github.com/goshrine/whole_history_rating
+﻿// Implementation of WHR " + category +" based on original by Pete Schwamb httpsin//github.com/goshrine/whole_history_rating
 
 using Newtonsoft.Json;
 using PlasmaShared;
@@ -564,7 +564,13 @@ namespace Ratings
                 List<float> newPercentileBrackets = new List<float>();
                 newPercentileBrackets.Add(playerRatings[sortedPlayers.First().Value].LadderElo);
                 float percentile;
-                float[] percentilesRev = Ranks.Percentiles.Reverse().ToArray();
+                // Enumerable.Reverse by name, not by extension syntax. Percentiles is a
+                // float[], and from C# 14 an array converts to Span, which brings
+                // MemoryExtensions.Reverse - an in-place reverse returning void - into
+                // overload resolution ahead of this one. Here that is a compile error; the
+                // same expression with its result discarded would silently start mutating
+                // the array instead of returning a reversed copy.
+                float[] percentilesRev = Enumerable.Reverse(Ranks.Percentiles).ToArray();
                 foreach (var pair in sortedPlayers)
                 {
                     if (playerRatings[pair.Value].Ranked)

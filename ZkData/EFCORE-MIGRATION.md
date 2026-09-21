@@ -523,6 +523,105 @@ The errors that were outstanding before this, now cleared:
 That last one is where the two blockers meet: an entity class that cannot reach .NET 9
 because it resizes an image. It is exactly what `IImageProcessor` exists for.
 
+## The views, measured
+
+`ZkData.Core` is the data half of Phase 3. The other half is MVC 5 → ASP.NET Core, and its
+largest unknown was the views: **nothing in this repository had ever compiled one.** Mono
+ships no `aspnet_compiler.exe`, so `tools/build-website.sh` checks C# only; the Windows
+runner compiles them but records nothing. Phase 0 edited 11 views and Phase 5 rewrote the
+galaxy map, both unverified.
+
+`ZeroKWeb.Core` does for the views what `Tests.Portable` did for the code - links the real
+files, compiles them on .NET 9, and turns the failures into a number:
+
+    ./tools/view-port-report.sh            print the inventory
+    ./tools/view-port-report.sh --check    fail if it no longer matches the committed one
+
+Of 116 views under `Zero-K.info/Views`:
+
+| | |
+|---|---|
+| **14** | compile against ASP.NET Core today, with only `ZkData.Core` referenced |
+| **66** | fail only on model types from the unported web project - waiting on their controllers |
+| **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
+| **27** | a missing member, name or package - `Html.BBCodeCached`, `ViewContext.IsChildAction`, `DiffPlex`, `WebGrease`, `System.Web.Mvc` |
+
+**Read the 14 carefully: it is not 37.** The first version of this report said 37, and 37
+was wrong - see below. What is true is that the *view-language* work is small: nine files
+use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
+to the web project rather than to the views.
+
+### The number was wrong the first time, and why
+
+The C# compiler stops binding method bodies once a compilation has produced about a hundred
+errors. A single build of all 116 views passes that easily - 66 of them fail on their
+`@model` type alone - and every view bound after the limit reports **nothing at all**, which
+this report read as "compiles". A view deliberately broken with
+`ThisTypeDoesNotExistAnywhere` sat in the clean bucket without a murmur.
+
+Declaration-level errors survive the limit (a bad `@model` becomes a field declaration, bound
+before any body), which is why the 66 and the 9 were right all along and the "clean" bucket
+was not. So the report now compiles twice: once for everything, then again over just the
+apparently-clean views in batches of 15, small enough that nothing is silenced. **23 views
+moved out of "compiles" the moment they were actually compiled** - almost all of them calling
+`Html.BBCodeCached`, a helper that lives in the unported web project, or
+`ViewContext.IsChildAction`, which ASP.NET Core removed.
+
+Twice now this harness has reported health it had not measured: first when a build that
+failed before touching a view produced no diagnostics, and then this. Both failure modes end
+the same way - silence read as success - and both now fail loudly instead. A batch that
+compiles nothing exits 2, and a view reported clean without having been re-batched is counted
+under `UNVERIFIED` rather than under `compiles`.
+
+Two things this does **not** establish, and they matter:
+
+- **It measures compilation, not rendering.** None of these views has been rendered by
+  anything. A view that compiles can still throw on its first request.
+- **It does not clear Phase 0's edits.** All nine views using the `PostLink` helper are
+  blocked, because the helper itself lives in the unported web project. The report says *why*
+  they are unverified; it does not verify them.
+
+`_ViewStart.cshtml` is worth singling out, because every view runs through it and it uses
+`ViewContext.IsChildAction` and `Request.IsAjaxRequest()` - both removed in ASP.NET Core.
+
+### What this found on its first CI run, which was not about views
+
+The check failed, and not on a view. `ZkData.Core` itself would not compile:
+
+    ZkData/Ef/WHR/WholeHistoryRating.cs(567,69): error CS0023:
+    Operator '.' cannot be applied to operand of type 'void'
+
+It built here and failed there on identical source, with the same SDK version in the
+workflow file. The reason is that the version in the workflow file is not the version that
+ran. **The runner has SDK 10.0.12 installed beside the 9.0.318 `setup-dotnet` installs, and
+with no `global.json` the build takes the higher one** - so CI was compiling this port as
+C# 14 while every local check compiled it as C# 13.
+
+Under C# 14 an array converts to `Span<T>`, which brings `MemoryExtensions.Reverse` - an
+in-place reverse returning `void` - into overload resolution ahead of `Enumerable.Reverse`.
+`Ranks.Percentiles` is a `float[]`, so `Ranks.Percentiles.Reverse().ToArray()` stopped
+meaning what it says.
+
+Here that is a compile error, which is the lucky case. **The same expression with its result
+discarded would silently start mutating the array in place instead of returning a reversed
+copy** - no diagnostic, changed behaviour. One call site in the linked sources was exposed;
+`WholeHistoryRating.cs:586` writes `.Select(x => x).Reverse()`, which reads like someone
+already met this and worked around it.
+
+Two fixes, because there are two problems:
+
+- The call site now says `Enumerable.Reverse(Ranks.Percentiles)` by name. Verified to compile
+  under **both** SDK 9 and SDK 10, and `db/compare-ratings.sh` confirms the ratings are
+  unchanged on both stacks - which is what that check is for.
+- `LangVersion` was `latest` in all three net9 projects, meaning "whichever C# the newest
+  SDK on this machine supports". It is now `13.0`. A project whose entire purpose is the
+  claim *compiles on .NET 9* cannot leave the language version to whatever is installed.
+  `tools/view-port-report.sh` likewise always builds through `tools/dotnet.sh`, because the
+  Razor compiler ships inside the SDK and its diagnostics would otherwise vary by runner.
+
+No `global.json` was added: it would apply to the Windows build too, on a machine I cannot
+test.
+
 ## Order of work
 
 1. Baseline the schema as one EF Core initial migration, and diff the result against
