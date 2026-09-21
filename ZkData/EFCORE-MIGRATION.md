@@ -734,6 +734,32 @@ including the controllers'. Fourth time this mechanism has produced a confident 
 in this port. The table above is measured through `tools/render-view.sh`, which uses only the
 views that compile.
 
+### Every remaining controller, and what stops it
+
+Four controllers link: `Mods`, `My`, `Charts`, `Forum`. The other nine were each measured
+through `tools/render-view.sh`, and none of them is waiting on a shim - each wants something
+that has to be decided or built.
+
+| controller | blocked on | kind |
+|---|---|---|
+| `Battles`, `Tourney` | `ZkLobbyServer` - `ReplayStorage`, and live `TourneyBattle` objects cast and mutated | **Phase 1's coupling**, reached from Phase 3 |
+| `Users`, `PlanetwarsAdmin` | `EntityFramework.Extensions` - `DbSet.Delete()`, `IQueryable.Update()` | EF6 batch operations; EF Core's `ExecuteDelete`/`ExecuteUpdate` are a different API |
+| `Clans`, `Maps`, and the two News controllers | `HttpPostedFileBase` | file upload; ASP.NET Core binds `IFormFile` |
+| `Maps` | `AutoRegistrator`, `ZkData.UnitSyncLib` | native interop with unitsync |
+| `Home` | `DotNetOpenAuth` | .NET Framework only, project discontinued |
+| `Admin` | `System.Data.SqlClient`, `Response.Write` | done - both solved here |
+
+**`HttpPostedFileBase` is the one worth naming as a trap.** It is an abstract class, and a shim
+of the same shape would compile: the actions take it as a parameter and read `InputStream`,
+`FileName`, `ContentLength`. But ASP.NET Core's model binder knows nothing about it, so those
+parameters would bind to null and every upload would silently do nothing. That is the
+`EntityFramework.Extensions` mistake again - compiles, then fails at runtime - so it is not
+shimmed. Four controllers change signature to `IFormFile` when the builds diverge.
+
+So the controller path is not blocked on effort. It is blocked on three decisions already
+named - the lobby-server split, EF Core's batch API, and divergence from the MVC 5 build -
+plus two libraries that need replacing outright.
+
 ### The next structural blocker is unobtrusive AJAX
 
 `ModsController` links, but `Mods/GameModesIndex.cshtml` still does not compile, and what it
