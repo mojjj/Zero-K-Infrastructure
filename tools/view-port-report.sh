@@ -13,17 +13,22 @@
 # It measures compilation, NOT rendering. A view that compiles can still throw on the first
 # request, and none of these has been rendered by anything.
 #
-# WHY IT COMPILES MORE THAN ONCE. The C# compiler stops binding method bodies once a
-# compilation has produced about a hundred errors. One build of all 116 views reaches that
-# easily - 66 fail on model types from the unported web project - and every view bound after
-# the limit reports nothing, which a naive report reads as "compiles". The first version of
-# this script did exactly that: a deliberately broken view sat in its "37 clean" without a
-# murmur.
+# WHY IT COMPILES MORE THAN ONCE. Roslyn does not bind method bodies at all if the
+# compilation has a declaration-level error. One build of all 116 views has 66 of them - a
+# view whose @model type is missing is a broken field declaration - so NO view's body is ever
+# bound, and every body-level mistake in the other 50 goes unreported. A report reads that
+# silence as "compiles". The first version of this script did exactly that, and a view
+# rewritten to call ThisTypeDoesNotExistAnywhere sat in its "37 clean" without a murmur.
+#
+# It is not an error-budget effect, which is what this comment used to claim. Two views are
+# enough: _ViewStart.cshtml alone reports its two CS1061s, and adding one view with a missing
+# @model type makes both disappear.
 #
 # So: one build of everything, which reliably yields the Razor diagnostics and the
-# declaration-level ones (a bad @model is a field declaration, bound before any body), then
-# a second pass over only the views that came back clean, in batches small enough to stay
-# under the limit.
+# declaration-level ones, then a second pass over only the views that came back clean - a set
+# with no declaration errors in it by construction, so bodies are bound and body errors are
+# reported. Batches keep the blast radius small if that assumption ever fails: a batch that
+# turns out to contain a declaration error is re-run one view at a time.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -81,7 +86,8 @@ PYEOF
 mapfile -t CANDIDATES < "$WORK/clean-after-pass1.txt"
 total=${#CANDIDATES[@]}
 for ((i = 0; i < total; i += BATCH)); do
-    keep=$(printf '%s\n' "${CANDIDATES[@]:i:BATCH}")
+    keep_arr=("${CANDIDATES[@]:i:BATCH}")
+    keep=$(printf '%s\n' "${keep_arr[@]}")
     build "$keep" "$WORK/batch.txt" || true
     # A batch that compiled nothing tells us nothing, and its silence would be read as every
     # view in it being clean. That is the same mistake twice, so it stops here.
@@ -90,7 +96,19 @@ for ((i = 0; i < total; i += BATCH)); do
         tail -10 "$WORK/batch.txt" >&2
         exit 2
     fi
-    cat "$WORK/batch.txt" >> "$WORK/pass2.txt"
+
+    # A declaration error anywhere in the batch means no body in it was bound, so every other
+    # view's silence is worthless. Should not happen - pass 1 reports declaration errors and
+    # these views had none - but the whole point of this rewrite is not to trust silence.
+    if grep -qE 'Zero-K\.info/Views/[^(]+\([0-9]+,[0-9]+\): error CS(0246|0234)' "$WORK/batch.txt"; then
+        echo "   batch has a declaration error; re-running its views one at a time" >&2
+        for view in "${keep_arr[@]}"; do
+            build "$view" "$WORK/single.txt" || true
+            cat "$WORK/single.txt" >> "$WORK/pass2.txt"
+        done
+    else
+        cat "$WORK/batch.txt" >> "$WORK/pass2.txt"
+    fi
 done
 rm -f "$PROPS"
 
