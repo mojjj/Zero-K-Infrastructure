@@ -145,6 +145,7 @@
     <Compile Include="AppCode\Global.cs" />
     <Compile Include="AppCode\GalaxyMapGeometry.cs" />
     <Compile Include="AppCode\HtmlHelperExtensions.cs" />
+    <Compile Include="AppCode\HtmlHelperExtensions.Portable.cs" />
     <Compile Include="AppCode\JsonRequest.cs" />
     <Compile Include="AppCode\NoCache.cs" />
     <Compile Include="AppCode\PostLinkExtensions.cs" />

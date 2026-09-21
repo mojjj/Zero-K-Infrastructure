@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
@@ -14,14 +14,6 @@ using ZkData;
 
 namespace System.Web.Mvc
 {
-    public enum StarType
-    {
-        RedStarSmall,
-        GreenStarSmall,
-        WhiteStarSmall,
-        RedSkull,
-        WhiteSkull
-    }
 
     public class SelectOption
     {
@@ -33,7 +25,7 @@ namespace System.Web.Mvc
     /// <para>Contains functions that return a <see cref="MvcHtmlString"/> for pretty display of things like accounts and clans</para>
     /// <para>The returned string is often also a link leading to the appropriate page, and has its own tooltip</para>
     /// </summary>
-    public static class HtmlHelperExtensions
+    public static partial class HtmlHelperExtensions
     {
         public static MvcHtmlString AccountAvatar(this HtmlHelper helper, Account account) {
             if (account.IsDeleted) return null;
@@ -781,31 +773,12 @@ namespace System.Web.Mvc
         }
 
 
-        public static string ToAgoString(this DateTime? utcDate) {
-            if (utcDate.HasValue) return ToAgoString(DateTime.UtcNow.Subtract(utcDate.Value));
-            else return "";
-        }
 
-        public static string ToAgoString(this DateTime utcDate) {
-            return ToAgoString(DateTime.UtcNow.Subtract(utcDate));
-        }
 
-        public static string ToAgoString(this TimeSpan timeSpan) {
-            if (timeSpan.TotalSeconds > 0) return string.Format("{0} ago", timeSpan.Duration().ToNiceString());
-            else return string.Format("in {0}", timeSpan.Duration().ToNiceString());
-        }
 
         /// <summary>
         /// Converts a <see cref="TimeSpan"/> to "X seconds/minutes/hours/days/months ago"
         /// </summary>
-        public static string ToNiceString(this TimeSpan timeSpan) {
-            if (timeSpan.TotalMinutes < 2) return string.Format("{0} seconds", (int)timeSpan.TotalSeconds);
-            if (timeSpan.TotalHours < 2) return string.Format("{0} minutes", (int)timeSpan.TotalMinutes);
-            if (timeSpan.TotalDays < 2) return string.Format("{0} hours", (int)timeSpan.TotalHours);
-            if (timeSpan.TotalDays < 60) return string.Format("{0} days", (int)timeSpan.TotalDays);
-            if (timeSpan.TotalDays < 365*2) return string.Format("{0} months", (int)(timeSpan.TotalDays / 30));
-            return string.Format("{0} years", (int)(timeSpan.TotalDays/365));
-        }
 
 
         public static MvcHtmlString EnumCheckboxesFor<TModel, TEnum>(this HtmlHelper<TModel> htmlHelper, Expression<Func<TModel, IList<TEnum>>> expression, IList<TEnum> hideList = null)

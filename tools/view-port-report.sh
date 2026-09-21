@@ -136,7 +136,14 @@ def classify(view):
     codes = {c for c, _ in found}
     if codes & RAZOR_LANGUAGE:
         return "razor-language"
-    if codes <= {"CS0246"} and all(any(u in msg for u in UNPORTED) for _, msg in found):
+    # ANY reference to a type from the unported web project puts the view here, even when it
+    # has other trouble as well. It used to require that EVERY error be one of those, which
+    # stopped being informative the moment a shim let binding get further: views that had
+    # reported one CS0246 began reporting four more errors behind it, and the bucket emptied
+    # while nothing about them had changed. A view that names a type the port does not have
+    # yet cannot compile until that type moves, whatever else is also wrong with it - and
+    # what else is wrong is not knowable until then.
+    if any(any(u in msg for u in UNPORTED) for _, msg in found):
         return "waiting-on-controllers"
     return "other"
 
@@ -153,7 +160,7 @@ print("# Razor views compiled against ASP.NET Core on .NET 9.")
 print("# GENERATED - run tools/view-port-report.sh --update.")
 print("#")
 print("# compiles               nothing stops this view today, verified in a small batch")
-print("# waiting-on-controllers only missing types from the unported web project")
+print("# waiting-on-controllers names a type from the unported web project; blocked on it")
 print("# razor-language         Razor itself rejects it; needs rewriting regardless")
 print("# other                  a package reference or an MVC 5 API")
 print()
