@@ -33,7 +33,14 @@ namespace ZeroKWeb.Host
                 return 2;
             }
 
-            var builder = WebApplication.CreateBuilder();
+            // The site's static content - img/, Scripts/, Styles/ - lives in Zero-K.info, and
+            // the layout reads it through Server.MapPath. Without this the layout throws on
+            // Directory.GetFiles("~/img/screenshots"), which is a missing web root rather than
+            // anything to do with the port.
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+            {
+                WebRootPath = FindSiteRoot(),
+            });
             builder.Logging.SetMinimumLevel(LogLevel.Warning);
             builder.WebHost.UseUrls(Url);
             builder.Services.AddControllersWithViews();
@@ -67,6 +74,20 @@ namespace ZeroKWeb.Host
             {
                 await app.StopAsync();
             }
+        }
+
+
+        /// <summary>The real site's folder, found by walking up from the binary.</summary>
+        private static string FindSiteRoot()
+        {
+            var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                var candidate = System.IO.Path.Combine(dir.FullName, "Zero-K.info");
+                if (System.IO.Directory.Exists(candidate)) return candidate;
+                dir = dir.Parent;
+            }
+            throw new System.IO.DirectoryNotFoundException("could not find Zero-K.info above " + AppContext.BaseDirectory);
         }
 
         private static async Task<int> CheckItServes()
@@ -103,15 +124,48 @@ namespace ZeroKWeb.Host
                     "Html.ActionLink resolved through routing to /Forum");
                 failures += Check(!html.Contains("@"), "no unprocessed Razor markers survived");
 
+                failures += await CheckItServesAPage(client);
+
                 Console.WriteLine();
                 if (failures == 0)
                 {
-                    Console.WriteLine("a Zero-K view is served over HTTP on .NET 9, through routing and a controller.");
+                    Console.WriteLine("a Zero-K page is served over HTTP on .NET 9, layout and all.");
                     return 0;
                 }
                 Console.WriteLine(failures + " check(s) failed.");
                 return 1;
             }
+        }
+
+
+        /// <summary>
+        /// A PAGE, not a view: a ViewResult runs _ViewStart, which picks up
+        /// Shared/_SiteLayout.cshtml, which pulls in TopMenu, LoginBar, the bundles and every
+        /// helper behind them. Home/NotLoggedIn.cshtml is the site's own view, unmodified.
+        /// </summary>
+        private static async Task<int> CheckItServesAPage(HttpClient client)
+        {
+            var response = await client.GetAsync(Url + "/Home/NotLoggedIn");
+            var html = await response.Content.ReadAsStringAsync();
+
+            Console.WriteLine();
+            Console.WriteLine("GET /Home/NotLoggedIn -> " + (int)response.StatusCode
+                              + ", " + html.Length + " bytes");
+
+            var failures = 0;
+            failures += Check(response.IsSuccessStatusCode, "the request succeeded");
+            failures += Check(html.Contains("You are not logged in"), "the view's own content is there");
+            // Page.Title is the MVC 5 ambient the shim maps onto ViewBag; the layout reads it
+            // back into <title>, so this is the shim working across a view/layout boundary.
+            failures += Check(html.Contains("Not logged in"), "Page.Title reached the layout's <title>");
+            failures += Check(html.Contains("<html") && html.Contains("</html>"), "it is a whole document");
+            // The bundling shim, standing in for System.Web.Optimization.
+            failures += Check(html.Contains("/Scripts/site_main.js"), "the script bundle rendered its files");
+            failures += Check(html.Contains("/Styles/style.css"), "the style bundle rendered its files");
+            // TopMenu and LoginBar are partials the layout pulls in; both were blocked until now.
+            failures += Check(html.Contains("PlanetWars"), "TopMenu rendered inside the layout");
+            failures += Check(!html.Contains("@"), "no unprocessed Razor markers survived");
+            return failures;
         }
 
         private static int Check(bool ok, string what)
