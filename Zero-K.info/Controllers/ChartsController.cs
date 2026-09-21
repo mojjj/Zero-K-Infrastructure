@@ -49,7 +49,7 @@ namespace ZeroKWeb.Controllers
         public IList<GraphPoint> GetDailyValues(DateTime fromTime, DateTime toTime)
         {
             var db = new ZkDataContext();
-            db.Database.CommandTimeout = 600;
+            db.Database.SetCommandTimeoutCompat(600);
 
             var selected = (from sbp in db.SpringBattlePlayers.Where(x => !x.IsSpectator)
                             join sb in db.SpringBattles on sbp.SpringBattleID equals sb.SpringBattleID
@@ -80,7 +80,7 @@ namespace ZeroKWeb.Controllers
         public IList<GraphPoint> GetDailyValues(DateTime fromTime, DateTime toTime)
         {
             var db = new ZkDataContext();
-            db.Database.CommandTimeout = 600;
+            db.Database.SetCommandTimeoutCompat(600);
 
             var selected = (from sbp in db.SpringBattlePlayers.Where(x => !x.IsSpectator)
                             join sb in db.SpringBattles on sbp.SpringBattleID equals sb.SpringBattleID
@@ -118,7 +118,7 @@ namespace ZeroKWeb.Controllers
         public IList<GraphPoint> GetDailyValues(DateTime fromTime, DateTime toTime)
         {
             var db = new ZkDataContext();
-            db.Database.CommandTimeout = 600;
+            db.Database.SetCommandTimeoutCompat(600);
 
             var selected = (from sbp in db.SpringBattlePlayers.Where(x => !x.IsSpectator)
                             join sb in db.SpringBattles on sbp.SpringBattleID equals sb.SpringBattleID
@@ -150,7 +150,7 @@ namespace ZeroKWeb.Controllers
         public IList<GraphPoint> GetDailyValues(DateTime fromTime, DateTime toTime)
         {
             var db = new ZkDataContext();
-            db.Database.CommandTimeout = 600;
+            db.Database.SetCommandTimeoutCompat(600);
 
             var selected = db.SpringBattlePlayers.Where(x => !x.IsSpectator).Select(x => new { x.AccountID, x.SpringBattle.StartTime }).Where(x => x.StartTime >= fromTime && x.StartTime <= toTime).ToList();
 
@@ -176,7 +176,7 @@ namespace ZeroKWeb.Controllers
         public IList<GraphPoint> GetDailyValues(DateTime fromTime, DateTime toTime)
         {
             var db = new ZkDataContext();
-            db.Database.CommandTimeout = 600;
+            db.Database.SetCommandTimeoutCompat(600);
 
             var selected = db.SpringBattlePlayers.Select(x => new { x.AccountID, x.SpringBattle.StartTime }).Where(x => x.StartTime >= fromTime && x.StartTime <= toTime).ToList();
 
@@ -202,7 +202,7 @@ namespace ZeroKWeb.Controllers
         public IList<GraphPoint> GetDailyValues(DateTime fromTime, DateTime toTime)
         {
             var db = new ZkDataContext();
-            db.Database.CommandTimeout = 600;
+            db.Database.SetCommandTimeoutCompat(600);
 
             var selected = db.SpringBattlePlayers.Where(x => !x.IsSpectator && x.SpringBattle.IsMatchMaker).Select(x => new { x.AccountID, x.SpringBattle.StartTime, x.SpringBattle.Duration }).Where(x => x.StartTime >= fromTime && x.StartTime <= toTime).ToList();
 
@@ -224,7 +224,7 @@ namespace ZeroKWeb.Controllers
         public IList<GraphPoint> GetDailyValues(DateTime fromTime, DateTime toTime)
         {
             var db = new ZkDataContext();
-            db.Database.CommandTimeout = 600;
+            db.Database.SetCommandTimeoutCompat(600);
 
             var selected = db.SpringBattlePlayers.Where(x => !x.IsSpectator).Select(x => new { x.AccountID, x.SpringBattle.StartTime, x.SpringBattle.Duration }).Where(x => x.StartTime >= fromTime && x.StartTime <= toTime).ToList();
 
@@ -246,7 +246,7 @@ namespace ZeroKWeb.Controllers
         public IList<GraphPoint> GetDailyValues(DateTime fromTime, DateTime toTime)
         {
             var db = new ZkDataContext();
-            db.Database.CommandTimeout = 600;
+            db.Database.SetCommandTimeoutCompat(600);
 
             var selected = db.SpringBattles.Select(x => new { x.PlayerCount, x.StartTime, x.Duration }).Where(x => x.StartTime >= fromTime && x.StartTime <= toTime).ToList();
 
@@ -268,7 +268,7 @@ namespace ZeroKWeb.Controllers
         public IList<GraphPoint> GetDailyValues(DateTime fromTime, DateTime toTime)
         {
             var db = new ZkDataContext();
-            db.Database.CommandTimeout = 600;
+            db.Database.SetCommandTimeoutCompat(600);
 
             var selected = (from sbp in db.SpringBattlePlayers.Where(x => !x.IsSpectator)
                             join sb in db.SpringBattles on sbp.SpringBattleID equals sb.SpringBattleID

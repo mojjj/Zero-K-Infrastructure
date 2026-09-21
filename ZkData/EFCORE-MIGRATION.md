@@ -700,6 +700,31 @@ Two of those are the same finding: **`BattlesController` and `TourneyController`
 `ZkLobbyServer`**, which is Phase 1's subject. An empty namespace would let both compile while
 hiding exactly the coupling Phase 1 exists to remove, so neither is shimmed.
 
+### A third controller, and a shim that would have lied
+
+`ChartsController` links. It wanted `MemCache` - 35 lines of `ConcurrentDictionary` in the
+web project, linked as it stands - and `db.Database.CommandTimeout = 600`, which is EF6's
+settable property. `SetCommandTimeoutCompat` already exists in both `ZkData/DbCompat.cs` and
+its EF Core twin for exactly this, so the nine call sites move onto it. Another verifiable
+controller edit.
+
+**`PlanetwarsAdminController` was nearly given a shim that would have lied.** Its
+`using EntityFramework.Extensions` passes the same test every dead using here has passed - one
+occurrence, the using line itself - so it was shimmed as an empty namespace. It is not dead:
+that namespace supplies `DbSet<T>.Delete()` and `IQueryable<T>.Update()`, EF6's batch
+operations, which the controller calls six times **without naming the namespace again**.
+
+The empty shim compiled. It would have thrown at runtime. EF Core's `ExecuteDelete` and
+`ExecuteUpdate` are a different API, so that controller needs porting rather than shimming,
+and the shim is removed with the reason written where the next person will look.
+
+That makes two namespaces deliberately not shimmed - this and `ZkLobbyServer` - and the test
+that distinguishes them from the seven that are is not "how many times does the name appear"
+but "does anything in the file use what the namespace provides".
+
+    compiles                 50 -> 51
+    waiting-on-controllers   25 -> 24
+
 ### Measuring controllers, masked again
 
 The first pass at that table said `AdminController` had **zero** errors. It has four. The
@@ -800,12 +825,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **50** | compile against ASP.NET Core today |
-| **25** | name a type from the unported web project; blocked on it whatever else is also wrong |
+| **51** | compile against ASP.NET Core today |
+| **24** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
 | **32** | something else missing |
 
-**Read the 50 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
+**Read the 51 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.
