@@ -493,6 +493,39 @@ looks: with `Forum` as the default, `Html.ActionLink("Forum index", "Index")` re
 because routing elides the defaults - correct, and indistinguishable from a broken link. The
 first version of this check asserted the wrong URL for exactly that reason.
 
+### Chasing the layout, and what stops it
+
+Serving a *page* rather than a view means `Shared/_SiteLayout.cshtml`, and it turned out to
+be four steps deep. Three helpers that emit links were ported - `PrintFaction`, `PrintClan`,
+`PrintDropships` - which need URL generation; MVC 5 reached it through another ambient
+static, and here it comes from the helper's own `ViewContext`, so they need no ambient at
+all.
+
+`System.Web.Optimization` is .NET Framework only and has no successor, which §3 lists as
+"Replace". The shim emits each bundle's files individually and unminified, in the order
+`BundleConfig` declares them - which is exactly what the real bundler does in debug mode, so
+it is a faithful development answer and deliberately not a production one: 13 script tags
+where the site serves one. Whoever chooses the build step replaces it.
+
+`_SiteLayout` also opens with `@using WebGrease.Configuration` and never mentions WebGrease
+again. One dead line, and because a `using` of a missing namespace is a *declaration* error,
+it was suppressing every body error in the layout, TopMenu and LoginBar - so all three looked
+one fix away when they were not. Deleting the line is the right fix and is not available
+from here: nothing in this repository compiles MVC 5 views, so the removal cannot be shown to
+be safe. The namespace is supplied instead.
+
+**With the masking gone, the layout chain is blocked on something that is not a shim.**
+
+    TopMenu.cshtml       Html.RenderAction    a child action - no ASP.NET Core equivalent
+    _SiteLayout.cshtml   Server.MapPath, Request.Params, System.IO usings
+    LoginBar.cshtml      Request.Url, Html.PrintAccount
+
+`Html.RenderAction` is the one that matters. ASP.NET Core removed child actions and replaced
+them with view components, which is a different shape: a class, a `Views/Shared/Components/`
+folder, and a changed call site. **The site layout cannot render until a view in it is
+rewritten**, so the first genuine view rewrite of this port is now identified rather than
+guessed at - and it sits on the page every other page inherits.
+
 ## A defect the port found
 
 `CampaignEvents` had
@@ -575,12 +608,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **25** | compile against ASP.NET Core today |
+| **27** | compile against ASP.NET Core today |
 | **34** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **48** | something else missing, and it is overwhelmingly one thing - see below |
+| **46** | something else missing, and it is overwhelmingly one thing - see below |
 
-**Read the 25 carefully: it is not 37.** The first version of this report said 37, and 37
+**Read the 27 carefully: it is not 37.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.

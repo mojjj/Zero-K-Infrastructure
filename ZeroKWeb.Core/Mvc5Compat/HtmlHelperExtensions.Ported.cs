@@ -2,7 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Microsoft.AspNetCore.Html;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.Extensions.DependencyInjection;
+using ZeroKWeb;
 using ZkData;
 
 namespace System.Web.Mvc
@@ -89,27 +93,82 @@ namespace System.Web.Mvc
         }
 
         /// <summary>
-        /// The original is <c>helper.Encode(text).Replace("\n", "&lt;br/&gt;")</c>, and that
-        /// does not survive the move.
+        /// <c>helper.Encode(text).Replace("\n", "&lt;br/&gt;")</c>, with the encoder named
+        /// rather than inherited - and that is the whole point.
         ///
-        /// MVC 5's Encode is HttpUtility.HtmlEncode, which leaves a newline alone, so the
-        /// Replace finds it. ASP.NET Core's encoder escapes it to <c>&amp;#xA;</c> first, so
-        /// the Replace matches nothing and every line break disappears - silently, in forum
-        /// posts and descriptions, with no error anywhere. Splitting before encoding gives
-        /// the original's output back.
+        /// MVC 5's <c>HtmlHelper.Encode</c> is <c>HttpUtility.HtmlEncode</c>. ASP.NET Core's
+        /// <c>IHtmlHelper.Encode</c> is not the same function: it escapes a newline to
+        /// <c>&amp;#xA;</c>, so the Replace matches nothing and every line break disappears -
+        /// silently, in forum posts and descriptions. It also escapes non-ASCII, so a player
+        /// called "Müller" would come out as "M&amp;#xFC;ller".
         ///
-        /// A related difference is left alone deliberately: ASP.NET Core's encoder also
-        /// escapes non-ASCII, so a player called "Müller" comes out as "M&amp;#xFC;ller"
-        /// where MVC 5 wrote it through. Browsers render both identically, and chasing it
-        /// would mean configuring a custom HtmlEncoder for the whole application - a
-        /// decision, not a transcription.
+        /// <c>WebUtility.HtmlEncode</c> is HttpUtility.HtmlEncode's actual counterpart on
+        /// .NET 9 - same five characters, nothing else - so naming it restores the original
+        /// byte for byte and lets the method keep its original shape.
         /// </summary>
         public static IHtmlContent PrintLines(this IHtmlHelper helper, string text)
+            => new HtmlString(System.Net.WebUtility.HtmlEncode(text).Replace("\n", "<br/>"));
+
+
+        /// <summary>
+        /// The link helpers need URL generation, which the formatters above do not.
+        ///
+        /// MVC 5 reached it through <c>Global.UrlHelper()</c> - another ambient static. Here
+        /// it comes from the helper's own ViewContext, which is where ASP.NET Core keeps it,
+        /// so these need no ambient at all.
+        /// </summary>
+        private static IUrlHelper Url(IHtmlHelper helper)
         {
-            if (text == null) return new HtmlString(string.Empty);
-            var lines = text.Split('\n');
-            for (var i = 0; i < lines.Length; i++) lines[i] = helper.Encode(lines[i]);
-            return new HtmlString(string.Join("<br/>", lines));
+            var context = helper.ViewContext;
+            var factory = context.HttpContext.RequestServices.GetRequiredService<IUrlHelperFactory>();
+            return factory.GetUrlHelper(context);
+        }
+
+        public static IHtmlContent PrintDropships(this IHtmlHelper helper, double? count, Faction faction)
+            => new HtmlString(string.Format("<span>{0}<img src='{1}' class='icon20'/></span>",
+                Math.Floor(count ?? 0), faction.GetShipImageUrl()));
+
+        public static IHtmlContent PrintDropships(this IHtmlHelper helper, Account account)
+        {
+            if (account == null || account.Faction == null) return null;
+            return new HtmlString(string.Format(
+                "<span nicetitle='Dropships available to you/owned by faction'><img src='{0}' class='icon20'/>{1} / {2}</span>",
+                account.Faction.GetShipImageUrl(), Math.Floor(account.GetDropshipsAvailable()),
+                Math.Floor(account.Faction.Dropships)));
+        }
+
+        public static IHtmlContent PrintFaction(this IHtmlHelper helper, Faction fac, bool big = true)
+        {
+            if (fac == null) return new HtmlString("");
+            var url = Url(helper);
+            if (big)
+                return new HtmlString(string.Format("<a href='{1}' nicetitle='$faction${2}'><img src='{0}'/></a>",
+                    fac.GetImageUrl(), url.Action("Detail", "Factions", new { id = fac.FactionID }), fac.FactionID));
+
+            // two spaces before style= in the original, kept
+            return new HtmlString(string.Format(
+                "<a href='{3}' nicetitle='$faction${4}'><span style='color:{0}'><img src='{1}'  style='width:16px;height:16px'/>{2}</span></a>",
+                fac.Color, fac.GetImageUrl(), fac.Shortcut,
+                url.Action("Detail", "Factions", new { id = fac.FactionID }), fac.FactionID));
+        }
+
+        public static IHtmlContent PrintClan(this IHtmlHelper helper, Clan clan, bool colorize = true, bool big = false)
+        {
+            var url = Url(helper);
+            if (clan == null)
+                return new HtmlString(string.Format("<a href='{0}'>No Clan</a>", url.Action("Index", "Clans")));
+
+            var color = Clan.ClanColor(clan, Global.ClanID);
+            if (string.IsNullOrEmpty(color)) color = "#B0D0C0";
+
+            if (big)
+                return new HtmlString(string.Format("<a href='{1}' nicetitle='$clan${2}'><img width='64' src='{0}'/></a>",
+                    clan.GetImageUrl(), url.Action("Detail", "Clans", new { id = clan.ClanID }), clan.ClanID));
+
+            return new HtmlString(string.Format(
+                "<a href='{0}' nicetitle='$clan${4}'><img src='{1}' width='16'><span style='color:{2}'>{3}</span></a>",
+                url.Action("Detail", "Clans", new { id = clan.ClanID }), clan.GetImageUrl(),
+                colorize ? color : "", System.Net.WebUtility.HtmlEncode(clan.Shortcut), clan.ClanID));
         }
 
         public static IHtmlContent PrintLines(this IHtmlHelper helper, IEnumerable<object> lines)
