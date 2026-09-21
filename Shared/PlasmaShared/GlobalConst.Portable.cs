@@ -61,5 +61,12 @@ namespace ZkData
         public const float LadderUpdatePeriod = 1; //Ladder is fully updated every X hours
         public const float LadderEloClassicEloK = 32f; //K value of classic elo
         public const float LadderEloSmoothingFactor = 0.8f; //1 for change as fast as whr, 0 for no change
+
+        // Wanted by Razor views rather than by the rating core: moved here from
+        // GlobalConst.cs so the .NET 9 projects can see them. Same class, same namespace,
+        // so nothing that already used them notices.
+        public const bool CanChangeClanFaction = true;
+        public const string MetalIcon = "/img/luaui/ibeam.png";
+        public const string EnergyIcon = "/img/luaui/energy.png";
     }
 }

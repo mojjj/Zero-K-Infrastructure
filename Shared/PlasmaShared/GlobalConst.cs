@@ -156,12 +156,9 @@ namespace ZkData
         public const int AttackPointsForDefeat = 1;
         public const int FactionChannelMinLevel = 2;
         public const bool RotatePWMaps = false;
-        public const bool CanChangeClanFaction = true;
         public const double MaxPwEloDifference = 120;
 
 
-        public const string MetalIcon = "/img/luaui/ibeam.png";
-        public const string EnergyIcon = "/img/luaui/energy.png";
         public const string BomberIcon = "/img/fleets/neutral.png";
         public const string WarpIcon = "/img/warpcore.png";
 

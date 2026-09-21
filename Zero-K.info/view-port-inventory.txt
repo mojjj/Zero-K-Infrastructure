@@ -7,10 +7,10 @@
 # other                  a package reference or an MVC 5 API
 
 total 116
-compiles                 14
+compiles                 15
 waiting-on-controllers   66
 razor-language           9
-other                    27
+other                    26
 
 waiting-on-controllers   Admin/TraceLogs.cshtml  [CS0246]
 waiting-on-controllers   Battles/BattleDetail.cshtml  [CS0246]
@@ -87,10 +87,10 @@ razor-language           Lobby/LobbyChatHistory.cshtml  [CS0246 RZ1002]
 razor-language           Lobby/LobbyChatMessages.cshtml  [CS0246 RZ1002]
 razor-language           PlanetwarsAdmin/PlanetwarsAdminIndex.cshtml  [CS0246 RZ1002]
 razor-language           PostHistory/PostHistoryIndex.cshtml  [CS0246 RZ1002]
-other                    Clans/Create.cshtml  [CS0117 CS1061]
+other                    Clans/Create.cshtml  [CS1061]
 other                    Clans/Tooltip.cshtml  [CS1061]
 other                    Download/DownloadIndex.cshtml  [CS0103 CS1061]
-other                    Factions/FactionTreatyDefinition.cshtml  [CS0117 CS1061]
+other                    Factions/FactionTreatyDefinition.cshtml  [CS1061]
 other                    Factions/Index.cshtml  [CS0103 CS1061]
 other                    Forum/DeletePostPrompt.cshtml  [CS0103 CS1061]
 other                    Forum/Preview.cshtml  [CS1061]
@@ -104,9 +104,8 @@ other                    Poll/PollVoteList.cshtml  [CS1061]
 other                    PostHistory/ViewEntry.cshtml  [CS1061]
 other                    Shared/DisplayTemplates/Diff.cshtml  [CS0246]
 other                    Shared/DisplayTemplates/DiffPiece.cshtml  [CS0246]
-other                    Shared/DisplayTemplates/StructureType.cshtml  [CS0117 CS1061]
+other                    Shared/DisplayTemplates/StructureType.cshtml  [CS1061]
 other                    Shared/DisplayTemplates/TreatyEffect.cshtml  [CS1061]
-other                    Shared/EditorTemplates/Enum.cshtml  [CS1061]
 other                    Shared/InfluenceList.cshtml  [CS1061]
 other                    Shared/InfluenceListShort.cshtml  [CS1061]
 other                    Shared/PlanetDropships.cshtml  [CS1061]
