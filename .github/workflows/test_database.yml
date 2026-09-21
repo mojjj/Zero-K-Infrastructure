@@ -108,6 +108,14 @@ jobs:
       - name: Compare the ratings the two stacks compute
         run: ./db/compare-ratings.sh
 
+      # Compilation is not rendering. ZeroKWeb.Core proves the views compile; this renders
+      # one on .NET 9 with a row read through EF Core and checks the HTML against the row.
+      # Needs the database, which is why it lives in this workflow rather than the portable one.
+      - name: Render a view on .NET 9
+        env:
+          ZK_CONNECTION_STRING: "Data Source=127.0.0.1,14330;Initial Catalog=zk_test;User ID=sa;Password=ZkLocal!Dev2026;MultipleActiveResultSets=true;TrustServerCertificate=true"
+        run: ./tools/render-view.sh
+
       - name: SQL Server log
         if: failure()
         run: docker logs zk-db --tail 80

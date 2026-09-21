@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Renders a Zero-K Razor view on .NET 9, with a model read out of the database through
+    EF Core, and checks the HTML that comes out.
+
+    ZeroKWeb.Core answers "does it compile". This answers the question that one cannot: a
+    view that compiles can still throw on its first request, and until now nothing in this
+    repository had rendered one - not this harness's ancestor, not CI, not the Windows
+    build, which compiles views but records nothing.
+
+        ./tools/render-view.sh
+
+    It can only include the views that compile, because a project that does not build
+    produces no assembly to run. The set comes from Zero-K.info/view-port-inventory.txt,
+    generated into view-set.props by the script, so it grows by itself as views are fixed
+    rather than needing a list kept by hand.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <LangVersion>13.0</LangVersion>
+    <RootNamespace>ZeroKWeb.Render</RootNamespace>
+    <NoWarn>$(NoWarn);CS0618;CS0649;CS0168;CS1998;CS0108;CS0114;CS0169;CS0067</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ZkData.Core\ZkData.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Zero-K.info\Views\**\*.cshtml" Link="Views\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Removes every view the inventory says does not compile; written by tools/render-view.sh. -->
+  <Import Project="view-set.props" Condition="Exists('view-set.props')" />
+
+</Project>

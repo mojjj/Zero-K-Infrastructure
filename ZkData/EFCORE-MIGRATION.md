@@ -573,10 +573,36 @@ the same way - silence read as success - and both now fail loudly instead. A bat
 compiles nothing exits 2, and a view reported clean without having been re-batched is counted
 under `UNVERIFIED` rather than under `compiles`.
 
+### One of them now renders
+
+`ZeroKWeb.Render` takes the other half of that: it renders `Maps/MapTags.cshtml` on .NET 9
+with a `Resource` read out of the fixture through EF Core, and checks the HTML against the
+row it came from.
+
+    ZK_CONNECTION_STRING=...zk_test ./tools/render-view.sh
+
+`MapTags` was chosen because it is the plainest of the 14 that compile - it takes a
+`ZkData.Resource`, sets its own layout, calls no helper from the unported web project, and
+its whole output is decided by the model. What this proves is the **seam**, not the view: a
+row read through EF Core reaches the Razor engine on .NET 9 and comes back as HTML that
+depends on that row's values.
+
+Five maps are rendered, not one. A view that ignored its model entirely would still satisfy a
+single-row check if the expected strings happened to sit in the template, so the harness also
+asserts that rows differing in any field the view reads produce different HTML, and rows
+agreeing on all of them produce identical HTML. That check earned its place immediately by
+failing - against a correct view, because the first version of the key left out
+`MapIsSpecial` and `MapIsAssymetrical`.
+
+The project can only contain the views that compile, since one that does not build produces
+no assembly to run. That set is generated from the committed inventory rather than listed by
+hand, so it grows on its own as views are fixed.
+
 Two things this does **not** establish, and they matter:
 
-- **It measures compilation, not rendering.** None of these views has been rendered by
-  anything. A view that compiles can still throw on its first request.
+- **One view is not 116.** The other 102 have never been rendered, and the 14 that compile
+  are the easy ones by construction. A view that compiles can still throw on its first
+  request.
 - **It does not clear Phase 0's edits.** All nine views using the `PostLink` helper are
   blocked, because the helper itself lives in the unported web project. The report says *why*
   they are unverified; it does not verify them.
