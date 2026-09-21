@@ -7,16 +7,15 @@
 # other                  a package reference or an MVC 5 API
 
 total 116
-compiles                 50
-waiting-on-controllers   25
+compiles                 51
+waiting-on-controllers   24
 razor-language           9
 other                    32
 
 waiting-on-controllers   Admin/TraceLogs.cshtml  [CS0234]
 waiting-on-controllers   Battles/BattleIndex.cshtml  [CS0234]
 waiting-on-controllers   Battles/BattleTileList.cshtml  [CS0234]
-waiting-on-controllers   Charts/ChartsIndex.cshtml  [CS0234]
-waiting-on-controllers   Charts/ChartsRatings.cshtml  [CS0234]
+waiting-on-controllers   Charts/ChartsRatings.cshtml  [CS1061]
 waiting-on-controllers   Forum/NewPost.cshtml  [CS0234]
 waiting-on-controllers   Forum/PostList.cshtml  [CS0234]
 waiting-on-controllers   Forum/SearchResults.cshtml  [CS0234]
