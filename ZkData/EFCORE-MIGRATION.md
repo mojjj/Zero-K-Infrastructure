@@ -639,6 +639,48 @@ Nothing new is needed to catch this - `tools/render-view.sh` and `tools/run-host
 exactly those projects and both run in CI. What is needed is the habit: **after touching a
 shim or linking new code, run those two before believing the inventory.**
 
+## The first controller
+
+The 34 views in `waiting-on-controllers` do not want controller *logic* - they want the view
+models declared inside controllers, and `ZeroKWeb.Models.CommentList`. So the first controller
+port is `ModsController`, 147 lines and the smallest, linked whole rather than rewritten.
+
+It needed one thing: `[Auth]`.
+
+**`AuthAttribute` is now ported, and it is the first authorization code in this port.** The
+original extends MVC 5's `AuthorizeAttribute` and does two things - send an unauthenticated
+visitor to `Home/NotLoggedIn` with a `ReturnUrl`, and answer 403 when a `Role` is named and
+the account does not hold it. ASP.NET Core has no `AuthorizeAttribute` of that shape, so the
+same two decisions are written against `IAuthorizationFilter`, in the same order, walking the
+`AdminLevel` flags the same way.
+
+It **fails closed**: with no authentication middleware, `Global.Account` is null, so every
+`[Auth]` action redirects - which is what the original does for an anonymous visitor, not a
+special case invented here.
+
+The two earlier appearances of authorization stay as they were, for reasons that have not
+changed: `Global` still reads the account out of `HttpContext.Items` because nothing populates
+it, and child actions still throw rather than run an action whose filters would be skipped.
+
+    compiles                 46 -> 47
+    waiting-on-controllers   34 -> 29
+
+One conflict had to be settled. Controllers write `db.Entry(x).State = EntityState.Added`;
+EF Core's setter wants EF Core's enum, while `using System.Data.Entity` finds `ZkData.Core`'s
+shim enum, and two structurally identical enums are still two types. The alias is scoped to
+the web port projects rather than fixed in `ZkData.Core`, because that shim exists for entity
+code comparing `entry.State == EntityState.Modified` against `ZkDataContext.EntityEntry`,
+whose `State` really is the EF6-shaped type. Both readings are right in their own project.
+
+### The next structural blocker is unobtrusive AJAX
+
+`ModsController` links, but `Mods/GameModesIndex.cshtml` still does not compile, and what it
+wants is `Ajax`, `Global.GetAjaxOptions`, `GridHelpers` and `UniGrid<>` - MVC 5's unobtrusive
+AJAX helpers and the site's grid built on them. ASP.NET Core removed that surface entirely.
+
+**19 views use it.** Like child actions, it is a rewrite rather than a shim, and like child
+actions the rewrite cannot be shared with the MVC 5 build.
+
 ## A defect the port found
 
 `CampaignEvents` had
@@ -721,12 +763,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **46** | compile against ASP.NET Core today |
-| **34** | name a type from the unported web project; blocked on it whatever else is also wrong |
+| **47** | compile against ASP.NET Core today |
+| **29** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **27** | something else missing |
+| **31** | something else missing |
 
-**Read the 46 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
+**Read the 47 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.

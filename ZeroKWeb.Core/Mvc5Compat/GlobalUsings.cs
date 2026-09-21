@@ -12,3 +12,19 @@ global using HtmlHelper = Microsoft.AspNetCore.Mvc.Rendering.IHtmlHelper;
 // namespace in scope the linked files see only the interface's own members and fail with
 // "no argument given for 'fragment'" on what looks like a perfectly ordinary ActionLink.
 global using Microsoft.AspNetCore.Mvc.Rendering;
+
+// MVC 5's Controller, ActionResult, ViewResult, [HttpPost] and the rest live in
+// System.Web.Mvc; ASP.NET Core's carry the same names in Microsoft.AspNetCore.Mvc. Bringing
+// that namespace in globally lets a linked controller find them, and the shim namespace
+// System.Web.Mvc deliberately defines none of those names, so nothing is ambiguous.
+global using Microsoft.AspNetCore.Mvc;
+
+// Controllers write `db.Entry(x).State = EntityState.Added`. EF Core's Entry().State wants
+// EF Core's enum; `using System.Data.Entity` finds ZkData.Core's shim enum instead, and two
+// structurally identical enums are still two types (CS0266).
+//
+// Scoped here rather than fixed in ZkData.Core: that shim exists because ENTITY code
+// compares `entry.State == EntityState.Modified` against ZkDataContext.EntityEntry, whose
+// State really is the EF6-shaped type. Both readings are right in their own project, and a
+// global alias in this one settles it for linked controllers without touching that.
+global using EntityState = Microsoft.EntityFrameworkCore.EntityState;

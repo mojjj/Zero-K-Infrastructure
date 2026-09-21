@@ -43,6 +43,8 @@
     <!-- already pure and standalone: linked as it stands, no split needed -->
     <Compile Include="..\Zero-K.info\AppCode\GalaxyMapGeometry.cs" Link="Linked\GalaxyMapGeometry.cs" />
     <Compile Include="..\Zero-K.info\ForumParser\**\*.cs" Link="Linked\ForumParser\%(RecursiveDir)%(Filename).cs" />
+    <Compile Include="..\Zero-K.info\Models\CommentList.cs" Link="Linked\Models\CommentList.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\ModsController.cs" Link="Linked\Controllers\ModsController.cs" />
     <Compile Include="..\ZeroKWeb.Core\Mvc5Compat\*.cs" Link="Linked\%(Filename).cs" />
   </ItemGroup>
 
