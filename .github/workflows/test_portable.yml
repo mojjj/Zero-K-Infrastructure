@@ -41,6 +41,13 @@ jobs:
           --logger "trx;LogFileName=test-results.trx"
           --results-directory TestResults
 
+      # The 117 Razor views have never been compiled by anything in this repository - mono
+      # ships no aspnet_compiler.exe, so tools/build-website.sh covers C# only. This
+      # compiles them against ASP.NET Core and fails when the inventory moves in either
+      # direction, so a view that starts or stops compiling is visible on the pull request.
+      - name: Check the Razor view port inventory
+        run: ./tools/view-port-report.sh --check
+
       - name: Test report
         # run even if the tests failed, but not for a PR from a fork
         if: (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request') && (success() || failure())

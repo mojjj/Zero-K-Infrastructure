@@ -523,6 +523,44 @@ The errors that were outstanding before this, now cleared:
 That last one is where the two blockers meet: an entity class that cannot reach .NET 9
 because it resizes an image. It is exactly what `IImageProcessor` exists for.
 
+## The views, measured
+
+`ZkData.Core` is the data half of Phase 3. The other half is MVC 5 → ASP.NET Core, and its
+largest unknown was the views: **nothing in this repository had ever compiled one.** Mono
+ships no `aspnet_compiler.exe`, so `tools/build-website.sh` checks C# only; the Windows
+runner compiles them but records nothing. Phase 0 edited 11 views and Phase 5 rewrote the
+galaxy map, both unverified.
+
+`ZeroKWeb.Core` does for the views what `Tests.Portable` did for the code - links the real
+files, compiles them on .NET 9, and turns the failures into a number:
+
+    ./tools/view-port-report.sh            print the inventory
+    ./tools/view-port-report.sh --check    fail if it no longer matches the committed one
+
+Of 116 views under `Zero-K.info/Views`:
+
+| | |
+|---|---|
+| **37** | compile against ASP.NET Core today, with only `ZkData.Core` referenced |
+| **66** | fail only on types from the unported web project - waiting on their controllers, not view problems |
+| **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
+| **4** | a package reference or an MVC 5 API - `DiffPlex`, `WebGrease` in `_SiteLayout`, `System.Web.Mvc` |
+
+**The views are in better shape than the fear suggested.** The view-specific work is nine
+files plus the layout's bundling call; the other 66 are fallout from controllers that have
+not moved yet and should resolve when they do.
+
+Two things this does **not** establish, and they matter:
+
+- **It measures compilation, not rendering.** None of these views has been rendered by
+  anything. A view that compiles can still throw on its first request.
+- **It does not clear Phase 0's edits.** All nine views using the `PostLink` helper are in
+  the blocked 66, because the helper itself lives in the unported web project. The report
+  says *why* they are unverified; it does not verify them.
+
+`_ViewStart.cshtml` is worth singling out, because every view runs through it and it uses
+`ViewContext.IsChildAction` and `Request.IsAjaxRequest()` - both removed in ASP.NET Core.
+
 ## Order of work
 
 1. Baseline the schema as one EF Core initial migration, and diff the result against
