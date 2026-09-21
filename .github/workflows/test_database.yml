@@ -116,6 +116,13 @@ jobs:
           ZK_CONNECTION_STRING: "Data Source=127.0.0.1,14330;Initial Catalog=zk_test;User ID=sa;Password=ZkLocal!Dev2026;MultipleActiveResultSets=true;TrustServerCertificate=true"
         run: ./tools/render-view.sh
 
+      # Routing, a controller and a request - none of which the other two harnesses have,
+      # and all of which the views need: they are full of Html.ActionLink.
+      - name: Serve a view over HTTP on .NET 9
+        env:
+          ZK_CONNECTION_STRING: "Data Source=127.0.0.1,14330;Initial Catalog=zk_test;User ID=sa;Password=ZkLocal!Dev2026;MultipleActiveResultSets=true;TrustServerCertificate=true"
+        run: ./tools/run-host.sh
+
       - name: SQL Server log
         if: failure()
         run: docker logs zk-db --tail 80
