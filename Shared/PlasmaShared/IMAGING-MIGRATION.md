@@ -83,6 +83,46 @@ height map through. It does two things wrong, both preserved for now in
 deliberately **not wired up**: switching changes the images uploaded for every new map, and
 whether to re-process the existing ones is a decision, not a refactor.
 
+## Decisions taken, 2026-09-21
+
+Two of the three open imaging questions were decided; the third stands.
+
+### `Images.Processor` is ImageSharp — **decided, done**
+
+One line in `Imaging/Images.cs`. Every upload through the seam - clan avatars and
+backgrounds, news and lobby-news thumbnails, structure icons - is now encoded by ImageSharp
+rather than System.Drawing.
+
+**This changes bytes on disk for new images.** Both implementations ask for bicubic; different
+libraries with different kernels do not produce identical pixels, so images uploaded from now
+on differ slightly from those already stored. **Nothing stored is touched.**
+
+Done now rather than when the port forced it: `System.Drawing.Common` is Windows-only on
+.NET 9, so the line had to move before the port completes, and moving it while there is slack
+means the difference lands somewhere it can be looked at. One line reverts it.
+
+`Tests.Portable` now pins the choice - a revert, deliberate or by a bad merge, would otherwise
+change what the site writes to disk with nothing to say so. A second test asserts the test
+assembly has no `System.Drawing.Common` reference, which is only true because `Images.cs` names
+an implementation that does not need one; while it named `SystemDrawingImageProcessor` that
+file could not be linked into a .NET 9 project at all.
+
+### Structure icons stay bicubic — **decided, accepted**
+
+`PlanetStructure.GenerateResized` asked for `HighQualityBilinear`; the seam asks for
+`HighQualityBicubic`, so icons regenerated since the seam landed differ slightly from earlier
+ones. Accepted rather than reverted: the alternative is widening `IImageProcessor.SaveResized`
+with a resampler argument for one call site, and these icons are small and regenerate
+routinely.
+
+### `ToBytes` — **still open**
+
+The aspect-ratio and size defects below are unchanged and unwired. The decision is not about
+imaging libraries: it is whether to re-process the minimaps already uploaded, which needs a
+backfill and a way to tell a corrected image from an uncorrected one. Fixing it for new maps
+only would leave two generations of minimaps side by side with no way to tell them apart,
+which is worse than the known defect.
+
 ## Suggested order
 
 0. **Done:** the target-size arithmetic is separated into
