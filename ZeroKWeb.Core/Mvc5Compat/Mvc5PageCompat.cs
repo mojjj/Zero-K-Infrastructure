@@ -21,10 +21,15 @@ namespace ZeroKWeb.Compat
         public dynamic Page => ViewBag;
 
         /// <summary>
-        /// MVC 5 put Request straight on the view page; ASP.NET Core reaches it through
-        /// Context. Five views ask for it by the short name.
+        /// MVC 5 put Request and Server straight on the view page. These are the MVC 5
+        /// shapes, not ASP.NET Core's - see Mvc5RequestCompat.cs for why a wrapper and not
+        /// the real HttpRequest.
         /// </summary>
-        public HttpRequest Request => Context.Request;
+        public Mvc5Request Request => new Mvc5Request(Context.Request);
+
+        public Mvc5Server Server => new Mvc5Server(
+            Context.RequestServices.GetService(typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment))
+                as Microsoft.AspNetCore.Hosting.IWebHostEnvironment);
     }
 
     public static class Mvc5RequestCompat
