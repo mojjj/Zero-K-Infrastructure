@@ -98,7 +98,7 @@ namespace ZeroKWeb.Controllers
                 }
 
                 // process modules
-				foreach (var key in Request.Form.AllKeys.Where(x => !string.IsNullOrEmpty(x)))
+				foreach (var key in Request.Form.Keys.Cast<string>().Where(x => !string.IsNullOrEmpty(x)))
 				{
 					var m = Regex.Match(key, "m([0-9]+)");
 					if (m.Success)
@@ -142,7 +142,7 @@ namespace ZeroKWeb.Controllers
 				}
 
                 // process decorations
-                foreach (var key in Request.Form.AllKeys.Where(x => !string.IsNullOrEmpty(x)))
+                foreach (var key in Request.Form.Keys.Cast<string>().Where(x => !string.IsNullOrEmpty(x)))
                 {
                     var d = Regex.Match(key, "d([0-9]+)");
                     if (d.Success)
@@ -183,7 +183,7 @@ namespace ZeroKWeb.Controllers
                 }
 
                 // remove a module/decoration if ordered to
-                foreach (var toDel in Request.Form.AllKeys.Where(x => !string.IsNullOrEmpty(x)))
+                foreach (var toDel in Request.Form.Keys.Cast<string>().Where(x => !string.IsNullOrEmpty(x)))
                 {
 					var m = Regex.Match(toDel, "deleteSlot([0-9]+)");
 					if (m.Success)

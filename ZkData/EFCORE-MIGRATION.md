@@ -672,6 +672,43 @@ the web port projects rather than fixed in `ZkData.Core`, because that shim exis
 code comparing `entry.State == EntityState.Modified` against `ZkDataContext.EntityEntry`,
 whose `State` really is the EF6-shaped type. Both readings are right in their own project.
 
+### A second controller, and how far the others are
+
+`MyController` links too, taking `compiles` to **50** and `waiting-on-controllers` to 25. It
+needed three `GlobalConst` members moved, `Response.Write`/`Flush` (ASP.NET Core's response is
+asynchronous; the shim blocks on it, which is what the original code does because it was
+written against a blocking API), and one edit to the controller itself.
+
+**That edit is worth separating from the others.** `Request.Form.AllKeys` is a *property*, and
+C# has no extension properties - the fifth time that has decided something here. So it is
+fixed in the controller: `Request.Form.Keys.Cast<string>()`, which compiles on both
+frameworks. Unlike a view edit, **this one is verifiable from Linux** - `tools/build-website.sh`
+compiles the Framework C#, and it does. Controller edits can be checked here; view edits
+cannot. That asymmetry decides which of the two is safe to make.
+
+Measured properly, the remaining controllers are close:
+
+| errors | controller | what it wants |
+|---:|---|---|
+| 1 | `BattlesController` | `ReplayStorage`, which lives in **ZkLobbyServer** |
+| 2 | `AdminController` | `DbCloner` (needs `System.Data.SqlClient`) |
+| 5 | `ChartsController` | a dead `System.Web.Helpers` using |
+| 12 | `PlanetwarsAdminController` | a dead `EntityFramework.Extensions` using |
+| - | `TourneyController` | `TourneyBattle`, eight times - **live lobby-server objects** |
+
+Two of those are the same finding: **`BattlesController` and `TourneyController` are blocked on
+`ZkLobbyServer`**, which is Phase 1's subject. An empty namespace would let both compile while
+hiding exactly the coupling Phase 1 exists to remove, so neither is shimmed.
+
+### Measuring controllers, masked again
+
+The first pass at that table said `AdminController` had **zero** errors. It has four. The
+measurement built `ZeroKWeb.Render` directly, which includes all 116 views rather than the
+compiling set, so declaration errors from the other views suppressed every method body -
+including the controllers'. Fourth time this mechanism has produced a confident wrong number
+in this port. The table above is measured through `tools/render-view.sh`, which uses only the
+views that compile.
+
 ### The next structural blocker is unobtrusive AJAX
 
 `ModsController` links, but `Mods/GameModesIndex.cshtml` still does not compile, and what it
@@ -763,12 +800,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **47** | compile against ASP.NET Core today |
-| **29** | name a type from the unported web project; blocked on it whatever else is also wrong |
+| **50** | compile against ASP.NET Core today |
+| **25** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **31** | something else missing |
+| **32** | something else missing |
 
-**Read the 47 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
+**Read the 50 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.

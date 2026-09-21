@@ -91,7 +91,6 @@ namespace ZkData
         
 
 
-        public static string ZkDataContextConnectionString;
 
         public static string BaseImageUrl;
         public static string BaseSiteUrl;
@@ -107,9 +106,7 @@ namespace ZkData
 
         public const int ZkLobbyUserCpu = 6667;
         public const int ZkLobbyUserCpuLinux = 6668;
-        public const int CommanderProfileCount = 6;
         public const int NumCommanderLevels = 5;
-        public const int MaxCommanderNameLength = 20;
 
 
         public const int MinDurationForPlanetwars = 0;
