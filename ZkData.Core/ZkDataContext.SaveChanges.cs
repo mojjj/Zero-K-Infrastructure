@@ -51,10 +51,10 @@ namespace ZkData
         private List<EntityEntry> GetChanges()
         {
             return ChangeTracker.Entries()
-                .Where(x => x.State == Microsoft.EntityFrameworkCore.EntityState.Modified
-                            || x.State == Microsoft.EntityFrameworkCore.EntityState.Added
-                            || x.State == Microsoft.EntityFrameworkCore.EntityState.Deleted)
-                .Select(x => new EntityEntry(x.Entity, (System.Data.Entity.EntityState)x.State, this))
+                .Where(x => x.State == EntityState.Modified
+                            || x.State == EntityState.Added
+                            || x.State == EntityState.Deleted)
+                .Select(x => new EntityEntry(x.Entity, x.State, this))
                 .ToList();
         }
 

@@ -31,20 +31,4 @@ namespace System.Data.Entity
             => EFCore.EntityFrameworkQueryableExtensions.AsNoTracking(source);
     }
 
-    /// <summary>
-    /// EF6 spelled this <c>System.Data.Entity.EntityState</c>.
-    ///
-    /// Both sides of every comparison have to be this type, not EF Core's: entity code
-    /// writes <c>entry.State == EntityState.Modified</c>, and two structurally identical
-    /// enums do not compare equal. So ZkDataContext.EntityEntry carries this one, and the
-    /// conversion to EF Core's happens here, once.
-    /// </summary>
-    public enum EntityState
-    {
-        Detached = EFCore.EntityState.Detached,
-        Unchanged = EFCore.EntityState.Unchanged,
-        Added = EFCore.EntityState.Added,
-        Deleted = EFCore.EntityState.Deleted,
-        Modified = EFCore.EntityState.Modified,
-    }
 }

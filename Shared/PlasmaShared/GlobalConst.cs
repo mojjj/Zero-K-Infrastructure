@@ -160,8 +160,6 @@ namespace ZkData
         public const string TeamEmail = "Zero-K team <team@zero-k.info>";
 
 
-        public const int ForumPostsPerPage = 20;
-        public const int MinNetKarmaToVote = -30;
         public const bool OnlyAdminsSeePostVoters = false;
         public const int PlanetWarsMinutesToAttackIfNoOption = 2;
         public const int PlanetWarsDropshipsStayForMinutes = 2*60;

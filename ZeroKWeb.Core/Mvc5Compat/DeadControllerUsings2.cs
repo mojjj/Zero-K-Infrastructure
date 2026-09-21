@@ -7,3 +7,8 @@ namespace System.Web.Helpers { internal static class DeadUsingMarker { } }
 // calls six times without naming the namespace again. An empty shim would have let it compile
 // and thrown at runtime. EF Core has ExecuteDelete/ExecuteUpdate, which are not the same API,
 // so that controller needs porting rather than shimming.
+
+// Dead in ForumPostIndexer: one using, and nothing from EF6's Infrastructure namespace -
+// no DbEntityEntry, no DbChangeTracker, no DbPropertyValues. Checked by what the file uses,
+// not by counting the name, which is the test that EntityFramework.Extensions failed.
+namespace System.Data.Entity.Infrastructure { internal static class DeadUsingMarker { } }
