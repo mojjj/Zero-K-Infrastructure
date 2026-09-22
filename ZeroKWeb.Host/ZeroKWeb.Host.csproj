@@ -67,4 +67,6 @@
 
   <Import Project="view-set.props" Condition="Exists('view-set.props')" />
 
+  <Import Project="..\port-views.props" />
+
 </Project>

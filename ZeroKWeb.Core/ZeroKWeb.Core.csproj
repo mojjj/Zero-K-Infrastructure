@@ -91,4 +91,6 @@
   -->
   <Import Project="view-batch.props" Condition="Exists('view-batch.props')" />
 
+  <Import Project="..\port-views.props" />
+
 </Project>

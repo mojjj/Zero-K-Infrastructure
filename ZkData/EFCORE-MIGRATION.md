@@ -1450,3 +1450,213 @@ Totals: `compiles` unchanged at 54 of 116, `waiting-on-controllers` 23 -> 22, `o
 locally and failed in the container with `CS2001: Source file could not be found`, which reads
 like a csproj error and is not one.
 
+## Child actions: the count was overstated, and the shim was incomplete
+
+### `compiles` went down, 54 to 52
+
+`Shared/TopMenu.cshtml` and `Shared/CommentList.cshtml` were in the `compiles` bucket. Neither
+can render. Both call `Html.RenderAction`/`Html.Action`, which ASP.NET Core removed, and the
+shim in `ZeroKWeb.Core/Mvc5Compat/ChildActionCompat.cs` supplies signatures that **throw**.
+
+The report only ever asked the compiler, and the compiler cannot see the difference between a
+method that works and a method whose body is `throw`. So there is now a `child-action` bucket,
+and the headline number no longer counts views that compile and then fail on first render:
+
+```
+compiles                 52
+child-action              4
+```
+
+This is a correction to a number this document has been reporting since the view inventory
+existed, not a regression.
+
+### Four overloads were missing, and they were being read as child-action findings
+
+The shim had `RenderAction(action, controller)`, `Action(action, controller)` and
+`Action(action, controller, routeValues)`. The repository also calls:
+
+| call site | overload |
+| --- | --- |
+| `Galaxy.cshtml:71` `@Html.Action("MatchMaker")` | `Action(string)` |
+| `Galaxy.cshtml:201`, `Planet.cshtml:315`, `NewPost.cshtml:58`, `Thread.cshtml:33` | `Action(string, object)` |
+| `Commanders.cshtml:24` | `RenderAction(string, object)` |
+| `UserDetail.cshtml:18` | `RenderAction(string, string, object)` |
+
+Those four views were reporting `CS1929`, `CS1503` and `CS1501`, and the inventory was carrying
+those codes as though they said something about the views. They said something about this file.
+With the overload set completed, `Galaxy.cshtml` and `Forum/NewPost.cshtml` bind for the first
+time, and the error lists on `Commanders`, `Planet` and `UserDetail` are accurate for the first
+time.
+
+`Galaxy.cshtml` is worth naming: Phase 5 rewrote the galaxy map and nothing had ever compiled
+the result.
+
+### Seven actions, and three of them carry `[Auth]`
+
+14 call sites - 13 views and one in `ForumParser/Tags/PollTag.cs`, which is linked C# rather
+than a view - reach seven distinct actions:
+
+| action | sites | filter |
+| --- | --- | --- |
+| `Planetwars/Events` | 6 | |
+| `Forum/GetPostList` | 3 | |
+| `Poll/Index` | 2 | |
+| `Planetwars/Ladder` | 1 | |
+| `Planetwars/MatchMaker` | 1 | `[Auth]` |
+| `Lobby/ChatNotification` | 1 | `[Auth]` |
+| `My/CommanderProfile` | 1 | `[Auth]` |
+
+The shim's own note said "at least one of these actions carries `[Auth]`". Three do. The note
+and the exception message now name them, because that count is the entire argument for why
+these are not shimmed by invoking the action directly.
+
+### The tripwire is now checked
+
+"It throws" is not something the compiler can verify and not something the inventory can see, so
+`ZeroKWeb.Render` exercises all eight overloads and asserts each one throws
+`NotSupportedException` with a message that still explains why:
+
+```
+   ok      Action(action) refuses to render
+   ...
+   ok      all eight overloads are covered
+```
+
+An edit that made one of these return empty content instead would look like progress - views
+would move into `compiles` - and it now fails a check.
+
+### `run-host.sh` had to learn the difference
+
+That harness builds its view set by excluding every view the inventory names, so the new bucket
+immediately excluded `TopMenu.cshtml` and the site layout stopped rendering: seven checks failed
+with *the partial view 'TopMenu' was not found*.
+
+The bucket is right and the harness's rule was too blunt. `child-action` views **compile**;
+whether the `Html.Action` call is reached depends on the request, and `TopMenu.cshtml` guards
+its call with `Global.IsAccountAuthorized`, so an anonymous request renders it in full. Dropping
+it would have deleted the only end-to-end evidence that the site layout works, to avoid a
+failure that does not occur. It is kept, and the throw is checked in `ZeroKWeb.Render` instead.
+
+### An unrelated trap found on the way
+
+`dotnet build ZeroKWeb.Host` **on its own** produces an app with no views at all:
+
+```
+warning CS8785: Generator 'RazorSourceGenerator' failed to generate source.
+  ArgumentException: The hintName 'Views__ViewStart_cshtml.g.cs' ... must be unique
+```
+
+`ZeroKWeb.Host/Views/_ViewStart.cshtml` and the linked `Zero-K.info/Views/_ViewStart.cshtml`
+both land at `Views\_ViewStart.cshtml`, and the generator gives up entirely rather than on that
+one file. It is invisible through `tools/run-host.sh` only because the inventory lists
+`_ViewStart.cshtml` as broken and the harness therefore excludes the linked copy. This
+reproduces on unmodified master and is not caused by anything here, but a direct build of that
+project cannot be trusted until it is fixed.
+
+### What is actually left, and why it is a decision rather than a task
+
+View components are the ASP.NET Core replacement, and they are a different shape: a class, a
+`Views/Shared/Components/<Name>/Default.cshtml`, and a changed call site -
+`@await Component.InvokeAsync(...)` instead of `@Html.Action(...)`.
+
+**That call site does not compile on MVC 5.** Every other thing this port has done rests on one
+source file compiling in both stacks, and this is the first place where that cannot hold for
+free. There are two ways out, and they are not equivalent:
+
+1. **Diverge the views.** Write the view components, rewrite the 13 call sites, and accept that
+   these views exist in two versions until the Framework build is retired. Simple, and it makes
+   the two builds stop being the same thing.
+2. **Keep one source and make `Html.Action` work.** Implement the shim as a dispatch to a
+   registered view component, keyed by (controller, action). The views do not change at all -
+   all 13 call sites keep MVC 5 syntax - and the three `[Auth]` actions become components that
+   perform the check explicitly rather than inheriting it from a filter. More machinery, and the
+   explicit check is the part to get right.
+
+Either way the seven actions have to be ported, and five of them live in controllers the port
+does not link yet (`Planetwars`, `Poll`, `Lobby`, `My`; `Forum` is linked). That is the size of
+the remaining work, and it is the same in both options.
+
+## Divergence: the first view the two builds no longer share
+
+The decision recorded in the previous section is taken: the child-action call sites **diverge**.
+`PortedViews/` holds the .NET 9 copies, `port-views.props` removes the linked original and links
+the copy in its place, and all three port projects import it. The MVC 5 build is untouched.
+
+`Shared/CommentList.cshtml` is the first, and the diff is one line:
+
+```diff
+-    @Html.Action("GetPostList","Forum", new { threadID = Model.Thread.ForumThreadID })
++    @await Component.InvokeAsync("ForumPostList", new { threadID = Model.Thread.ForumThreadID })
+```
+
+`ZeroKWeb.Core/ViewComponents/ForumPostListViewComponent.cs` is `ForumController.GetPostList`'s
+body with two forced differences: it builds its own model, because a view component is invoked
+with an anonymous object rather than through model binding, and it returns the partial by full
+path, because view components resolve views under `Views/Shared/Components/<Name>/` and
+`PostList.cshtml` is a real view the Forum controller also renders on its own.
+
+### Only one, and the reason is not caution
+
+**Every one of the seven actions renders a partial that does not compile yet.**
+
+| action | renders | state |
+| --- | --- | --- |
+| `Forum/GetPostList` | `Forum/PostList.cshtml` | CS0103 CS0117 CS0246 |
+| `Poll/Index` | `Poll/PollView.cshtml` | CS0103 CS0246 |
+| `Planetwars/Ladder` | `Planetwars/Ladder.cshtml` | CS0246 |
+| `Planetwars/MatchMaker` | `Planetwars/PwMatchMaker.cshtml` | CS0103 CS0117 CS0246 |
+| `Lobby/ChatNotification` | `Shared/ChatNotification.cshtml` | CS0234 |
+| `Planetwars/Events` | `Planetwars/Events.cshtml` | CS0234 |
+| `My/CommanderProfile` | `My/CommanderProfile.cshtml` | compiles |
+
+So a view component can be written and compiled, but not exercised. Writing the other six now
+would produce six unverifiable components and would trade a clear `NotSupportedException` -
+which says exactly what is wrong and where - for a failure deep inside a partial that does not
+build. The remaining six should follow their partials, not lead them.
+
+`My/CommanderProfile` is the exception whose partial already compiles, but its **caller**,
+`My/Commanders.cshtml`, is blocked on the AJAX helpers (`Ajax`, `AjaxOptions`, `InsertionMode`),
+so it cannot be exercised either.
+
+### Two measurement traps this opened, and what was done about them
+
+**A diverged view could have gone uncompiled and nobody would have noticed.** The first build
+after adding `PortedViews/Shared/CommentList.cshtml` reported zero errors, which proves nothing
+on its own - a file that is not in the build also reports zero errors. Appending
+`@ThisSymbolDoesNotExistAnywhere` to it and getting
+
+```
+PortedViews/Shared/CommentList.cshtml(12,2): error CS0103: The name ... does not exist
+```
+
+is what actually established it. A positive control, because this port has been fooled by
+silence four times.
+
+**A broken diverged view would poison the whole report.** `PortedViews` files are never removed
+from a batch, so they are compiled in every one; a declaration error in one would suppress
+method-body binding everywhere and quietly empty every other bucket. The report now prints
+
+```
+PORTED VIEW BROKEN       PortedViews/Shared/CommentList.cshtml  [CS0103]
+```
+
+above the inventory, and an `ORPHAN` line for a copy whose original has been renamed or deleted.
+Both were verified by breaking the file on purpose.
+
+The inventory gained a `diverged` bucket so the original is not silently counted as though the
+port still compiles it:
+
+```
+compiles                 52
+diverged                  1
+child-action              3
+```
+
+### The cost, recorded where it will be seen
+
+`PortedViews/README.md` states it: a view in there is maintained twice until
+`Zero-K.info/asp.net.csproj` is retired, and the MVC 5 copy is the one serving production. The
+report catches a compile error in either copy. **Nothing catches a behaviour difference between
+two files that both compile**, which is why the standing rule is that the diff stays confined to
+the child-action call site.
+

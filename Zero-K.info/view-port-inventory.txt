@@ -2,21 +2,31 @@
 # GENERATED - run tools/view-port-report.sh --update.
 #
 # compiles               nothing stops this view today, verified in a small batch
+# diverged              the port compiles its OWN copy under PortedViews/ instead;
+#                        the original here is the MVC 5 one. See PortedViews/README.md.
+# child-action           COMPILES BUT CANNOT RENDER - calls Html.Action/RenderAction,
+#                        which ASP.NET Core removed; the shim throws. Needs a view
+#                        component, and that rewrite does not compile on MVC 5.
 # waiting-on-controllers names a type from the unported web project; blocked on it
 # razor-language         Razor itself rejects it; needs rewriting regardless
 # other                  a package reference or an MVC 5 API
 
 total 116
-compiles                 54
-waiting-on-controllers   22
+compiles                 52
+diverged                 1
+child-action             3
+waiting-on-controllers   21
 razor-language           9
-other                    31
+other                    30
 
+diverged                 Shared/CommentList.cshtml  -> PortedViews/Shared/CommentList.cshtml
+child-action             Forum/NewPost.cshtml
+child-action             Planetwars/Galaxy.cshtml
+child-action             Shared/TopMenu.cshtml
 waiting-on-controllers   Admin/TraceLogs.cshtml  [CS0234]
 waiting-on-controllers   Battles/BattleIndex.cshtml  [CS0234]
 waiting-on-controllers   Battles/BattleTileList.cshtml  [CS0234]
 waiting-on-controllers   Charts/ChartsRatings.cshtml  [CS1061]
-waiting-on-controllers   Forum/NewPost.cshtml  [CS1929]
 waiting-on-controllers   Forum/SearchResults.cshtml  [CS1061]
 waiting-on-controllers   Home/HomeIndex.cshtml  [CS0234]
 waiting-on-controllers   Ladders/LaddersFull.cshtml  [CS0246]
@@ -57,10 +67,9 @@ other                    LobbyNews/LobbyNewsIndex.cshtml  [CS1061]
 other                    Missions/TileList.cshtml  [CS1061]
 other                    Mods/GameModeDetail.cshtml  [CS1061]
 other                    Mods/GameModesIndex.cshtml  [CS0103 CS0117 CS0246]
-other                    My/Commanders.cshtml  [CS0103 CS0246 CS1503]
+other                    My/Commanders.cshtml  [CS0103 CS0246]
 other                    News/Index.cshtml  [CS1061]
-other                    Planetwars/Galaxy.cshtml  [CS1929]
-other                    Planetwars/Planet.cshtml  [CS0117 CS1061 CS1929]
+other                    Planetwars/Planet.cshtml  [CS0117 CS1061]
 other                    Planetwars/PwMatchMaker.cshtml  [CS0103 CS0117 CS0246]
 other                    Poll/PollUserVotes.cshtml  [CS1061]
 other                    Poll/PollView.cshtml  [CS0103 CS0246]
@@ -69,7 +78,7 @@ other                    Shared/DisplayTemplates/Diff.cshtml  [CS0246]
 other                    Shared/DisplayTemplates/DiffPiece.cshtml  [CS0246]
 other                    Shared/DisplayTemplates/FactionTreaty.cshtml  [CS1061]
 other                    Shared/DisplayTemplates/ForumPost.cshtml  [CS1061]
-other                    Shared/UserDetail.cshtml  [CS0103 CS0246 CS1061 CS1501]
+other                    Shared/UserDetail.cshtml  [CS0103 CS0246 CS1061]
 other                    Static/Index.cshtml  [CS1061]
 other                    Users/UserRoleList.cshtml  [CS1061]
 other                    Wiki/WikiIndex.cshtml  [CS1061]
