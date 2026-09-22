@@ -72,6 +72,7 @@
          what keeps ILobbyServerApi crossable rather than merely intended to be. -->
     <Compile Include="..\ZkLobbyServer\ILobbyServerApi.cs" Link="Linked\ILobbyServerApi.cs" />
     <Compile Include="..\ZkLobbyServer\TourneyApi.cs" Link="Linked\TourneyApi.cs" />
+    <Compile Include="..\ZkLobbyServer\PlanetWarsApi.cs" Link="Linked\PlanetWarsApi.cs" />
     <Compile Include="..\Zero-K.info\AppCode\ForumPostIndexer.cs" Link="Linked\ForumPostIndexer.cs" />
     <Compile Include="..\Zero-K.info\Controllers\ChartsController.cs" Link="Linked\Controllers\ChartsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\TourneyController.cs" Link="Linked\Controllers\TourneyController.cs" />

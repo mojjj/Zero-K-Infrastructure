@@ -93,6 +93,33 @@ namespace ZkLobbyServer
 
         void AddPlanetWarsAttackOption(Planet planet, int attackerFactionId);
 
+        /// <summary>
+        /// Which half of the turn the matchmaker is in; null when PlanetWars is offline.
+        ///
+        /// This was on the in-process interface only because PwPhase lived in a lobby-server
+        /// file. Moving that enum to PlanetWarsApi.cs, which the port links, is the whole change.
+        /// </summary>
+        PwPhase? PlanetWarsPhase { get; }
+
+        /// <summary>
+        /// The PlanetWars battles on one map. Callers pass <c>planet.Resource.InternalName</c>.
+        ///
+        /// It takes a map name rather than the <c>Planet</c> it used to, because the server did
+        /// nothing with the entity but read that one string off it - through a navigation
+        /// property, on an entity the WEBSITE's DbContext had loaded. In one process that is a
+        /// lazy load; in two it is not possible at all.
+        /// </summary>
+        List<PlanetBattleInfo> GetPlanetBattles(string mapName);
+
+        /// <summary>
+        /// Every PlanetWars battle on the server, in one call.
+        ///
+        /// For the galaxy map, which asks the question once per planet. That loop is
+        /// O(planets x battles) in this process already; as a remote call it would have been one
+        /// round trip per planet.
+        /// </summary>
+        List<PlanetBattleInfo> GetPlanetWarsBattles();
+
         /// <summary>Per-viewer, so attack options render with the right flags. Null when offline.</summary>
         PwMatchCommand GeneratePlanetWarsLobbyCommand(string playerName, string playerFaction);
 
@@ -134,21 +161,37 @@ namespace ZkLobbyServer
         /// </summary>
         Task ForceJoinTourneyBattle(string player, int battleID);
 
+        // ---- single sign-on -------------------------------------------------------------
+
+        /// <summary>
+        /// Redeems a lobby session token for the account it was issued to, and invalidates it.
+        /// Returns null when the token is unknown, already used, or null.
+        ///
+        /// This is how a player logged into the game client arrives at the website already
+        /// signed in: ClientConnection puts the token in the server's table at login, the client
+        /// puts it in a URL, and Global.asax redeems it here. Single use, by design - the old
+        /// code called ConcurrentDictionary.TryRemove directly, and this keeps that.
+        ///
+        /// It was the last thing reaching through <see cref="ILobbyServerApiInProcess.InProcess"/>,
+        /// and it was reaching for a raw dictionary. A remote implementation needs a real
+        /// endpoint for this one rather than a wrapper, and it is worth noticing that the token
+        /// is a bearer credential: whatever carries this call has to be as trusted as the table.
+        /// </summary>
+        int? RedeemSessionToken(string token);
+
         // ---- connected users ------------------------------------------------------------
 
         /// <summary>Tells a connected client to join a battle. No-op when the user is offline.</summary>
         Task ConnectPlayerToBattle(string userName, int battleID);
 
-        // ---- not modelled yet -----------------------------------------------------------
+        // ---- nothing left ---------------------------------------------------------------
         //
-        // What is left is PlanetWars: GetPlanetBattles(Planet) and PlanetWarsPhase, both on
-        // ILobbyServerApiInProcess. They return live Battle objects and a server-side enum, and
-        // unlike the tournament console their callers include two Razor views, so the DTO has to
-        // satisfy Planet.cshtml and Galaxy.cshtml as well as four controller actions.
+        // This interface is now the website's whole lobby-server surface. ILobbyServerApiInProcess
+        // still exists and the lobby server still implements it, but no caller in Zero-K.info
+        // names any of its members - including InProcess itself.
         //
-        // Nothing is bodged onto this interface in the meantime: returning Battle or PwPhase
-        // from here would break the promise that everything above can cross a process boundary,
-        // and that promise is what the port's build now enforces.
+        // Nothing is bodged onto this interface to get there: every member above compiles in a
+        // project with no reference to ZkLobbyServer, and the port's build is what enforces it.
 
     }
 

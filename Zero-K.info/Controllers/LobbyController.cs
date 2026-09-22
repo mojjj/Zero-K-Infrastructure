@@ -39,7 +39,7 @@ namespace ZeroKWeb.Controllers
             var planet = db.Planets.Find(id);
             if (planet != null)
             {
-                var battle = Global.LobbyApi.GetPlanetBattles(planet).OrderByDescending(x => x.Users.Count).FirstOrDefault();
+                var battle = Global.LobbyApi.GetPlanetBattles(planet.Resource.InternalName).OrderByDescending(x => x.UserCount).FirstOrDefault();
                 if (battle != null) Global.LobbyApi.ConnectPlayerToBattle(Global.Account.Name, id);
             }
 

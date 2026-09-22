@@ -5,7 +5,7 @@
 @{
 	ViewBag.Title = "Planet";
 	Page.Title = "Planet " + Model.Name;
-	var autohost = Global.LobbyApi.GetPlanetBattles(Model).OrderByDescending(x=>x.Users.Count).FirstOrDefault();
+	var autohost = Global.LobbyApi.GetPlanetBattles(Model.Resource.InternalName).OrderByDescending(x=>x.UserCount).FirstOrDefault();
     ZkDataContext db = ViewBag.Db;
 
     var colorStyle = "";

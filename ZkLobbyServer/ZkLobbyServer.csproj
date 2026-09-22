@@ -153,6 +153,7 @@
     <Compile Include="ServerRunner.cs" />
     <Compile Include="ILobbyServerApi.cs" />
     <Compile Include="TourneyApi.cs" />
+    <Compile Include="PlanetWarsApi.cs" />
     <Compile Include="ILobbyServerApiInProcess.cs" />
     <Compile Include="InProcessLobbyServerApi.cs" />
     <Compile Include="ServerTextCommands.cs" />

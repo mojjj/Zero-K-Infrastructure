@@ -109,11 +109,19 @@ namespace ZeroKWeb
         public static ZkLobbyServer.ZkLobbyServer Server { get; private set; }
 
         /// <summary>
-        /// The website's view of the lobby server. Prefer this over <see cref="Server"/>: the
-        /// members on the interface are the ones that can survive the server moving to its own
+        /// The website's view of the lobby server, and now its only one. Every member of
+        /// <see cref="ZkLobbyServer.ILobbyServerApi"/> can survive the server moving to its own
         /// process, which is what Zero-K.info/HOSTING.md is about. Null until the server starts.
+        ///
+        /// The type is the NARROW interface on purpose. It was ILobbyServerApiInProcess, which
+        /// also exposed the live battle list, the live Battle objects and the server itself; now
+        /// that nothing here needs those, declaring the narrow type is what stops them coming
+        /// back. Reaching for one is a compile error in this build, not just in the .NET 9 port.
+        ///
+        /// The object behind it is still an InProcessLobbyServerApi, and the server still runs in
+        /// this process. What changed is that the website can no longer tell.
         /// </summary>
-        public static ZkLobbyServer.ILobbyServerApiInProcess LobbyApi { get; private set; }
+        public static ZkLobbyServer.ILobbyServerApi LobbyApi { get; private set; }
 
         public static ServerRunner ZkServerRunner { get; private set; }
         public static ForumPostCache ForumPostCache { get; private set; }= new ForumPostCache();
