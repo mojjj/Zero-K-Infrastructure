@@ -47,7 +47,9 @@ jobs:
       - name: Cache NuGet packages
         uses: actions/cache@v4
         with:
-          path: ~/.cache/zk-mono-nuget
+          path: |
+            ~/.cache/zk-mono-nuget
+            ~/.cache/zk-website-build
           key: zk-mono-nuget-${{ hashFiles('**/*.csproj', '**/packages.config') }}
           restore-keys: zk-mono-nuget-
 
@@ -76,6 +78,19 @@ jobs:
 
       - name: Load the test fixture
         run: ./db/load-fixture.sh
+
+      # The Framework build, which nothing in CI did until now. It compiles eight projects -
+      # the website, ZkLobbyServer, ZkData, PlasmaShared, LobbyClient and the rest - so it is
+      # what catches a change that compiles on .NET 9 and not on .NET Framework, or the
+      # reverse. The port edits production C# in both directions, so both sides need a build.
+      #
+      # It does NOT compile Razor views: mono ships no aspnet_compiler.exe. That gap is
+      # covered as far as it can be by tools/view-port-report.sh in the other workflow.
+      #
+      # Placed here rather than in test_portable.yml because this job already pulls the
+      # mono:6.12 image for the steps above, so the image is warm.
+      - name: Build the .NET Framework solution under mono
+        run: ./tools/build-website.sh
 
       - name: Run the WHR pipeline tests
         run: ./db/run-db-tests.sh

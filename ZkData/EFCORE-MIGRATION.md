@@ -845,6 +845,26 @@ AJAX helpers and the site's grid built on them. ASP.NET Core removed that surfac
 **19 views use it.** Like child actions, it is a rewrite rather than a shim, and like child
 actions the rewrite cannot be shared with the MVC 5 build.
 
+## The Framework build is a check now
+
+Nothing in CI compiled .NET Framework. `tools/build-website.sh` existed and was run by hand;
+the Windows job that would have covered it sits queued forever on this fork.
+
+It runs in `test_database.yml` now, where the mono image is already warm. It builds **eight
+projects** - the website, `ZkLobbyServer`, `ZkData`, `PlasmaShared`, `LobbyClient`,
+`PlasmaDownloader`, `MonoTorrent`, `AutoRegistrator` - which matters because this port edits
+production C# in both directions. A `GlobalConst` member moved into the portable half, a call
+site moved onto a compat helper, an interface split in two: each of those has to compile on
+.NET Framework *and* .NET 9, and until now only one side was checked automatically.
+
+Verified to fail rather than merely to pass: breaking `ILobbyServerApiInProcess` on purpose
+exits 1. A build check that cannot fail is the same class of mistake as a report that cannot
+report, and this file has two of those already.
+
+It still does not compile Razor views - mono ships no `aspnet_compiler.exe`. That gap is
+covered as far as it can be by the view inventory in the other workflow, and not at all
+beyond it.
+
 ## A defect the port found
 
 `CampaignEvents` had
