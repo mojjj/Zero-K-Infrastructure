@@ -885,7 +885,7 @@ Two decisions inside it are worth naming:
   `MaxPlayers`, `Users`, `Debriefings`, `Prototype`, and the two counts. A controller handing
   `TourneyIndex.cshtml` this type instead of the live one needs no change to the view. Nothing
   here can compile a Razor view, so a rewrite could not be verified; matching the names avoids
-  needing one.
+  needing one. **That last sentence was wrong, and the section below measures it instead.**
 - **`Describe` copies `Users` and `Debriefings` rather than sharing them.** A caller in another
   process would receive a snapshot, so a caller in this one sees the same thing - otherwise the
   in-process implementation would quietly support aliasing that the remote one never could.
@@ -1272,3 +1272,82 @@ test.
 4. Only then does `ZkData` target .NET 9, which is what unblocks the rest of Phase 3.
 
 Steps 1 and 2 cannot be verified without a database. Step 3 is compile-checkable.
+
+## TourneyController on the tournament API: `LobbyApi.InProcess` reaches zero
+
+The eight uses, and what each became:
+
+| was | now |
+| --- | --- |
+| `InProcess.Battles.Values.OfType<TourneyBattle>()` x4 | `GetTourneyBattles()` |
+| `InProcess.Battles.Get(id)` then `RemoveBattle` | `RemoveTourneyBattle(id)` |
+| `InProcess.Battles.Get(id) as TourneyBattle` | `GetTourneyBattle(id)` |
+| `new TourneyBattle(InProcess, prototype)` + `AddBattle` x2 | `CreateTourneyBattle(prototype)` |
+| `ForceJoinBattle(p, bat)` x2 | `ForceJoinTourneyBattle(p, id)` |
+
+`TourneyModel.Battles` changed from `List<TourneyBattle>` to `List<TourneyBattleInfo>`.
+
+One member was added to the crossable interface to finish this:
+
+```csharp
+Task ForceJoinTourneyBattle(string player, int battleID);
+```
+
+The general `ForceJoinBattle` takes a host **name** and picks the first battle with that
+founder. That is a different question - two battles can share a founder - and the tournament
+console has the id in hand. This is the "a battle id would do" note on the in-process overload,
+done.
+
+### The website no longer uses the escape hatch
+
+```
+$ grep -rn "LobbyApi.InProcess" Zero-K.info/
+$
+```
+
+Three members of `ILobbyServerApiInProcess` - `AddBattle`, `RemoveBattle` and
+`ForceJoinBattle(string, Battle)` - now have no website callers either. They stay declared
+because the lobby server itself implements and uses them; what changed is who calls them.
+
+What is left of the seam is PlanetWars, and only PlanetWars:
+
+| member | callers |
+| --- | --- |
+| `GetPlanetBattles(Planet)` | `PlanetwarsController` x4, `LobbyController`, `Planet.cshtml`, `Galaxy.cshtml` |
+| `PlanetWarsPhase` | `Planet.cshtml` |
+
+Unlike the tournament console, two of those callers are **views**, so the DTO has to carry what
+`Planet.cshtml` and `Galaxy.cshtml` read off a live `Battle` - `Users.Count` and `IsInGame` -
+not just what the controllers read.
+
+### A correction: the view was checkable, and it was checked
+
+The `TourneyApi.cs` commit asserted that nothing in this repository can compile a Razor view,
+so matching the field names to what `TourneyIndex.cshtml` reads could not be verified. That is
+true of `tools/build-website.sh` - mono ships no `aspnet_compiler.exe` - but **`ZeroKWeb.Core`
+compiles views with the Razor source generator, which is the whole point of that project.** The
+assertion was about the wrong build.
+
+`TourneyController.cs` is now linked into `ZeroKWeb.Core`, so the check is real. With no views
+in the batch the controller compiles with zero errors. With `TourneyIndex.cshtml` alone in the
+batch:
+
+```
+TourneyIndex.cshtml(106,23): error CS1061: ... does not contain a definition for 'MultiSelectFor'
+TourneyIndex.cshtml(112,23): error CS1061: ... does not contain a definition for 'MultiSelectFor'
+```
+
+Two errors, both the same helper, and **none** from the nine members the view reads off
+`TourneyBattleInfo`. `MultiSelectFor` lives in `AppCode/HtmlHelperExtensions.cs:806` - the
+unported half - and has nothing to do with this change.
+
+The inventory reclassifies accordingly:
+
+```
+-waiting-on-controllers   Tourney/TourneyIndex.cshtml  [CS0234]
++waiting-on-controllers   Tourney/TourneyIndex.cshtml  [CS1061]
+```
+
+Same bucket, different blocker: it was failing on the controller type not existing, which is
+exactly the masking this document keeps running into - one declaration error, and everything
+behind it reports nothing. The totals are unchanged at 54 of 116.

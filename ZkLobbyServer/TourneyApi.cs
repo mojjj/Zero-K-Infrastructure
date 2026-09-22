@@ -19,9 +19,16 @@ namespace ZkLobbyServer
     /// The field NAMES are deliberately the ones `TourneyBattle` and `ServerBattle` already
     /// expose - BattleID, Title, FounderName, MaxPlayers, Users, Debriefings, Prototype and the
     /// two counts. `Views/Tourney/TourneyIndex.cshtml` reads exactly those, so a controller
-    /// handing it this type instead of the live one needs no change to the view. Nothing in
-    /// this repository can compile a Razor view, so a rewrite there could not be verified;
-    /// matching the names avoids needing one.
+    /// handing it this type instead of the live one needs no change to the view.
+    ///
+    /// That is now measured rather than assumed. When this type was added, the claim here was
+    /// that nothing in the repository could compile a Razor view and so the match could not be
+    /// checked. That was wrong: it is true of the mono build, which has no aspnet_compiler, but
+    /// ZeroKWeb.Core compiles views with the Razor source generator, and it now links
+    /// TourneyController. Building that view against this type produces two errors, both
+    /// `MultiSelectFor` - an MVC 5 helper still in the unported half of HtmlHelperExtensions -
+    /// and none from the nine members above. The view was previously blocked by CS0234 on the
+    /// controller type itself, which masked everything behind it.
     /// </summary>
     public class TourneyBattleInfo
     {

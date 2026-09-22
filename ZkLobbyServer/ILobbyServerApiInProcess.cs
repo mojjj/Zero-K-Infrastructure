@@ -18,20 +18,25 @@ namespace ZkLobbyServer
     /// This is the remaining Phase 1 work, enumerated. Each member needs either a DTO in place
     /// of the live object, or an id in place of the reference:
     ///
-    ///   ForceJoinBattle(string, Battle)  - a battle id would do
-    ///   GetPlanetBattles(Planet)         - "a DTO away from being remotable", per its old note
-    ///   AddBattle(ServerBattle)          - battles addressed by id rather than by reference
-    ///   RemoveBattle(Battle)             - the same
-    ///   PlanetWarsPhase                  - PwPhase is a server enum; a DTO or a string
-    ///   InProcess                        - the escape hatch, and the real measure of progress
+    ///   GetPlanetBattles(Planet)         - "a DTO away from being remotable", per its old note.
+    ///                                      Nine callers: PlanetwarsController x4,
+    ///                                      LobbyController, Planet.cshtml, Galaxy.cshtml.
+    ///   PlanetWarsPhase                  - PwPhase is a server enum; a DTO or a string.
+    ///                                      One caller: Planet.cshtml.
     ///
-    /// The tournament API that InProcess's eight remaining callers need now exists on
-    /// <see cref="ILobbyServerApi"/> - GetTourneyBattles, GetTourneyBattle, CreateTourneyBattle
-    /// and RemoveTourneyBattle, in terms of <see cref="TourneyBattleInfo"/>. What is left is
-    /// moving TourneyController onto it, which is a controller rewrite rather than a design
-    /// question.
+    ///   ForceJoinBattle(string, Battle)  - done as ForceJoinTourneyBattle(string, int) on
+    ///                                      ILobbyServerApi; no callers left.
+    ///   AddBattle(ServerBattle)          - done as CreateTourneyBattle; no callers left.
+    ///   RemoveBattle(Battle)             - done as RemoveTourneyBattle; no callers left.
+    ///   InProcess                        - the escape hatch: NO CALLERS LEFT.
     ///
-    /// Count the escape hatch's remaining callers with:
+    /// The last three battle members and the escape hatch stay declared here because the lobby
+    /// server itself still implements and uses them; what changed is that the website no longer
+    /// does. The website's only remaining non-crossable dependency is PlanetWars - the two
+    /// members above, and they are needed by views as much as by controllers, so the DTO has to
+    /// carry what Planet.cshtml and Galaxy.cshtml read (Users.Count and IsInGame).
+    ///
+    /// Check the escape hatch with, which should print nothing:
     ///
     ///     grep -rn "LobbyApi.InProcess" Zero-K.info/
     /// </summary>
