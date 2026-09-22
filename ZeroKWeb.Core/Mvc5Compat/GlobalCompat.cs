@@ -63,6 +63,22 @@ namespace ZeroKWeb
         public static bool IsLobbyAccess => Context?.Request?.Cookies[GlobalConst.LobbyAccessCookieName] != null;
 
         /// <summary>
+        /// The lobby server, through Phase 1's seam - the crossable half of it, which is all
+        /// this project can see. Null, because no lobby server is attached to a port harness.
+        ///
+        /// Null is the faithful answer rather than a convenient one. The real Global sets this
+        /// at application start and leaves it null when the server is not running, and the call
+        /// sites already handle that: PlanetwarsEventCreator guards with
+        /// `if (Global.LobbyApi != null)` before every notification it sends. Those paths skip
+        /// the notification here, which is exactly what they do on a site with no lobby server.
+        ///
+        /// Unguarded call sites will throw, loudly, which is the right failure: it says the port
+        /// has reached code that genuinely needs a running lobby server, rather than quietly
+        /// pretending one answered.
+        /// </summary>
+        public static ZkLobbyServer.ILobbyServerApi LobbyApi => null;
+
+        /// <summary>
         /// The forum's full-text indexer. The real Global constructs one at application
         /// start; nothing starts an application here, so this is created on first use and
         /// never indexes anything the site would not. ForumController only ever calls into

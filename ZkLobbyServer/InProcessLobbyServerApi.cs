@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using LobbyClient;
 using System.Linq;
@@ -13,7 +13,7 @@ namespace ZkLobbyServer
     /// forwarding - it exists so callers depend on the interface rather than on the server object,
     /// which is what makes a future out-of-process implementation a drop-in.
     /// </summary>
-    public class InProcessLobbyServerApi : ILobbyServerApi
+    public class InProcessLobbyServerApi : ILobbyServerApiInProcess
     {
         readonly ZkLobbyServer server;
 

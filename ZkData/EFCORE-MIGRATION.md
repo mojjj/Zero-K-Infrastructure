@@ -812,10 +812,29 @@ those members - "these stay in-process until battles are modelled". What is new 
 consequence: **the port cannot even declare `Global.LobbyApi`**, because its type does not
 exist outside the lobby server. Not one call, the type itself.
 
-So the Phase 1 work has a forcing function and a natural first step: **split
-`ILobbyServerApi` into the part that already crosses and the part that does not.** The
-crossable half would link into the port immediately, which would unblock the four controllers
-as far as their lobby calls go; the rest is the DTO design Phase 1 has been waiting for.
+**That split is now done, and the seam compiles on .NET 9.**
+
+`ILobbyServerApi` keeps the members that already cross a process boundary, and it is **linked
+into the port** - which has no reference to `ZkLobbyServer`, so a member naming a server-side
+type breaks that build. The promise the interface has carried in a comment since Phase 1 is
+now checked by a compiler.
+
+`ILobbyServerApiInProcess` takes the six that cannot, and enumerates the remaining Phase 1
+work with what each one needs:
+
+    ForceJoinBattle(string, Battle)  a battle id would do
+    GetPlanetBattles(Planet)         "a DTO away from being remotable", per its old note
+    AddBattle(ServerBattle)          battles addressed by id rather than by reference
+    RemoveBattle(Battle)             the same
+    PlanetWarsPhase                  PwPhase is a server enum; a DTO or a string
+    InProcess                        the escape hatch, and the real measure of progress
+
+Nothing else changed: `InProcessLobbyServerApi` implements the derived interface and
+`Global.LobbyApi` is typed as it, so every existing call site compiles exactly as before.
+
+The port's `Global` can now declare `LobbyApi`, typed as the crossable half, answering null -
+which is what the real one answers when no lobby server is running, and what
+`PlanetwarsEventCreator` already guards for before every notification it sends.
 
 ### The next structural blocker is unobtrusive AJAX
 
