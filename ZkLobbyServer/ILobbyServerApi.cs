@@ -104,6 +104,26 @@ namespace ZkLobbyServer
         /// <summary>Used to warn before renaming someone who is mid-battle.</summary>
         bool IsUserInAnyBattle(string userName);
 
+        // ---- tournaments ----------------------------------------------------------------
+        // TourneyController's whole surface, in terms of TourneyBattleInfo rather than the live
+        // TourneyBattle objects it reaches for today. These are what its eight
+        // LobbyApi.InProcess uses become.
+
+        /// <summary>Every tournament battle currently on the server.</summary>
+        List<TourneyBattleInfo> GetTourneyBattles();
+
+        /// <summary>One of them, or null when no tournament battle has that id.</summary>
+        TourneyBattleInfo GetTourneyBattle(int battleID);
+
+        /// <summary>
+        /// Creates a tournament battle from a prototype and returns its id.
+        /// The website sends names, not accounts: it has already resolved them.
+        /// </summary>
+        Task<int> CreateTourneyBattle(TourneyPrototypeInfo prototype);
+
+        /// <summary>Removes one. False when it was not there.</summary>
+        Task<bool> RemoveTourneyBattle(int battleID);
+
         // ---- connected users ------------------------------------------------------------
 
         /// <summary>Tells a connected client to join a battle. No-op when the user is offline.</summary>
