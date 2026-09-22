@@ -460,18 +460,7 @@ namespace PlasmaShared
             return ((double)bytes / 1024 / 1024 / 1024).ToString("F2") + "G";
         }
 
-        public static string PrintTimeRemaining(long secs)
-        {
-            if (secs <= 0) return "";
-            if (secs < 60) return String.Format("{0}s", secs);
-            if (secs < 3600) return String.Format("{0}m {1}s", secs / 60, secs % 60);
-            return String.Format("{0}h {1}m {2}s", secs / 3600, secs / 60 % 60, secs % 60);
-        }
-
-        public static string PrintTimeRemaining(this TimeSpan timeSpan)
-        {
-            return PrintTimeRemaining((int)timeSpan.TotalSeconds);
-        }
+        // PrintTimeRemaining moved to Utils.Enumerable.cs, which the .NET 9 port links.
 
         public static void RaiseAsyncEvent<T>(this EventHandler<T> e, object o, T args) where T : EventArgs
         {
