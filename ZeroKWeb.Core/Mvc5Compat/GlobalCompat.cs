@@ -1,5 +1,9 @@
 using System;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Routing;
+using Microsoft.AspNetCore.Routing;
 using ZkData;
 
 namespace ZeroKWeb
@@ -61,6 +65,26 @@ namespace ZeroKWeb
             IsAccountAuthorized && (Account?.AdminLevel >= AdminLevel.Moderator || Account?.IsTourneyController == true);
 
         public static bool IsLobbyAccess => Context?.Request?.Cookies[GlobalConst.LobbyAccessCookieName] != null;
+
+        /// <summary>
+        /// MVC 5 built a UrlHelper from the ambient request; ASP.NET Core builds one from an
+        /// ActionContext through a factory. Several view helpers call this to turn
+        /// ("Detail", "Clans", new { id }) into a URL, and the call shape is identical on both,
+        /// so only the construction differs.
+        ///
+        /// The ActionContext is built here rather than taken from IActionContextAccessor, which
+        /// would need registering in every host that links these helpers. Routing is read off
+        /// the request when it is there, so links resolve against the real route table.
+        /// </summary>
+        public static IUrlHelper UrlHelper()
+        {
+            var http = Context;
+            if (http == null) return null;
+            var factory = http.RequestServices?.GetService(typeof(IUrlHelperFactory)) as IUrlHelperFactory;
+            if (factory == null) return null;
+            var routeData = http.GetRouteData() ?? new RouteData();
+            return factory.GetUrlHelper(new ActionContext(http, routeData, new ActionDescriptor()));
+        }
 
         /// <summary>
         /// The lobby server, through Phase 1's seam - the crossable half of it, which is all

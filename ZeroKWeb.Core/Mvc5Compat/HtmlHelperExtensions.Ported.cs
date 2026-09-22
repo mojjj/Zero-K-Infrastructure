@@ -216,6 +216,65 @@ namespace System.Web.Mvc
             }
         }
 
+
+        public static IHtmlContent PrintFactionTreaty(this IHtmlHelper helper, FactionTreaty treaty)
+        {
+            if (treaty == null) return new HtmlString("");
+            // the original's markup really does close a </span> it never opened
+            return new HtmlString(string.Format("<a href='{1}' nicetitle='$treaty${0}'>TR{0}</span></a>",
+                treaty.FactionTreatyID,
+                Global.UrlHelper().Action("TreatyDetail", "Factions", new { id = treaty.FactionTreatyID })));
+        }
+
+        public static IHtmlContent PrintPlanet(this IHtmlHelper helper, Planet planet)
+        {
+            if (planet == null) return new HtmlString("?");
+            return new HtmlString(string.Format(
+                "<a href='{0}' title='$planet${4}' style='{5}'><img src='/img/planets/{1}' width='{2}'>{3}</a>",
+                Global.UrlHelper().Action("Planet", "Planetwars", new { id = planet.PlanetID }),
+                planet.Resource.MapPlanetWarsIcon,
+                planet.Resource.PlanetWarsIconSize / 3,
+                planet.Name,
+                planet.PlanetID,
+                planet.Faction != null ? "color:" + planet.Faction.Color : ""));
+        }
+
+        public static IHtmlContent PrintStructureType(this IHtmlHelper helper, StructureType stype)
+        {
+            // the original calls Global.UrlHelper() here and never uses it; not carried over,
+            // because carrying it would mean calling into request state for nothing
+            if (stype == null) return new HtmlString("");
+            return new HtmlString(string.Format("<span nicetitle='$structuretype${0}'>{1}</span>",
+                stype.StructureTypeID, stype.Name));
+        }
+
+        public static IHtmlContent PrintRoleType(this IHtmlHelper helper, RoleType rt)
+        {
+            var factoids = new List<string>();
+            if (rt.IsClanOnly) factoids.Add("clan based");
+            if (rt.IsOnePersonOnly) factoids.Add("only one person can hold this");
+            if (rt.IsVoteable) factoids.Add("is voteable");
+            if (rt.RoleTypeHierarchiesByMasterRoleTypeID.Any(x => x.CanAppoint))
+                factoids.Add("appoints: " + string.Join(", ",
+                    rt.RoleTypeHierarchiesByMasterRoleTypeID.Where(x => x.CanAppoint).Select(x => x.SlaveRoleType.Name)));
+            if (rt.RoleTypeHierarchiesByMasterRoleTypeID.Any(x => x.CanRecall))
+                factoids.Add("recalls: " + string.Join(", ",
+                    rt.RoleTypeHierarchiesByMasterRoleTypeID.Where(x => x.CanRecall).Select(x => x.SlaveRoleType.Name)));
+            if (rt.RightBomberQuota != 0) factoids.Add(string.Format("bomber quota {0:F0}%", rt.RightBomberQuota * 100));
+            if (rt.RightDropshipQuota != 0) factoids.Add(string.Format("dropship quota {0:F0}%", rt.RightDropshipQuota * 100));
+            if (rt.RightWarpQuota != 0) factoids.Add(string.Format("warp quota {0:F0}%", rt.RightWarpQuota * 100));
+            if (rt.RightMetalQuota != 0) factoids.Add(string.Format("metal quota {0:F0}%", rt.RightMetalQuota * 100));
+            if (rt.RightSetEnergyPriority) factoids.Add("can set energy priorities");
+            if (rt.RightDiplomacy) factoids.Add("can control diplomacy");
+            if (rt.RightEditTexts) factoids.Add("controls texts");
+
+            // &nbsp without the semicolon, as found
+            return new HtmlString(string.Format("<span title=\"<b>{0}</b><ul>{1}</ul>\"><b>{2}</b></span>",
+                rt.Description,
+                string.Join("", factoids.Select(x => "<li>" + x + "</li>")),
+                rt.Name + "&nbsp"));
+        }
+
         public static IHtmlContent PrintDate(this IHtmlHelper helper, DateTime? dateTime)
             => new HtmlString($"<span nicetitle=\"{dateTime}\">{dateTime.ToAgoString()}</span>");
 

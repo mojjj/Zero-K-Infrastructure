@@ -742,8 +742,8 @@ that has to be decided or built.
 
 | controller | blocked on | kind |
 |---|---|---|
-| `Battles`, `Tourney`, `Users` | `ZkLobbyServer` / `Global.LobbyApi` - `ReplayStorage`, live `TourneyBattle` objects cast and mutated, and the lobby API itself | **Phase 1's coupling**, reached from Phase 3 |
-| `PlanetwarsAdmin` | `PlanetwarsEventCreator`, which calls `Global.LobbyApi` | **also Phase 1** - see below. `Utils.Shuffle` and `Database.CommandTimeout` are done |
+| `Battles`, `Tourney`, `Users` | `ZkLobbyServer` types that stayed in-process: `ReplayStorage`, live `TourneyBattle` objects cast and mutated | **Phase 1's remaining coupling**. `PlanetwarsAdmin` was here too until the seam was split |
+| ~~`PlanetwarsAdmin`~~ | **links** - it was Phase 1's problem, and the seam split solved it |
 | `Clans`, `Maps`, and the two News controllers | `HttpPostedFileBase` | file upload; ASP.NET Core binds `IFormFile` |
 | `Maps` | `AutoRegistrator`, `ZkData.UnitSyncLib` | native interop with unitsync |
 | `Home` | `DotNetOpenAuth` | .NET Framework only, project discontinued |
@@ -844,6 +844,25 @@ AJAX helpers and the site's grid built on them. ASP.NET Core removed that surfac
 
 **19 views use it.** Like child actions, it is a rewrite rather than a shim, and like child
 actions the rewrite cannot be shared with the MVC 5 build.
+
+### The split paid for itself immediately
+
+`PlanetwarsAdminController` links. It was the controller that turned out to be Phase 1's
+problem two commits ago, and splitting the interface was exactly what it needed: the port can
+declare `Global.LobbyApi` as the crossable half, `PlanetwarsEventCreator` compiles against it,
+and the controller follows.
+
+Four more helpers were needed on the way - `PrintFactionTreaty`, `PrintPlanet`,
+`PrintRoleType`, `PrintStructureType` - along with `Global.UrlHelper()`, which MVC 5 built
+from the ambient request and ASP.NET Core builds from an `ActionContext` through a factory.
+The call shape is identical either side; only the construction differs.
+
+    compiles                 52 -> 54
+
+One thing was deliberately *not* carried over. `PrintStructureType` calls `Global.UrlHelper()`
+and never uses the result; the port's version does not, because calling into request state for
+a value nobody reads is a cost with no behaviour attached. Every other oddity was transcribed
+as found, including a `</span>` that closes nothing in `PrintFactionTreaty`.
 
 ## The Framework build is a check now
 
@@ -947,12 +966,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **52** | compile against ASP.NET Core today |
+| **54** | compile against ASP.NET Core today |
 | **24** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
-| **32** | something else missing |
+| **30** | something else missing |
 
-**Read the 52 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
+**Read the 54 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.
