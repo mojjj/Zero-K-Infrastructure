@@ -742,12 +742,17 @@ that has to be decided or built.
 
 | controller | blocked on | kind |
 |---|---|---|
-| `Battles`, `Tourney` | `ZkLobbyServer` - `ReplayStorage`, and live `TourneyBattle` objects cast and mutated | **Phase 1's coupling**, reached from Phase 3 |
-| `Users`, `PlanetwarsAdmin` | `EntityFramework.Extensions` - `DbSet.Delete()`, `IQueryable.Update()` | EF6 batch operations; EF Core's `ExecuteDelete`/`ExecuteUpdate` are a different API |
+| `Battles`, `Tourney`, `Users` | `ZkLobbyServer` / `Global.LobbyApi` - `ReplayStorage`, live `TourneyBattle` objects cast and mutated, and the lobby API itself | **Phase 1's coupling**, reached from Phase 3 |
+| `PlanetwarsAdmin` | `PlanetwarsEventCreator`, `Utils.Shuffle`, `Database.CommandTimeout` | ordinary porting; its `EntityFramework.Extensions` blocker is **solved** below |
 | `Clans`, `Maps`, and the two News controllers | `HttpPostedFileBase` | file upload; ASP.NET Core binds `IFormFile` |
 | `Maps` | `AutoRegistrator`, `ZkData.UnitSyncLib` | native interop with unitsync |
 | `Home` | `DotNetOpenAuth` | .NET Framework only, project discontinued |
 | `Admin` | `System.Data.SqlClient`, `Response.Write` | done - both solved here |
+
+`Users` moved into the first row while this was written. Its `EntityFramework.Extensions`
+blocker is gone, and behind it was `Global.LobbyApi` - so **three** controllers are gated on
+the lobby-server split, not two. The earlier measurement could not see that: the dead usings
+in front of it were declaration errors, and those stop every method body in the file binding.
 
 **`HttpPostedFileBase` is the one worth naming as a trap.** It is an abstract class, and a shim
 of the same shape would compile: the actions take it as a parameter and read `InputStream`,
@@ -759,6 +764,31 @@ shimmed. Four controllers change signature to `IFormFile` when the builds diverg
 So the controller path is not blocked on effort. It is blocked on three decisions already
 named - the lobby-server split, EF Core's batch API, and divergence from the MVC 5 build -
 plus two libraries that need replacing outright.
+
+### EF6's batch operations, implemented rather than shimmed
+
+`EntityFramework.Extensions` gave EF6 `DbSet<T>.Delete()` and
+`IQueryable<T>.Update(x => new T { ... })`: one statement against every row a query matches,
+without loading anything. EF Core 7 grew the same capability as `ExecuteDelete` and
+`ExecuteUpdate`, so `Mvc5Compat/BatchOperationsCompat.cs` is a translation, not a
+reimplementation - the database does identical work either way.
+
+`Update` is where the work is. EF6 takes a member initialiser and EF Core wants a chain of
+`SetProperty` calls, so the initialiser is taken apart and rebuilt as that chain. Arbitrary
+expressions survive, not only constants: whatever was on the right-hand side reaches EF Core
+unchanged for it to translate.
+
+One detail cost a wrong turn worth recording. `SetPropertyCalls<T>.SetProperty` takes
+**`Func<T, TProperty>`, not `Expression<Func<T, TProperty>>`** - the lambdas live *inside* the
+expression tree EF Core parses, so they are passed straight through as `LambdaExpression`s,
+exactly as the compiler emits for `setters.SetProperty(x => x.A, x => 1)`. Reflecting for an
+`Expression<>` parameter finds no overload at all.
+
+**It is checked against a real database, not just compiled**, because the alternative to this
+file was an empty namespace that also compiled and would have thrown on an admin page that
+deletes planets. `ZeroKWeb.Render` now runs both operations inside a transaction it rolls
+back: that the row count matches the query, that the rows really changed, that a `null`
+assignment lands, and that the fixture is untouched afterwards.
 
 ### The next structural blocker is unobtrusive AJAX
 
