@@ -25,6 +25,12 @@ namespace ZkLobbyServer
     ///   PlanetWarsPhase                  - PwPhase is a server enum; a DTO or a string
     ///   InProcess                        - the escape hatch, and the real measure of progress
     ///
+    /// The tournament API that InProcess's eight remaining callers need now exists on
+    /// <see cref="ILobbyServerApi"/> - GetTourneyBattles, GetTourneyBattle, CreateTourneyBattle
+    /// and RemoveTourneyBattle, in terms of <see cref="TourneyBattleInfo"/>. What is left is
+    /// moving TourneyController onto it, which is a controller rewrite rather than a design
+    /// question.
+    ///
     /// Count the escape hatch's remaining callers with:
     ///
     ///     grep -rn "LobbyApi.InProcess" Zero-K.info/

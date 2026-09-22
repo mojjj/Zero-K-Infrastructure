@@ -72,6 +72,70 @@ namespace ZkLobbyServer
 
         public Task RemoveBattle(Battle battle) => server.RemoveBattle(battle);
 
+        // ---- tournaments ----------------------------------------------------------------
+        //
+        // The only place in this class that converts rather than forwards. Everything else
+        // hands a live object straight through; these map TourneyBattle onto TourneyBattleInfo,
+        // which is what lets the calls leave the process. The mapping is the interesting part of
+        // the tournament API - the rest of it is the same three operations TourneyController
+        // already performs through InProcess.
+
+        public List<TourneyBattleInfo> GetTourneyBattles() =>
+            server.Battles.Values.Where(x => x != null).OfType<TourneyBattle>().Select(Describe).ToList();
+
+        public TourneyBattleInfo GetTourneyBattle(int battleID)
+        {
+            server.Battles.TryGetValue(battleID, out var battle);
+            return battle is TourneyBattle tourney ? Describe(tourney) : null;
+        }
+
+        public async Task<int> CreateTourneyBattle(TourneyPrototypeInfo prototype)
+        {
+            var battle = new TourneyBattle(server, new TourneyBattle.TourneyPrototype
+            {
+                Title = prototype.Title,
+                FounderName = prototype.FounderName,
+                TeamPlayers = prototype.TeamPlayers,
+                ModOptions = prototype.ModOptions,
+                MapOptions = prototype.MapOptions,
+            });
+            await AddBattle(battle);
+            return battle.BattleID;
+        }
+
+        public async Task<bool> RemoveTourneyBattle(int battleID)
+        {
+            server.Battles.TryGetValue(battleID, out var battle);
+            if (!(battle is TourneyBattle)) return false;
+            await server.RemoveBattle(battle);
+            return true;
+        }
+
+        /// <summary>
+        /// A live tournament battle as data. Users and Debriefings are copied rather than
+        /// shared: the originals keep changing on the server, and a caller in another process
+        /// would receive a snapshot, so a caller in this one should see the same thing.
+        /// </summary>
+        private static TourneyBattleInfo Describe(TourneyBattle battle) => new TourneyBattleInfo
+        {
+            BattleID = battle.BattleID,
+            Title = battle.Title,
+            FounderName = battle.FounderName,
+            MaxPlayers = battle.MaxPlayers,
+            SpectatorCount = battle.SpectatorCount,
+            NonSpectatorCount = battle.NonSpectatorPlayerCount,
+            Users = new Dictionary<string, UserBattleStatus>(battle.Users),
+            Debriefings = new List<BattleDebriefing>(battle.Debriefings),
+            Prototype = battle.Prototype == null ? new TourneyPrototypeInfo() : new TourneyPrototypeInfo
+            {
+                Title = battle.Prototype.Title,
+                FounderName = battle.Prototype.FounderName,
+                TeamPlayers = battle.Prototype.TeamPlayers,
+                ModOptions = battle.Prototype.ModOptions,
+                MapOptions = battle.Prototype.MapOptions,
+            },
+        };
+
         public NewsList GetCurrentNewsList() => server.NewsListManager.GetCurrentNewsList();
 
         public LadderList GetCurrentLadderList() => server.LadderListManager.GetCurrentLadderList();

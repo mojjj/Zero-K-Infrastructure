@@ -864,7 +864,34 @@ and never uses the result; the port's version does not, because calling into req
 a value nobody reads is a cost with no behaviour attached. Every other oddity was transcribed
 as found, including a `</span>` that closes nothing in `PrintFactionTreaty`.
 
-## The Framework build is a check now
+### The tournament API exists
+
+The six members that stayed in-process are only half the Phase 1 story; the other half is
+`TourneyController`'s eight `LobbyApi.InProcess` uses, which the plan called "a real tournament
+API with DTOs plus a rewritten Razor view" and estimated in months.
+
+Measured, those eight uses are **three operations**: list the tournament battles, get one by
+id, create one from a prototype. A fourth, remove, is in the view's links.
+
+`ZkLobbyServer/TourneyApi.cs` is the data they need. **Every member is a primitive or a
+LobbyClient protocol type** - `UserBattleStatus` and `BattleDebriefing` already travel between
+the lobby server and the game client, so they travel to a website in another process too. The
+four methods are declared on the **crossable** interface, which means the port's build enforces
+that they stay crossable.
+
+Two decisions inside it are worth naming:
+
+- **The field names are the ones the view already reads** - `BattleID`, `Title`, `FounderName`,
+  `MaxPlayers`, `Users`, `Debriefings`, `Prototype`, and the two counts. A controller handing
+  `TourneyIndex.cshtml` this type instead of the live one needs no change to the view. Nothing
+  here can compile a Razor view, so a rewrite could not be verified; matching the names avoids
+  needing one.
+- **`Describe` copies `Users` and `Debriefings` rather than sharing them.** A caller in another
+  process would receive a snapshot, so a caller in this one sees the same thing - otherwise the
+  in-process implementation would quietly support aliasing that the remote one never could.
+
+`TourneyController` still has its eight `InProcess` uses. Moving it onto the API is a
+controller rewrite, which is verifiable here, and is the next step rather than this one.
 
 Nothing in CI compiled .NET Framework. `tools/build-website.sh` existed and was run by hand;
 the Windows job that would have covered it sits queued forever on this fork.
