@@ -27,6 +27,11 @@ namespace ZeroKWeb.Compat
         /// </summary>
         public Mvc5Request Request => new Mvc5Request(Context.Request);
 
+        /// <summary>
+        /// MVC 5's Ajax helper. 18 views use it; see Mvc5Compat/AjaxCompat.cs.
+        /// </summary>
+        public Mvc5AjaxHelper Ajax => new Mvc5AjaxHelper(ZeroKWeb.Global.UrlHelper(), Output);
+
         public Mvc5Server Server => new Mvc5Server(
             Context.RequestServices.GetService(typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment))
                 as Microsoft.AspNetCore.Hosting.IWebHostEnvironment);
