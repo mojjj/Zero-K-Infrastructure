@@ -106,8 +106,8 @@ namespace ZkLobbyServer
 
         // ---- tournaments ----------------------------------------------------------------
         // TourneyController's whole surface, in terms of TourneyBattleInfo rather than the live
-        // TourneyBattle objects it reaches for today. These are what its eight
-        // LobbyApi.InProcess uses become.
+        // TourneyBattle objects. The controller now calls these: its eight LobbyApi.InProcess
+        // uses are gone, and with them the website's last use of the escape hatch.
 
         /// <summary>Every tournament battle currently on the server.</summary>
         List<TourneyBattleInfo> GetTourneyBattles();
@@ -124,6 +124,16 @@ namespace ZkLobbyServer
         /// <summary>Removes one. False when it was not there.</summary>
         Task<bool> RemoveTourneyBattle(int battleID);
 
+        /// <summary>
+        /// Forces a player into a tournament battle, addressed by id.
+        ///
+        /// The general ForceJoinBattle takes a host NAME and finds the first battle with that
+        /// founder, which is not the same question: two battles can share a founder, and the
+        /// tournament console has the id in hand anyway. This is the "a battle id would do"
+        /// note on the in-process overload, done.
+        /// </summary>
+        Task ForceJoinTourneyBattle(string player, int battleID);
+
         // ---- connected users ------------------------------------------------------------
 
         /// <summary>Tells a connected client to join a battle. No-op when the user is offline.</summary>
@@ -131,16 +141,14 @@ namespace ZkLobbyServer
 
         // ---- not modelled yet -----------------------------------------------------------
         //
-        // TourneyController is a tournament admin console over live server objects: it lists
-        // TourneyBattle instances, creates them from a TourneyPrototype, reads their Debriefings
-        // and Prototype.TeamPlayers, and the Razor view renders those objects directly.
+        // What is left is PlanetWars: GetPlanetBattles(Planet) and PlanetWarsPhase, both on
+        // ILobbyServerApiInProcess. They return live Battle objects and a server-side enum, and
+        // unlike the tournament console their callers include two Razor views, so the DTO has to
+        // satisfy Planet.cshtml and Galaxy.cshtml as well as four controller actions.
         //
-        // Remoting it needs a tournament API rather than a translation: DTOs for battle,
-        // prototype and debriefing, a create/remove/force-join contract, and the view rewritten
-        // against the DTOs. That is the last thing standing between this interface and an
-        // out-of-process lobby server, and it is deliberately not bodged onto the interface -
-        // returning ServerBattle or TourneyBattle from here would break the promise that
-        // everything above can cross a process boundary.
+        // Nothing is bodged onto this interface in the meantime: returning Battle or PwPhase
+        // from here would break the promise that everything above can cross a process boundary,
+        // and that promise is what the port's build now enforces.
 
     }
 

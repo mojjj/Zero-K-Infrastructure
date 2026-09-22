@@ -111,6 +111,12 @@ namespace ZkLobbyServer
             return true;
         }
 
+        public async Task ForceJoinTourneyBattle(string player, int battleID)
+        {
+            server.Battles.TryGetValue(battleID, out var battle);
+            if (battle is TourneyBattle) await server.ForceJoinBattle(player, battle);
+        }
+
         /// <summary>
         /// A live tournament battle as data. Users and Debriefings are copied rather than
         /// shared: the originals keep changing on the server, and a caller in another process

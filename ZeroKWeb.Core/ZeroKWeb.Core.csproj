@@ -74,6 +74,7 @@
     <Compile Include="..\ZkLobbyServer\TourneyApi.cs" Link="Linked\TourneyApi.cs" />
     <Compile Include="..\Zero-K.info\AppCode\ForumPostIndexer.cs" Link="Linked\ForumPostIndexer.cs" />
     <Compile Include="..\Zero-K.info\Controllers\ChartsController.cs" Link="Linked\Controllers\ChartsController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\TourneyController.cs" Link="Linked\Controllers\TourneyController.cs" />
   </ItemGroup>
 
   <!--
