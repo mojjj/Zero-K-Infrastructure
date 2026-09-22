@@ -55,6 +55,9 @@
          ZkLobbyServer, so a member that names a server-side type fails this build. That is
          what keeps ILobbyServerApi crossable rather than merely intended to be. -->
     <Compile Include="..\ZeroKWeb.Core\Mvc5Compat\*.cs" Link="Linked\%(Filename).cs" />
+    <!-- The view components that replace MVC 5 child actions. Same reason as Mvc5Compat:
+         ZeroKWeb.Core owns these files, these two projects link them. -->
+    <Compile Include="..\ZeroKWeb.Core\ViewComponents\*.cs" Link="Linked\ViewComponents\%(Filename).cs" />
   </ItemGroup>
 
   <!-- Removes every view the inventory says does not compile; written by tools/render-view.sh. -->

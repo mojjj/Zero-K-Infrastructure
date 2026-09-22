@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Web.Mvc;
 using EntityFramework.Extensions;
+using PlasmaShared;
 using ZkData;
 
 namespace ZeroKWeb.Render
@@ -94,6 +95,7 @@ namespace ZeroKWeb.Render
             failures += CheckPortedHelpers();
             failures += CheckBatchOperations();
             failures += CheckChildActionTripwire();
+            failures += await CheckViewComponents();
 
             Console.WriteLine();
             if (failures == 0)
@@ -302,6 +304,206 @@ namespace ZeroKWeb.Render
         /// </summary>
 
         /// <summary>The minimum ASP.NET Core insists on before it will execute a view.</summary>
+        /// <summary>
+        /// A view component, invoked the way a diverged view invokes one.
+        ///
+        /// This is the check the child-action work has been missing. ForumPostList compiles and
+        /// cannot be run - Forum/PostList.cshtml does not build yet - so up to now "a view
+        /// component works on .NET 9" was an assumption. PlanetwarsLadder is the first that can
+        /// be exercised: Planetwars/Ladder.cshtml compiles, and Planetwars/Ladder carries no
+        /// filters.
+        ///
+        /// It goes through the real IViewComponentHelper by NAME, which is what
+        /// `@await Component.InvokeAsync("PlanetwarsLadder")` compiles into - not by calling
+        /// Invoke() directly, which would prove the query and skip everything that makes a view
+        /// component a view component: discovery, view resolution, the ViewComponentResult.
+        ///
+        /// The fixture has no Galaxies and no Factions, and the component's query needs both, so
+        /// the rows are made here inside a transaction that is rolled back. They are synthetic
+        /// and deliberately identifiable - the assertions look for names this method wrote.
+        /// </summary>
+        private static async Task<int> CheckViewComponents()
+        {
+            Console.WriteLine();
+            Console.WriteLine("view components:");
+
+            var failures = 0;
+
+            // COMMITTED, not a rolled-back transaction, and that is forced: the component opens
+            // its own ZkDataContext, so it is a different connection and cannot see uncommitted
+            // rows. The first attempt used a transaction and the component reported "Sequence
+            // contains no elements" from db.Galaxies.First - it was reading the real database
+            // while the rows sat in another connection's transaction.
+            //
+            // So the setup is written, used, and undone by hand below. Every original value is
+            // captured first and restored in the finally. If this process is killed between the
+            // two, the fixture is left dirty - reload it with db/load-fixture.sh.
+            int factionID = 0, galaxyID = 0;
+            SpringBattle battle = null;
+            AutohostMode originalMode = default;
+            DateTime originalStart = default;
+            var originalPlayers = new List<(int AccountID, bool IsSpectator)>();
+            var originalAccounts = new List<(int AccountID, int? FactionID, DateTime LastLogin)>();
+
+            try
+            {
+                var names = new List<string>();
+                using (var db = new ZkDataContext())
+                {
+                    var faction = new Faction
+                    {
+                        Name = "RenderCheckFaction", Shortcut = "RCF", Color = "#123456",
+                        Metal = 0, Bombers = 0, Dropships = 0, Warps = 0,
+                        EnergyDemandLastTurn = 0, EnergyProducedLastTurn = 0,
+                        VictoryPoints = 0, IsDeleted = false,
+                    };
+                    db.Factions.Add(faction);
+
+                    var galaxy = new Galaxy
+                    {
+                        IsDefault = true, IsDirty = false, Started = DateTime.UtcNow.AddDays(-2),
+                        Width = 100, Height = 100, Turn = 0, AttackerSideCounter = 0,
+                    };
+                    db.Galaxies.Add(galaxy);
+                    db.SaveChanges();
+                    factionID = faction.FactionID;
+                    galaxyID = galaxy.GalaxyID;
+
+                    // An existing battle becomes a PlanetWars battle, which is cheaper than
+                    // building one and keeps the player rows real.
+                    battle = db.SpringBattles.OrderBy(b => b.SpringBattleID).First();
+                    originalMode = battle.Mode;
+                    originalStart = battle.StartTime;
+                    battle.Mode = AutohostMode.Planetwars;
+                    battle.StartTime = DateTime.UtcNow.AddDays(-1);
+
+                    var players = db.SpringBattlePlayers
+                        .Where(x => x.SpringBattleID == battle.SpringBattleID)
+                        .OrderBy(x => x.AccountID).Take(2).ToList();
+                    if (players.Count < 2)
+                    {
+                        Console.WriteLine("   FAIL  the fixture battle has fewer than two players");
+                        return 1;
+                    }
+
+                    foreach (var player in players)
+                    {
+                        originalPlayers.Add((player.AccountID, player.IsSpectator));
+                        player.IsSpectator = false;
+
+                        var account = db.Accounts.Single(a => a.AccountID == player.AccountID);
+                        originalAccounts.Add((account.AccountID, account.FactionID, account.LastLogin));
+                        account.FactionID = factionID;
+                        account.LastLogin = DateTime.UtcNow;
+                        names.Add(account.Name);
+                    }
+                    db.SaveChanges();
+                }
+
+                // Ladder.cshtml calls acct.GetRating(RatingCategory.Planetwars), which indexes
+                // RatingSystems.whr - empty until Init() runs, and its "unknown category"
+                // fallback indexes the same empty dictionary, so the failure is a
+                // KeyNotFoundException rather than a default rating.
+                //
+                // Init() fills that dictionary on its first line and then starts the WHR pass in
+                // a background task. Only the first part matters here: with the pass unfinished,
+                // GetPlayerRating reads AccountRatings from the database, which the fixture has.
+                Ratings.RatingSystems.Init();
+
+                var html = await InvokeViewComponent("PlanetwarsLadder");
+
+                failures += Check(html.Contains("Top players"), "  the component rendered its view");
+                failures += Check(html.Contains("RenderCheckFaction"),
+                    "  the faction from the database reached the HTML");
+                foreach (var name in names)
+                {
+                    failures += Check(html.Contains(name), "  " + name + " is in the ladder");
+                }
+                failures += Check(!html.Contains("@"), "  no unprocessed Razor markers survived");
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    foreach (var original in originalAccounts)
+                    {
+                        var account = db.Accounts.Single(a => a.AccountID == original.AccountID);
+                        account.FactionID = original.FactionID;
+                        account.LastLogin = original.LastLogin;
+                    }
+                    foreach (var original in originalPlayers)
+                    {
+                        var player = db.SpringBattlePlayers.Single(
+                            x => x.SpringBattleID == battle.SpringBattleID && x.AccountID == original.AccountID);
+                        player.IsSpectator = original.IsSpectator;
+                    }
+                    if (battle != null)
+                    {
+                        var stored = db.SpringBattles.Single(b => b.SpringBattleID == battle.SpringBattleID);
+                        stored.Mode = originalMode;
+                        stored.StartTime = originalStart;
+                    }
+                    if (galaxyID != 0) db.Galaxies.Remove(db.Galaxies.Single(g => g.GalaxyID == galaxyID));
+                    db.SaveChanges();
+                    if (factionID != 0) db.Factions.Remove(db.Factions.Single(f => f.FactionID == factionID));
+                    db.SaveChanges();
+                }
+            }
+
+            using (var db = new ZkDataContext())
+            {
+                failures += Check(
+                    !db.Factions.Any(f => f.Name == "RenderCheckFaction") && !db.Galaxies.Any()
+                    && db.SpringBattles.Single(b => b.SpringBattleID == battle.SpringBattleID).Mode == originalMode,
+                    "  the fixture is left as it was found");
+            }
+            return failures;
+        }
+
+        /// <summary>
+        /// Invokes a view component by name through the MVC infrastructure, exactly as
+        /// <c>@await Component.InvokeAsync("Name")</c> does from a view.
+        /// </summary>
+        private static async Task<string> InvokeViewComponent(string name)
+        {
+            var provider = BuildServices();
+            var tempDataProvider = provider.GetRequiredService<ITempDataProvider>();
+            var httpContext = new DefaultHttpContext { RequestServices = provider };
+
+            // An endpoint has to be present for MVC to pick the LinkGenerator-based UrlHelper
+            // rather than the router-based one. There is no route table here, so Url.Action
+            // returns null and hrefs come out empty - URL GENERATION IS NOT EXERCISED by this
+            // check, only that the view runs and the model reaches the HTML.
+            httpContext.SetEndpoint(new Microsoft.AspNetCore.Http.Endpoint(
+                _ => Task.CompletedTask, Microsoft.AspNetCore.Http.EndpointMetadataCollection.Empty, "render-harness"));
+
+            var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
+            var viewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary());
+
+            using (var writer = new StringWriter())
+            {
+                var viewContext = new ViewContext(actionContext, new FakeView(), viewData,
+                    new TempDataDictionary(httpContext, tempDataProvider), writer, new HtmlHelperOptions());
+
+                var helper = provider.GetRequiredService<IViewComponentHelper>();
+                ((IViewContextAware)helper).Contextualize(viewContext);
+                var content = await helper.InvokeAsync(name);
+
+                using (var componentWriter = new StringWriter())
+                {
+                    content.WriteTo(componentWriter, System.Text.Encodings.Web.HtmlEncoder.Default);
+                    return componentWriter.ToString();
+                }
+            }
+        }
+
+        /// <summary>A ViewContext needs an IView; a component does not use it.</summary>
+        private sealed class FakeView : Microsoft.AspNetCore.Mvc.ViewEngines.IView
+        {
+            public string Path => "/none";
+            public Task RenderAsync(ViewContext context) => Task.CompletedTask;
+        }
+
         private static ServiceProvider BuildServices()
         {
             var services = new ServiceCollection();
@@ -310,7 +512,16 @@ namespace ZeroKWeb.Render
             services.AddSingleton<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>(environment);
             services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(environment);
             services.AddSingleton(new Microsoft.Extensions.ObjectPool.DefaultObjectPoolProvider());
-            services.AddMvcCore().AddRazorViewEngine();
+            // AddApplicationPart: a console app is not an MVC application, so nothing registers
+            // this assembly as a place to look for controllers or view components. Without it
+            // InvokeAsync("PlanetwarsLadder") reports that no such component exists, which reads
+            // like the component is wrong rather than undiscovered.
+            // Routing, so IUrlHelper resolves at all. Views call @Url.Action; without this the
+            // factory hands back the router-based UrlHelper, which throws "Could not find an
+            // IRouter associated with the ActionContext".
+            services.AddRouting();
+            services.AddMvcCore().AddRazorViewEngine().AddViews()
+                .AddApplicationPart(typeof(Program).Assembly);
             services.AddSingleton<System.Diagnostics.DiagnosticSource>(new System.Diagnostics.DiagnosticListener("zk"));
             services.AddSingleton(new System.Diagnostics.DiagnosticListener("zk"));
             return services.BuildServiceProvider();
