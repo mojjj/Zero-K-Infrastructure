@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using LobbyClient;
 using ZeroKWeb;
@@ -13,16 +13,18 @@ namespace ZkLobbyServer
     /// disconnects every player (see Zero-K.info/HOSTING.md). Moving it to its own process is
     /// blocked on the website reaching directly into the server's live in-memory state.
     ///
-    /// This interface is the seam for that work. It changes no behaviour - the only implementation
-    /// is <see cref="InProcessLobbyServerApi"/>, which forwards straight to <see cref="ZkLobbyServer"/>.
-    /// Its purpose is to make the coupling explicit:
+    /// **Every member here compiles outside the lobby server**, and that is now enforced rather
+    /// than intended: this file is linked into the .NET 9 port (ZeroKWeb.Core and friends), which
+    /// has no reference to this project, so a member naming a server-side type breaks that build.
     ///
-    ///   - Members declared here are calls that could cross a process boundary as they are, or with
-    ///     a DTO in place of an entity.
-    ///   - Anything still reached through <see cref="InProcess"/> cannot, and is the remaining work.
+    /// The six that did name one - ForceJoinBattle(Battle), GetPlanetBattles, AddBattle,
+    /// RemoveBattle, PlanetWarsPhase and InProcess - moved to
+    /// <see cref="ILobbyServerApiInProcess"/>. They are the remaining Phase 1 work, and they are
+    /// now separated by a compiler rather than by a comment.
     ///
-    /// The goal is for <see cref="InProcess"/> to lose all its callers. Adding one is fine; it just
-    /// means that call has not been designed yet.
+    /// Adding a member here that needs Battle, ServerBattle, PwPhase or ZkLobbyServer will fail
+    /// the port's build. That is the point: it means the call has not been designed yet, and it
+    /// belongs in the other interface until it has been.
     /// </summary>
     public interface ILobbyServerApi
     {
@@ -34,7 +36,6 @@ namespace ZkLobbyServer
         Task GhostSay(Say say, int? battleID = null);
         Task KickFromServer(string kickerName, string kickeeName, string reason);
         Task ForceJoinBattle(string playerName, string battleHost);
-        Task ForceJoinBattle(string player, Battle bat);
         Task SetTopic(string channel, string topic, string author);
         Task RequestJoinPlanet(string name, int planetId, string attackerFaction);
         Task SendSiteToLobbyCommand(string user, SiteToLobbyCommand command);
@@ -62,18 +63,7 @@ namespace ZkLobbyServer
         /// <summary>Number of clients currently connected to the lobby server.</summary>
         int ConnectedUserCount { get; }
 
-        /// <summary>
-        /// Returns live <see cref="Battle"/> objects. Callers only read scalar fields and user
-        /// counts, so this is a DTO away from being remotable.
-        /// </summary>
-        List<Battle> GetPlanetBattles(Planet planet);
 
-        // ---- battle lifecycle -----------------------------------------------------------
-        // ServerBattle is a live server-side object; these stay in-process until battles are
-        // addressed by id rather than by reference.
-
-        Task AddBattle(ServerBattle battle);
-        Task RemoveBattle(Battle battle);
 
         // ---- lobby content lists --------------------------------------------------------
         // Served to the game client and refreshed when the website edits the underlying rows.
@@ -100,8 +90,6 @@ namespace ZkLobbyServer
         /// <summary>False when PlanetWars is offline; callers must handle that.</summary>
         bool IsPlanetWarsMatchMakerRunning { get; }
 
-        /// <summary>Null when the matchmaker is not running.</summary>
-        PwPhase? PlanetWarsPhase { get; }
 
         void AddPlanetWarsAttackOption(Planet planet, int attackerFactionId);
 
@@ -134,19 +122,6 @@ namespace ZkLobbyServer
         // returning ServerBattle or TourneyBattle from here would break the promise that
         // everything above can cross a process boundary.
 
-        // ---- escape hatch ---------------------------------------------------------------
-
-        /// <summary>
-        /// The server itself, for the calls that still need its live object graph: the battle
-        /// dictionary, connected users, the PlanetWars matchmaker, channel and list managers,
-        /// and the lobby session tokens used for website single sign-on.
-        ///
-        /// Null when the lobby server is not running. Every use is a call that still has to be
-        /// designed before the server can move out of the web process; count them with:
-        ///
-        ///     grep -rn "LobbyApi.InProcess" Zero-K.info/
-        /// </summary>
-        ZkLobbyServer InProcess { get; }
     }
 
     /// <summary>Aggregate battle counts, so the website does not need the live battle list.</summary>

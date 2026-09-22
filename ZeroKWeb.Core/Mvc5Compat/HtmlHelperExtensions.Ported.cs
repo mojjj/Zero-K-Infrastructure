@@ -44,7 +44,11 @@ namespace System.Web.Mvc
     /// The namespace is System.Web.Mvc for the reason given in
     /// HtmlHelperExtensions.Portable.cs: it is how the views already find these.
     /// </summary>
-    public static class HtmlHelperExtensionsPorted
+    // A partial of the SAME class Zero-K.info/AppCode/HtmlHelperExtensions.Portable.cs
+    // declares, not a separate one. The original is invoked both ways - Html.PrintAccount(x)
+    // from views, HtmlHelperExtensions.PrintAccount(null, x) from PlanetwarsEventCreator - and
+    // only a partial of the real class satisfies both.
+    public static partial class HtmlHelperExtensions
     {
 
         /// <summary>
