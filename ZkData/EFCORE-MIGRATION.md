@@ -1576,3 +1576,87 @@ Either way the seven actions have to be ported, and five of them live in control
 does not link yet (`Planetwars`, `Poll`, `Lobby`, `My`; `Forum` is linked). That is the size of
 the remaining work, and it is the same in both options.
 
+## Divergence: the first view the two builds no longer share
+
+The decision recorded in the previous section is taken: the child-action call sites **diverge**.
+`PortedViews/` holds the .NET 9 copies, `port-views.props` removes the linked original and links
+the copy in its place, and all three port projects import it. The MVC 5 build is untouched.
+
+`Shared/CommentList.cshtml` is the first, and the diff is one line:
+
+```diff
+-    @Html.Action("GetPostList","Forum", new { threadID = Model.Thread.ForumThreadID })
++    @await Component.InvokeAsync("ForumPostList", new { threadID = Model.Thread.ForumThreadID })
+```
+
+`ZeroKWeb.Core/ViewComponents/ForumPostListViewComponent.cs` is `ForumController.GetPostList`'s
+body with two forced differences: it builds its own model, because a view component is invoked
+with an anonymous object rather than through model binding, and it returns the partial by full
+path, because view components resolve views under `Views/Shared/Components/<Name>/` and
+`PostList.cshtml` is a real view the Forum controller also renders on its own.
+
+### Only one, and the reason is not caution
+
+**Every one of the seven actions renders a partial that does not compile yet.**
+
+| action | renders | state |
+| --- | --- | --- |
+| `Forum/GetPostList` | `Forum/PostList.cshtml` | CS0103 CS0117 CS0246 |
+| `Poll/Index` | `Poll/PollView.cshtml` | CS0103 CS0246 |
+| `Planetwars/Ladder` | `Planetwars/Ladder.cshtml` | CS0246 |
+| `Planetwars/MatchMaker` | `Planetwars/PwMatchMaker.cshtml` | CS0103 CS0117 CS0246 |
+| `Lobby/ChatNotification` | `Shared/ChatNotification.cshtml` | CS0234 |
+| `Planetwars/Events` | `Planetwars/Events.cshtml` | CS0234 |
+| `My/CommanderProfile` | `My/CommanderProfile.cshtml` | compiles |
+
+So a view component can be written and compiled, but not exercised. Writing the other six now
+would produce six unverifiable components and would trade a clear `NotSupportedException` -
+which says exactly what is wrong and where - for a failure deep inside a partial that does not
+build. The remaining six should follow their partials, not lead them.
+
+`My/CommanderProfile` is the exception whose partial already compiles, but its **caller**,
+`My/Commanders.cshtml`, is blocked on the AJAX helpers (`Ajax`, `AjaxOptions`, `InsertionMode`),
+so it cannot be exercised either.
+
+### Two measurement traps this opened, and what was done about them
+
+**A diverged view could have gone uncompiled and nobody would have noticed.** The first build
+after adding `PortedViews/Shared/CommentList.cshtml` reported zero errors, which proves nothing
+on its own - a file that is not in the build also reports zero errors. Appending
+`@ThisSymbolDoesNotExistAnywhere` to it and getting
+
+```
+PortedViews/Shared/CommentList.cshtml(12,2): error CS0103: The name ... does not exist
+```
+
+is what actually established it. A positive control, because this port has been fooled by
+silence four times.
+
+**A broken diverged view would poison the whole report.** `PortedViews` files are never removed
+from a batch, so they are compiled in every one; a declaration error in one would suppress
+method-body binding everywhere and quietly empty every other bucket. The report now prints
+
+```
+PORTED VIEW BROKEN       PortedViews/Shared/CommentList.cshtml  [CS0103]
+```
+
+above the inventory, and an `ORPHAN` line for a copy whose original has been renamed or deleted.
+Both were verified by breaking the file on purpose.
+
+The inventory gained a `diverged` bucket so the original is not silently counted as though the
+port still compiles it:
+
+```
+compiles                 52
+diverged                  1
+child-action              3
+```
+
+### The cost, recorded where it will be seen
+
+`PortedViews/README.md` states it: a view in there is maintained twice until
+`Zero-K.info/asp.net.csproj` is retired, and the MVC 5 copy is the one serving production. The
+report catches a compile error in either copy. **Nothing catches a behaviour difference between
+two files that both compile**, which is why the standing rule is that the diff stays confined to
+the child-action call site.
+

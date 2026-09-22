@@ -141,10 +141,18 @@ text = pathlib.Path(sys.argv[1]).read_text()
 rebatched = set(pathlib.Path(sys.argv[2]).read_text().split())
 
 errors = collections.defaultdict(list)
-for m in re.finditer(r'[^\s(]*?(Zero-K\.info/Views/[^(]+)\((\d+),\d+\): error ([A-Z]+\d+): ([^[]+)', text):
+for m in re.finditer(r'[^\s(]*?((?:Zero-K\.info/Views|PortedViews)/[^(]+)\((\d+),\d+\): error ([A-Z]+\d+): ([^[]+)', text):
     errors[m.group(1)].append((m.group(3), m.group(4).strip()))
 
 views = sorted(str(p) for p in pathlib.Path("Zero-K.info/Views").rglob("*.cshtml"))
+
+# The port compiles these INSTEAD of the linked original at the same path. See
+# PortedViews/README.md. They are matched here rather than assumed: a copy whose original has
+# been renamed or deleted would otherwise sit in the build unnoticed.
+ported = sorted(str(q) for q in pathlib.Path("PortedViews").rglob("*.cshtml")) if pathlib.Path("PortedViews").exists() else []
+replaces = {q: "Zero-K.info/Views/" + str(pathlib.Path(q).relative_to("PortedViews")) for q in ported}
+orphans = sorted(q for q, original in replaces.items() if original not in views)
+diverged = {original for original in replaces.values() if original in views}
 
 RAZOR_LANGUAGE = {"RZ1002", "RZ1031"}
 UNPORTED = ("ZeroKWeb", "Controller", "AwardCalculator", "PwLadder")
@@ -160,6 +168,8 @@ def has_child_action(view):
     return bool(CHILD_ACTION.search(pathlib.Path(view).read_text(encoding="utf-8-sig", errors="replace")))
 
 def classify(view):
+    if view in diverged:
+        return "diverged"
     found = errors.get(view, [])
     if not found:
         return "child-action" if has_child_action(view) else "compiles"
@@ -185,11 +195,13 @@ for view in views:
 # pass the error limit can silence. There should be none; say so loudly if there are.
 unverified = [v for v in buckets["compiles"] if v not in rebatched]
 
-order = ["compiles", "child-action", "waiting-on-controllers", "razor-language", "other"]
+order = ["compiles", "diverged", "child-action", "waiting-on-controllers", "razor-language", "other"]
 print("# Razor views compiled against ASP.NET Core on .NET 9.")
 print("# GENERATED - run tools/view-port-report.sh --update.")
 print("#")
 print("# compiles               nothing stops this view today, verified in a small batch")
+print("# diverged              the port compiles its OWN copy under PortedViews/ instead;")
+print("#                        the original here is the MVC 5 one. See PortedViews/README.md.")
 print("# child-action           COMPILES BUT CANNOT RENDER - calls Html.Action/RenderAction,")
 print("#                        which ASP.NET Core removed; the shim throws. Needs a view")
 print("#                        component, and that rewrite does not compile on MVC 5.")
@@ -203,10 +215,25 @@ for name in order:
 if unverified:
     print("UNVERIFIED               %d" % len(unverified))
 print()
+# A PortedViews copy is compiled in EVERY batch, never removed, so a declaration error in one
+# would suppress method-body binding across the whole report and quietly empty every other
+# bucket. That has happened enough times in this port to be worth shouting about.
+ported_errors = {q: sorted({c for c, _ in errors[q]}) for q in ported if errors.get(q)}
+if orphans or ported_errors:
+    print()
+    for q in orphans:
+        print("ORPHAN                   %s replaces nothing" % q)
+    for q, codes in sorted(ported_errors.items()):
+        print("PORTED VIEW BROKEN       %s  [%s]" % (q, " ".join(codes)))
+
 for name in order:
     if name == "compiles":
         continue
     for view in buckets[name]:
+        if name == "diverged":
+            print("%-24s %s  -> PortedViews/%s" % (
+                name, view.replace("Zero-K.info/Views/", ""), view.replace("Zero-K.info/Views/", "")))
+            continue
         if name == "child-action":
             print("%-24s %s" % (name, view.replace("Zero-K.info/Views/", "")))
             continue

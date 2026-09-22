@@ -75,4 +75,6 @@
   <!-- Removes every view the inventory says does not compile; written by tools/render-view.sh. -->
   <Import Project="view-set.props" Condition="Exists('view-set.props')" />
 
+  <Import Project="..\port-views.props" />
+
 </Project>

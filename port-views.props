@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    The views the .NET 9 port compiles INSTEAD of the linked originals. See PortedViews/README.md.
+
+    Imported by ZeroKWeb.Core, ZeroKWeb.Host and ZeroKWeb.Render, after each one's
+    Content Include of ..\Zero-K.info\Views\**, because it removes from it.
+
+    Each Remove below must have a counterpart file under PortedViews\ at the same path, and vice
+    versa: two files landing at the same Views\... link is how ZeroKWeb.Host ended up with a
+    Razor generator that fails outright and produces NO views at all (CS8785, duplicate hintName).
+  -->
+  <ItemGroup>
+    <Content Remove="..\Zero-K.info\Views\Shared\CommentList.cshtml" />
+
+    <Content Include="..\PortedViews\**\*.cshtml" Link="Views\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

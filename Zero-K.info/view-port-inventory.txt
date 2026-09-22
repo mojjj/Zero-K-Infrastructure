@@ -2,6 +2,8 @@
 # GENERATED - run tools/view-port-report.sh --update.
 #
 # compiles               nothing stops this view today, verified in a small batch
+# diverged              the port compiles its OWN copy under PortedViews/ instead;
+#                        the original here is the MVC 5 one. See PortedViews/README.md.
 # child-action           COMPILES BUT CANNOT RENDER - calls Html.Action/RenderAction,
 #                        which ASP.NET Core removed; the shim throws. Needs a view
 #                        component, and that rewrite does not compile on MVC 5.
@@ -11,14 +13,15 @@
 
 total 116
 compiles                 52
-child-action             4
+diverged                 1
+child-action             3
 waiting-on-controllers   21
 razor-language           9
 other                    30
 
+diverged                 Shared/CommentList.cshtml  -> PortedViews/Shared/CommentList.cshtml
 child-action             Forum/NewPost.cshtml
 child-action             Planetwars/Galaxy.cshtml
-child-action             Shared/CommentList.cshtml
 child-action             Shared/TopMenu.cshtml
 waiting-on-controllers   Admin/TraceLogs.cshtml  [CS0234]
 waiting-on-controllers   Battles/BattleIndex.cshtml  [CS0234]
