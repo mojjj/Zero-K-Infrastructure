@@ -1751,3 +1751,101 @@ The three lists are now one file, `port-sources.props`, imported by all three pr
 makes the drift impossible rather than detectable. `Mvc5Compat` stays in Host and Render because
 ZeroKWeb.Core owns those files natively.
 
+## The first view component that runs, and what it found
+
+`PlanetwarsLadderViewComponent` replaces `@Html.Action("Ladder", "Planetwars")`. It is the
+second of seven and the first that can be **executed**: `Planetwars/Ladder.cshtml` compiles as
+of the commit that linked `PlanetwarsController`, and the action carries no filters.
+
+`ZeroKWeb.Render` now invokes it by name through the real `IViewComponentHelper` - which is what
+`@await Component.InvokeAsync("PlanetwarsLadder")` compiles into - rather than calling `Invoke()`
+directly, which would prove the query and skip discovery, view resolution and the
+`ViewComponentResult`.
+
+Running it found a defect that nothing in this port had been able to see.
+
+### EF6 lazy-loads navigation properties. EF Core did not, and said nothing.
+
+`PlanetwarsController.Ladder` does
+
+```csharp
+db.Accounts.Where(...).ToList().GroupBy(x => x.Faction)
+```
+
+and `Ladder.cshtml` skips every group whose `Faction` is null. EF6 lazy-loads any `virtual`
+navigation by default. EF Core loads none unless asked and **does not complain** - the property
+is simply `null`. So on .NET 9 the PlanetWars ladder rendered as a heading and nothing else. No
+exception, no warning, no failing test.
+
+The check caught it because it asserts that rows written to the fixture appear in the HTML:
+
+```
+   ok      the component rendered its view
+   FAIL    the faction from the database reached the HTML
+   FAIL    player03 is in the ladder
+```
+
+Fixed by enabling `UseLazyLoadingProxies()`, which restores EF6's semantics globally. Every
+navigation in `ZkData` is already `virtual`, because EF6 required exactly that for the same
+feature, so proxies ask nothing of the entity classes.
+
+The alternative - adding `.Include()` at each call site - fixes the queries someone remembers to
+look at. There are hundreds, they are shared source with the MVC 5 build, and the failure mode
+is silence.
+
+### Enabling proxies silently disabled all entity validation
+
+`write` failed immediately afterwards:
+
+```
+FAILED an over-long value is refused before it reaches the database: the save was allowed
+```
+
+`Ef6Compat/EntityValidation.cs` reflected over `change.Entity.GetType()`. With proxies on, that
+is `Castle.Proxies.AccountProxy`, whose overriding properties do not carry the base class's
+`[StringLength]` and `[Required]` attributes - so it found nothing to validate and **every value
+passed**. The EF6 validation this port reproduces had been turned off by a one-line change, and
+the only symptom was a check that stopped failing when it should.
+
+Fixed by using `entry.Metadata.ClrType`, which is the real entity type whether or not the
+instance is a proxy.
+
+This is the same failure shape as the view inventory's: an absence that reads as success. It is
+worth stating that the write verification is what caught it, and that had this port not had a
+check which *deliberately supplies a bad value and expects a rejection*, the change would have
+looked clean.
+
+### What the harness had to gain to run a component at all
+
+Three things, each of which failed in a way that looked like the component was wrong:
+
+- **The component was not in the assembly.** `ZeroKWeb.Host` and `ZeroKWeb.Render` did not link
+  `ZeroKWeb.Core/ViewComponents`, so discovery reported "a view component named
+  'PlanetwarsLadder' could not be found". The same drift class `port-sources.props` was created
+  for, one folder it did not cover.
+- **No application part.** A console app is not an MVC application, so nothing registers its
+  assembly as a place to look. Same error message, different cause.
+- **No router.** `Ladder.cshtml` calls `@Url.Action`, and without an endpoint on the context MVC
+  hands back the router-based `UrlHelper`, which throws. An endpoint is now set so the
+  `LinkGenerator` helper is used instead. There is no route table, so **URL generation is not
+  exercised** - hrefs come out empty, and the check asserts on data reaching the HTML, not links.
+
+### The setup rows are committed, not rolled back
+
+Every other database check here works inside a transaction it rolls back. This one cannot: the
+component opens its **own** `ZkDataContext`, which is a different connection, so it cannot see
+uncommitted rows. The first attempt did use a transaction, and the component reported *Sequence
+contains no elements* from `db.Galaxies.First` while the rows sat invisible in another
+connection's transaction.
+
+So the fixture is modified, used and restored by hand, with every original value captured first.
+If the process is killed in between, the fixture is left dirty; reload it with
+`db/load-fixture.sh`.
+
+### Still not diverged
+
+`Ladder`'s only call site is `Galaxy.cshtml`, which **also** calls `Planetwars/MatchMaker` and
+`Planetwars/Events`. Neither of those partials compiles yet, so Galaxy cannot be diverged and
+this component has no caller in a view. It is exercised directly instead, which is the same
+thing the diverged view will do.
+

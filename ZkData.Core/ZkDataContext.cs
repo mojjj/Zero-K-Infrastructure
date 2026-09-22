@@ -29,8 +29,33 @@ namespace ZkData
 
         public ZkDataContext(DbContextOptions<ZkDataContext> options) : base(options) { }
 
+        /// <summary>
+        /// Lazy loading is ON, because it is on in EF6 and this port's job is to behave the same.
+        ///
+        /// EF6 lazy-loads any `virtual` navigation property by default. EF Core loads none unless
+        /// asked, and - this is the part that matters - it does not complain: an unloaded
+        /// navigation is simply `null`, so production code that walks one silently sees nothing
+        /// instead of throwing.
+        ///
+        /// That is not hypothetical. PlanetwarsController.Ladder does
+        ///
+        ///     db.Accounts.Where(...).ToList().GroupBy(x =&gt; x.Faction)
+        ///
+        /// and its view skips every group whose Faction is null. Without proxies the PlanetWars
+        /// ladder renders as an empty page on .NET 9 - no error, no warning, just a heading. It
+        /// was found by ZeroKWeb.Render invoking the ladder view component against fixture rows,
+        /// which is the first time anything here ran a real page end to end.
+        ///
+        /// Every navigation in ZkData is already `virtual`, because EF6 required that for the
+        /// same feature, so proxies have nothing to ask of the entity classes.
+        ///
+        /// The alternative - adding .Include() at each call site - would fix the queries someone
+        /// remembers to look at. There are hundreds, they are shared source with the MVC 5 build,
+        /// and the failure mode is silence.
+        /// </summary>
         protected override void OnConfiguring(DbContextOptionsBuilder options)
         {
+            options.UseLazyLoadingProxies();
             if (!options.IsConfigured) options.UseSqlServer(ConnectionString);
         }
 

@@ -51,7 +51,15 @@ namespace ZkData.Core.Ef6Compat
                 if (change.State == EntityState.Deleted) continue;
 
                 var entry = db.Entry(change.Entity);
-                foreach (var validated in ValidatedProperties(db, change.Entity.GetType()))
+
+                // entry.Metadata.ClrType, not change.Entity.GetType(). With lazy-loading proxies
+                // enabled the runtime type is a generated subclass - Castle.Proxies.AccountProxy -
+                // whose overriding properties do not carry the base class's [StringLength] and
+                // [Required] attributes, so reflecting on it finds nothing to validate and every
+                // value passes. EF's metadata gives the real entity type either way.
+                var clrType = entry.Metadata.ClrType;
+
+                foreach (var validated in ValidatedProperties(db, clrType))
                 {
                     var value = entry.Property(validated.Name).CurrentValue;
                     var context = new ValidationContext(change.Entity)
@@ -65,7 +73,7 @@ namespace ZkData.Core.Ef6Compat
 
                     if (message == null) message = new StringBuilder();
                     message.AppendFormat("Entity of type \"{0}\" in state \"{1}\" has the following validation errors:\n",
-                        change.Entity.GetType().Name, change.State);
+                        clrType.Name, change.State);
                     foreach (var result in results)
                         message.AppendFormat("- Property: \"{0}\", Value: \"{1}\", Error: \"{2}\"\n",
                             validated.Name, value, result.ErrorMessage);
