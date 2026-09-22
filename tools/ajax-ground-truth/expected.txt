@@ -1,0 +1,14 @@
+### encoding
+<form action="/Planetwars/E" data-ajax="true" data-ajax-complete="a &lt; b &amp;&amp; c > d &quot; &#39; ü © 中" data-ajax-mode="replace" data-ajax-update="#t" method="post"></form>
+### BeginForm(action, routeValues, options)
+<form action="/Planetwars/Events?accountID=42&amp;partial=True&amp;pageSize=40" data-ajax="true" data-ajax-loading="#ajaxScrollProgress" data-ajax-mode="replace" data-ajax-update="#events" method="post"></form>
+### BeginForm(action, options)
+<form action="/Planetwars" data-ajax="true" data-ajax-complete="GlobalPageInit($(&#39;#events&#39;))" data-ajax-mode="replace" data-ajax-success="ReplaceHistory($(&#39;#events&#39;).find(&#39;form&#39;).serialize())" data-ajax-update="#events" method="post"></form>
+### BeginForm(action, controller, options)
+<form action="/Clans" data-ajax="true" data-ajax-complete="GlobalPageInit($(&#39;#events&#39;))" data-ajax-mode="replace" data-ajax-success="ReplaceHistory($(&#39;#events&#39;).find(&#39;form&#39;).serialize())" data-ajax-update="#events" method="post"></form>
+### BeginForm(action, controller, routeValues, options, htmlAttributes)
+<form action="/PlanetWars/MatchMaker" data-ajax="true" data-ajax-complete="GlobalPageInit($(&#39;#events&#39;))" data-ajax-mode="replace" data-ajax-success="ReplaceHistory($(&#39;#events&#39;).find(&#39;form&#39;).serialize())" data-ajax-update="#events" id="mmForm" method="post"></form>
+### BeginForm(action, routeValues, options) with method
+<form action="/Planetwars/CommanderProfile?profileNumber=1" data-ajax="true" data-ajax-loading="#busy" data-ajax-method="post" data-ajax-mode="replace" data-ajax-update="#com1" method="post"></form>
+### ActionLink(text, action, routeValues, options)
+<a data-ajax="true" data-ajax-mode="replace" data-ajax-update="#matchMaker" href="/Planetwars/MatchMakerJoin?planetID=7&amp;attackerFaction=Dyn">Join</a>

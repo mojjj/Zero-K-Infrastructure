@@ -8,6 +8,9 @@
 @using System.Linq
 @* not the real System.Web.Mvc - the linked helper file declares that namespace *@
 @using System.Web.Mvc
+@* AjaxOptions and InsertionMode, reimplemented in Mvc5Compat/AjaxCompat.cs against markup
+   captured from MVC 5. The namespace is MVC 5's because 18 views name these types unqualified. *@
+@using System.Web.Mvc.Ajax
 @using PlasmaShared
 @using ZkData
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers

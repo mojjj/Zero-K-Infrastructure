@@ -96,6 +96,7 @@ namespace ZeroKWeb.Render
             failures += CheckBatchOperations();
             failures += CheckChildActionTripwire();
             failures += await CheckViewComponents();
+            failures += CheckAjaxMarkup();
 
             Console.WriteLine();
             if (failures == 0)
@@ -228,6 +229,25 @@ namespace ZeroKWeb.Render
                     actual = writer.ToString();
                 }
             }
+            return CheckEqual(actual, expected, what);
+        }
+
+        /// <summary>Finds a repo-relative file by walking up from the binary.</summary>
+        private static string FindUpwards(string relative)
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory != null)
+            {
+                var candidate = Path.Combine(directory.FullName, relative);
+                if (File.Exists(candidate)) return candidate;
+                directory = directory.Parent;
+            }
+            return null;
+        }
+
+        /// <summary>Byte comparison, with both sides printed on a mismatch.</summary>
+        private static int CheckEqual(string actual, string expected, string what)
+        {
             var ok = actual == expected;
             Console.WriteLine((ok ? "   ok    " : "   FAIL  ") + what);
             if (!ok) Console.WriteLine("           wanted " + (expected ?? "(nothing)") + "\n           got    " + (actual ?? "(nothing)"));
@@ -304,6 +324,122 @@ namespace ZeroKWeb.Render
         /// </summary>
 
         /// <summary>The minimum ASP.NET Core insists on before it will execute a view.</summary>
+        /// <summary>
+        /// The ported Ajax helper against markup captured from MVC 5 itself.
+        ///
+        /// The expected strings are not written here by hand. tools/ajax-ground-truth/capture.sh
+        /// runs the real System.Web.Mvc 5.2.3 under mono and records what it emits, and this
+        /// compares the port's output to that file byte for byte.
+        ///
+        /// That process has already paid for itself: the first capture came back with
+        /// `onsubmit="Sys.Mvc.AsyncForm.handleSubmit(...)"`, the pre-unobtrusive Microsoft Ajax
+        /// markup, because the capture harness had no Web.config and so defaulted
+        /// UnobtrusiveJavaScriptEnabled to false. Zero-K.info/Web.config sets it true. A
+        /// transcription from memory would have produced data-ajax attributes and been right by
+        /// luck, or Sys.Mvc and been wrong with confidence.
+        ///
+        /// The action URL is supplied rather than generated: URL generation is MVC's own routing,
+        /// not this shim's, and the harness has no route table. Everything else - which
+        /// attributes appear, their ALPHABETICAL order, the '#' prefixes, the &amp;#39; encoding -
+        /// is this file's responsibility and is compared exactly.
+        /// </summary>
+        private static int CheckAjaxMarkup()
+        {
+            Console.WriteLine();
+            Console.WriteLine("Ajax markup, against MVC 5 captured under mono:");
+
+            // Walked up from the binary rather than taken from the working directory, which is
+            // not the repository root when this runs under tools/render-view.sh.
+            var path = FindUpwards(Path.Combine("tools", "ajax-ground-truth", "expected.txt"));
+            if (path == null)
+            {
+                Console.WriteLine("   FAIL  tools/ajax-ground-truth/expected.txt not found - run "
+                                  + "tools/ajax-ground-truth/capture.sh --update");
+                return 1;
+            }
+
+            var expected = new Dictionary<string, string>();
+            string label = null;
+            foreach (var line in File.ReadAllLines(path))
+            {
+                if (line.StartsWith("### ")) { label = line.Substring(4); continue; }
+                if (label != null && line.Length > 0) { expected[label] = line; label = null; }
+            }
+
+            var siteOptions = new System.Web.Mvc.Ajax.AjaxOptions
+            {
+                UpdateTargetId = "events",
+                OnComplete = "GlobalPageInit($(\'#events\'))",
+                OnSuccess = "ReplaceHistory($(\'#events\').find(\'form\').serialize())",
+            };
+
+            var cases = new (string Label, string Url, Func<string, string> Build)[]
+            {
+                ("BeginForm(action, routeValues, options)",
+                 "/Planetwars/Events?accountID=42&partial=True&pageSize=40",
+                 url => System.Web.Mvc.AjaxCompat.BuildTag("form", url, "action",
+                     new System.Web.Mvc.Ajax.AjaxOptions
+                     {
+                         InsertionMode = System.Web.Mvc.Ajax.InsertionMode.Replace,
+                         UpdateTargetId = "events",
+                         LoadingElementId = "ajaxScrollProgress",
+                     }, null, "")),
+
+                ("BeginForm(action, options)", "/Planetwars",
+                 url => System.Web.Mvc.AjaxCompat.BuildTag("form", url, "action", siteOptions, null, "")),
+
+                ("BeginForm(action, controller, options)", "/Clans",
+                 url => System.Web.Mvc.AjaxCompat.BuildTag("form", url, "action", siteOptions, null, "")),
+
+                ("BeginForm(action, controller, routeValues, options, htmlAttributes)", "/PlanetWars/MatchMaker",
+                 url => System.Web.Mvc.AjaxCompat.BuildTag("form", url, "action", siteOptions,
+                     new Dictionary<string, object> { { "id", "mmForm" } }, "")),
+
+                ("BeginForm(action, routeValues, options) with method", "/Planetwars/CommanderProfile?profileNumber=1",
+                 url => System.Web.Mvc.AjaxCompat.BuildTag("form", url, "action",
+                     new System.Web.Mvc.Ajax.AjaxOptions
+                     {
+                         UpdateTargetId = "com1",
+                         InsertionMode = System.Web.Mvc.Ajax.InsertionMode.Replace,
+                         HttpMethod = "post",
+                         LoadingElementId = "busy",
+                     }, null, "")),
+
+                ("encoding", "/Planetwars/E",
+                 url => System.Web.Mvc.AjaxCompat.BuildTag("form", url, "action",
+                     new System.Web.Mvc.Ajax.AjaxOptions
+                     {
+                         UpdateTargetId = "t",
+                         OnComplete = "a < b && c > d \" ' \u00fc \u00a9 \u4e2d",
+                     }, null, "")),
+
+                ("ActionLink(text, action, routeValues, options)",
+                 "/Planetwars/MatchMakerJoin?planetID=7&attackerFaction=Dyn",
+                 url => System.Web.Mvc.AjaxCompat.BuildTag("a", url, "href",
+                     new System.Web.Mvc.Ajax.AjaxOptions
+                     {
+                         UpdateTargetId = "matchMaker",
+                         InsertionMode = System.Web.Mvc.Ajax.InsertionMode.Replace,
+                     }, null, "Join")),
+            };
+
+            var failures = 0;
+            foreach (var (caseLabel, url, build) in cases)
+            {
+                if (!expected.TryGetValue(caseLabel, out var want))
+                {
+                    Console.WriteLine("   FAIL    no captured line for " + caseLabel);
+                    failures++;
+                    continue;
+                }
+                failures += CheckEqual(build(url), want, "  " + caseLabel);
+            }
+
+            failures += Check(cases.Length == expected.Count,
+                "  every captured shape is checked (" + cases.Length + " of " + expected.Count + ")");
+            return failures;
+        }
+
         /// <summary>
         /// A view component, invoked the way a diverged view invokes one.
         ///

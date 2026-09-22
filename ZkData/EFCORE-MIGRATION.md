@@ -1849,3 +1849,86 @@ If the process is killed in between, the fixture is left dirty; reload it with
 this component has no caller in a view. It is exercised directly instead, which is the same
 thing the diverged view will do.
 
+## The AJAX helper, captured rather than remembered
+
+`Planetwars/Events.cshtml` was not blocked on anything to do with PlanetWars. It was blocked on
+`Ajax.BeginForm`, and so are 17 other views - 20 call sites in all.
+
+```
+compiles                 54 -> 57
+other                    32 -> 28
+```
+
+`Planetwars/Events.cshtml` and `Poll/PollView.cshtml` compile. `My/Commanders.cshtml` moved into
+`child-action`, its last remaining blocker. `Lobby/LobbyChat` and `Planetwars/PwMatchMaker` are
+down to one error each.
+
+### This one is reimplemented, not tripwired
+
+ASP.NET Core removed `AjaxHelper`. It did not remove what the helper produces. With
+`UnobtrusiveJavaScriptEnabled` - which `Zero-K.info/Web.config` sets to `true` - MVC 5 emits a
+plain tag carrying `data-ajax-*` attributes, and the script that reads them,
+`Zero-K.info/Scripts/jquery.unobtrusive-ajax.js`, is unchanged and still shipped. The contract is
+markup, so the markup can be reproduced, exactly as `NoCache` was.
+
+### The capture is the point
+
+`tools/ajax-ground-truth/` runs the real `System.Web.Mvc` 5.2.3 under mono and records what it
+emits for the seven call shapes this site uses. `ZeroKWeb.Render` compares the port's output to
+that file **byte for byte**. It earned its keep three times before the first comparison passed:
+
+**The first capture described a different site.** It came back with
+
+```
+onsubmit="Sys.Mvc.AsyncForm.handleSubmit(this, new Sys.UI.DomEvent(event), { ... });"
+```
+
+the pre-unobtrusive Microsoft Ajax markup, because the harness had no `Web.config` and so
+defaulted `UnobtrusiveJavaScriptEnabled` to false. A capture that looks authoritative and
+describes markup the site does not serve is worse than no capture at all.
+
+**The attribute details are not guessable.** Attributes come out in *alphabetical* order,
+because MVC builds them in a sorted dictionary. `UpdateTargetId` and `LoadingElementId` are
+emitted with a `#` prefix - the raw id would select nothing.
+
+**The encoding disagrees with ASP.NET Core in three places.** The first byte comparison failed
+on exactly one character:
+
+```
+wanted ... data-ajax-complete="GlobalPageInit($(&#39;#events&#39;))" ...
+got    ... data-ajax-complete="GlobalPageInit($(&#x27;#events&#x27;))" ...
+```
+
+Rather than reason about the rest, the capture was extended to put every character that might
+differ through MVC 5 itself:
+
+| character | MVC 5 | `HtmlEncoder.Default` |
+| --- | --- | --- |
+| `<` | `&lt;` | `&lt;` |
+| `&` | `&amp;` | `&amp;` |
+| `"` | `&quot;` | `&quot;` |
+| `'` | `&#39;` | `&#x27;` |
+| `>` | `>`, unescaped | escaped |
+| `ü © 中` | literal UTF-8 | `&#xFC;` etc |
+
+Three disagreements, all harmless in a browser - every form decodes to the same characters. They
+matter because byte-identical output is what makes a difference in rendered HTML a signal rather
+than noise, and the site's `OnComplete` strings are full of apostrophes, so the third row alone
+touches most of the 18 views.
+
+That table is read off a capture. Note that the non-ASCII row was itself wrong on the first
+attempt: mono printed `?` for all three characters until the harness forced UTF-8 console output.
+A harness that silently mangles what it is measuring produces confident, wrong answers.
+
+### What is duplicated, and will drift
+
+`Global.GetAjaxOptions` is copied into `GlobalCompat` rather than linked, because
+`Zero-K.info/AppCode/Global.cs` needs `System.Web`. Sixteen of the eighteen views go through it,
+so its two format strings decide most of the site's AJAX markup and now exist twice.
+
+### What is deliberately absent
+
+`AjaxOptions` carries only the properties this site sets. An option MVC 5 supports and Zero-K
+never uses is missing rather than ignored, so a view that started using one would fail to
+compile - which is right, because nothing would have verified its markup.
+

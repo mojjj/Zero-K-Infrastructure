@@ -113,5 +113,25 @@ namespace ZeroKWeb
         // Session is opt-in in ASP.NET Core and the ported application has not decided about
         // it yet. False is what an unconfigured request would answer anyway.
         public static bool IsWebLobbyAccess => false;
+
+        /// <summary>
+        /// The site's own AjaxOptions factory, copied from Zero-K.info/AppCode/Global.cs rather
+        /// than linked - that file needs System.Web and cannot compile here. Sixteen of the
+        /// eighteen Ajax views go through it, so the two strings below decide most of the site's
+        /// AJAX markup and are duplicated literals that can drift.
+        ///
+        /// Duplicated rather than split out because splitting Global.cs is a production edit with
+        /// a much wider blast radius than this one type; when Global.cs is ported, this goes.
+        /// </summary>
+        public static System.Web.Mvc.Ajax.AjaxOptions GetAjaxOptions(string targetID, bool updateHistory = true)
+        {
+            var ret = new System.Web.Mvc.Ajax.AjaxOptions
+            {
+                UpdateTargetId = targetID,
+                OnComplete = string.Format("GlobalPageInit($('#{0}'))", targetID),
+            };
+            if (updateHistory) ret.OnSuccess = string.Format("ReplaceHistory($('#{0}').find('form').serialize())", targetID);
+            return ret;
+        }
     }
 }
