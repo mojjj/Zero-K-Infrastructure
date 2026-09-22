@@ -48,6 +48,7 @@ namespace ZkData
         public const double PlanetWarsEnergyToMetalRatio = 0.0;
         public const double PlanetWarsMaximumIP = 100.0; //maximum IP on each planet
         public const double InfluenceToCapturePlanet = PlanetWarsMaximumIP / 2 + 0.1;
+        public const double InfluenceToLosePlanet = 10;   // its counterpart; was in the other half
         public const bool RequireWormholeToTravel = true;
         public static int SteamContributionJarID = 2;
         public const int WikiEditLevel = 20;
@@ -83,5 +84,25 @@ namespace ZkData
         public static string ZkDataContextConnectionString;
         public const int ForumPostsPerPage = 20;
         public const int MinNetKarmaToVote = -30;
-    }
+    
+        // Channel names. Plain strings with no dependencies; they were in GlobalConst.cs only
+        // because that is where they were written. LobbyController reads ModeratorChannel four
+        // times, and ChannelManager and ChatRelay read all four, so the port needs them here.
+        public const string ModeratorChannel = "zkadmin";
+        public const string Top20Channel = "zktop20";
+        public const string UserLogChannel = "zklog";
+        public const string CoreChannel = "zkcore";
+
+
+        // PlanetWars balance numbers. Plain constants, read by PlanetwarsController and by
+        // Planet.cshtml; they were in GlobalConst.cs only because that is where they were
+        // written. Moving them is what lets that controller and that view compile.
+        public const double DropshipsForFullWarpIPGain = 10;
+        public const double SelfDestructRefund = 0.5;
+        public const double BomberKillStructureChance = 0.1;
+        public const double BomberKillIpChance = 1.2;
+        public const double BomberKillIpAmount = 1;
+        public const int PlanetWarsMaxTeamsize = 4;
+
+}
 }

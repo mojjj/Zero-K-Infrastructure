@@ -40,24 +40,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\Zero-K.info\AppCode\HtmlHelperExtensions.Portable.cs" Link="Linked\HtmlHelperExtensions.Portable.cs" />
-    <Compile Include="..\Zero-K.info\AppCode\GalaxyMapGeometry.cs" Link="Linked\GalaxyMapGeometry.cs" />
-    <Compile Include="..\Zero-K.info\ForumParser\**\*.cs" Link="Linked\ForumParser\%(RecursiveDir)%(Filename).cs" />
-    <Compile Include="..\Zero-K.info\Models\CommentList.cs" Link="Linked\Models\CommentList.cs" />
-    <Compile Include="..\Zero-K.info\Controllers\ModsController.cs" Link="Linked\Controllers\ModsController.cs" />
-    <Compile Include="..\Zero-K.info\Controllers\MyController.cs" Link="Linked\Controllers\MyController.cs" />
-    <Compile Include="..\Zero-K.info\AppCode\PlanetwarsEventCreator.cs" Link="Linked\PlanetwarsEventCreator.cs" />
-    <Compile Include="..\Zero-K.info\Controllers\PlanetwarsAdminController.cs" Link="Linked\Controllers\PlanetwarsAdminController.cs" />
-    <Compile Include="..\Zero-K.info\Controllers\ForumController.cs" Link="Linked\Controllers\ForumController.cs" />
-    <Compile Include="..\Zero-K.info\AppCode\MemCache.cs" Link="Linked\MemCache.cs" />
     <!-- Phase 1's seam. Linked here on purpose: this project has no reference to
          ZkLobbyServer, so a member that names a server-side type fails this build. That is
          what keeps ILobbyServerApi crossable rather than merely intended to be. -->
-    <Compile Include="..\ZkLobbyServer\ILobbyServerApi.cs" Link="Linked\ILobbyServerApi.cs" />
-    <Compile Include="..\ZkLobbyServer\TourneyApi.cs" Link="Linked\TourneyApi.cs" />
-    <Compile Include="..\ZkLobbyServer\PlanetWarsApi.cs" Link="Linked\PlanetWarsApi.cs" />
-    <Compile Include="..\Zero-K.info\AppCode\ForumPostIndexer.cs" Link="Linked\ForumPostIndexer.cs" />
-    <Compile Include="..\Zero-K.info\Controllers\ChartsController.cs" Link="Linked\Controllers\ChartsController.cs" />
     <Compile Include="..\ZeroKWeb.Core\Mvc5Compat\*.cs" Link="Linked\%(Filename).cs" />
   </ItemGroup>
 
@@ -68,5 +53,7 @@
   <Import Project="view-set.props" Condition="Exists('view-set.props')" />
 
   <Import Project="..\port-views.props" />
+
+  <Import Project="..\port-sources.props" />
 
 </Project>

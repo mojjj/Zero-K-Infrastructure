@@ -127,10 +127,7 @@ namespace ZkData
         public const string MissionSlotsFileName = "_missionSlots.xml";
 
 
-        public const string ModeratorChannel = "zkadmin";
-        public const string Top20Channel = "zktop20";
-        public const string UserLogChannel = "zklog";
-        public const string CoreChannel = "zkcore";
+        // The four channel names moved to GlobalConst.Portable.cs, which the .NET 9 port links.
         
 
         public const int VictoryPointDecay = 1;
@@ -139,12 +136,6 @@ namespace ZkData
         public const double PlanetWarsAttackerMetal = 100;
         public const double PlanetWarsDefenderMetal = 100;
         public const double InfluencePerTech = 1;
-        public const double InfluenceToLosePlanet = 10;
-        public const double DropshipsForFullWarpIPGain = 10;
-        public const double SelfDestructRefund = 0.5;
-        public const double BomberKillStructureChance = 0.1;
-        public const double BomberKillIpChance = 1.2;
-        public const double BomberKillIpAmount = 1;
         public const double StructureIngameDisableTimeMult = 2;
         public const int AttackPointsForVictory = 2;
         public const int AttackPointsForDefeat = 1;
@@ -163,7 +154,6 @@ namespace ZkData
         public const bool OnlyAdminsSeePostVoters = false;
         public const int PlanetWarsMinutesToAttackIfNoOption = 2;
         public const int PlanetWarsDropshipsStayForMinutes = 2*60;
-        public const int PlanetWarsMaxTeamsize = 4;
         public const double PlanetWarsDefenderWinKillCcMultiplier = 0.2;
         public const double PlanetWarsAttackerWinLoseCcMultiplier = 0.5;
 

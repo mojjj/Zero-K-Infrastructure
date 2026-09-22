@@ -161,6 +161,7 @@
     <Compile Include="Controllers\MyController.cs" />
     <Compile Include="Controllers\NewsController.cs" />
     <Compile Include="Controllers\PlanetwarsController.cs" />
+    <Compile Include="Controllers\PlanetwarsController.Imaging.cs" />
     <Compile Include="Controllers\PollController.cs" />
     <Compile Include="Controllers\StaticController.cs" />
     <Compile Include="Controllers\UsersController.cs" />

@@ -179,7 +179,7 @@ namespace ZeroKWeb.Controllers
             {
                 using (var db = new ZkDataContext())
                 {
-                    db.Database.CommandTimeout = 5;
+                    db.Database.SetCommandTimeoutCompat(5);
                     var acc = db.Accounts.Where(x => x.AccountID == Global.AccountID).First();
                     var ret = db.LobbyChatHistories.AsQueryable();
                     ret = ret.Where(x => x.Target == Global.Account.Name && x.SayPlace == SayPlace.User && x.Time > acc.LastChatRead);
@@ -209,7 +209,7 @@ namespace ZeroKWeb.Controllers
             model = model ?? new ChatModel();
 
             var db = new ZkDataContext();
-            bool isMuted = Punishment.GetActivePunishment(Global.AccountID, Request.UserHostAddress, 0, null, x => x.BanMute) != null;
+            bool isMuted = Punishment.GetActivePunishment(Global.AccountID, Request.UserHostAddressCompat(), 0, null, x => x.BanMute) != null;
             var minTime = DateTime.UtcNow.AddDays(-30);
             if (!string.IsNullOrEmpty(model.Channel))
             {
@@ -231,8 +231,8 @@ namespace ZeroKWeb.Controllers
                 }
                 string channelName = model.Channel;
                 model.Data = db.LobbyChatHistories
-                    .SqlQuery("SELECT TOP 30 * FROM [dbo].[LobbyChatHistories] WHERE [Target] = {0} AND [SayPlace] = {1} AND [Time] > {2} ORDER BY [Time] DESC", channelName, SayPlace.Channel, minTime)
-                    .ToList().OrderBy(x => x.Time).AsQueryable();
+                    .SqlQueryCompat("SELECT TOP 30 * FROM [dbo].[LobbyChatHistories] WHERE [Target] = {0} AND [SayPlace] = {1} AND [Time] > {2} ORDER BY [Time] DESC", channelName, SayPlace.Channel, minTime)
+                    .OrderBy(x => x.Time).AsQueryable();
                 //Note if using Take(), it will be slow for uncommon channels like zktourney when ordering by Time and slow for common channels like zk if ordering by ID
             }
             else if (!string.IsNullOrEmpty(model.User))

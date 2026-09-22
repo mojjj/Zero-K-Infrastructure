@@ -14,5 +14,13 @@ namespace ZkData
     public static partial class GlobalConst
     {
         public static ModeType Mode => ModeType.Local;
+
+        /// <summary>
+        /// What <c>SetMode(ModeType.Local)</c> assigns in GlobalConst.cs, stated here because
+        /// that method cannot compile on .NET 9. It is a duplicated literal and can drift; it is
+        /// here rather than in GlobalConst.Portable.cs so that it sits beside the Mode it belongs
+        /// to, and both disappear together when the port reaches GlobalConst itself.
+        /// </summary>
+        public static string BaseSiteUrl => "https://localhost:44301";
     }
 }

@@ -1,4 +1,6 @@
+﻿using System.Collections.Generic;
 using System.Data.Entity;
+using System.Linq;
 
 namespace ZkData
 {
@@ -23,6 +25,20 @@ namespace ZkData
         public static void MarkModified<T>(this ZkDataContext db, T entity) where T : class
         {
             db.Entry(entity).State = EntityState.Modified;
+        }
+
+        /// <summary>
+        /// A raw SQL query against an entity type. EF6 spells it DbSet.SqlQuery, EF Core spells
+        /// it FromSqlRaw, and the two differ in more than the name - see the EF Core twin.
+        ///
+        /// Returns a materialised list rather than a query, because that is the only shape both
+        /// can honestly promise: EF6's DbSqlQuery is enumerable but not composable, so anything
+        /// this returned that looked composable would be a lie on one side.
+        /// </summary>
+        public static List<T> SqlQueryCompat<T>(this DbSet<T> set, string sql, params object[] parameters)
+            where T : class
+        {
+            return set.SqlQuery(sql, parameters).ToList();
         }
     }
 }

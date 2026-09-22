@@ -1,0 +1,49 @@
+<Project>
+  <!--
+    The production sources the .NET 9 port compiles, LINKED rather than copied, so the same file
+    serves both stacks and cannot drift. Imported by ZeroKWeb.Core, ZeroKWeb.Host and
+    ZeroKWeb.Render.
+
+    It is one file because three copies of this list went out of step. ZeroKWeb.Core gained
+    TourneyController and then LobbyController, PlanetwarsController and
+    PlanetWarsTurnHandler.Portable.cs while the other two did not - and since the view inventory
+    is measured against ZeroKWeb.Core, it began promising that views compile which Host and
+    Render could not build. That surfaced as ChatNotification.cshtml and Ladder.cshtml failing
+    in render-view.sh the moment they started compiling in Core. The TourneyController case had
+    been latent for two merges, unnoticed only because its view was blocked on something else.
+
+    ZeroKWeb.Core owns Mvc5Compat natively, so that glob stays in the Host and Render projects
+    rather than here.
+  -->
+  <ItemGroup>
+    <Compile Include="..\Zero-K.info\AppCode\HtmlHelperExtensions.Portable.cs" Link="Linked\HtmlHelperExtensions.Portable.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\GalaxyMapGeometry.cs" Link="Linked\GalaxyMapGeometry.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\MemCache.cs" Link="Linked\MemCache.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\PlanetwarsEventCreator.cs" Link="Linked\PlanetwarsEventCreator.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\ForumPostIndexer.cs" Link="Linked\ForumPostIndexer.cs" />
+    <Compile Include="..\Zero-K.info\ForumParser\**\*.cs" Link="Linked\ForumParser\%(RecursiveDir)%(Filename).cs" />
+    <Compile Include="..\Zero-K.info\Models\CommentList.cs" Link="Linked\Models\CommentList.cs" />
+
+    <Compile Include="..\Zero-K.info\Controllers\ModsController.cs" Link="Linked\Controllers\ModsController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\MyController.cs" Link="Linked\Controllers\MyController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\PlanetwarsAdminController.cs" Link="Linked\Controllers\PlanetwarsAdminController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\ForumController.cs" Link="Linked\Controllers\ForumController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\ChartsController.cs" Link="Linked\Controllers\ChartsController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\TourneyController.cs" Link="Linked\Controllers\TourneyController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\LobbyController.cs" Link="Linked\Controllers\LobbyController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\PlanetwarsController.cs" Link="Linked\Controllers\PlanetwarsController.cs" />
+
+    <!--
+      Phase 1's seam, linked on purpose: these projects have no reference to ZkLobbyServer, so a
+      member naming a server-side type fails the build. That is what keeps ILobbyServerApi
+      crossable rather than merely intended to be.
+
+      PlanetWarsTurnHandler.Portable.cs is not part of that seam - it is the database half of a
+      static class the website calls directly, which the seam never modelled. See the file.
+    -->
+    <Compile Include="..\ZkLobbyServer\ILobbyServerApi.cs" Link="Linked\ILobbyServerApi.cs" />
+    <Compile Include="..\ZkLobbyServer\TourneyApi.cs" Link="Linked\TourneyApi.cs" />
+    <Compile Include="..\ZkLobbyServer\PlanetWarsApi.cs" Link="Linked\PlanetWarsApi.cs" />
+    <Compile Include="..\ZkLobbyServer\SpringieInterface\PlanetWarsTurnHandler.Portable.cs" Link="Linked\PlanetWarsTurnHandler.Portable.cs" />
+  </ItemGroup>
+</Project>
