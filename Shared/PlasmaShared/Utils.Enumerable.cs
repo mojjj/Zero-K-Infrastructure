@@ -137,5 +137,23 @@ namespace PlasmaShared
                 array[k] = temp;
             }
         }
-    }
+    
+        /// <summary>
+        /// Pure string formatting, moved here from Utils.cs so the port can link it.
+        /// Read by Planetwars/PwMatchMaker.cshtml and Missions/Detail.cshtml, and by the game
+        /// client, which is why it stays in PlasmaShared rather than moving to the website.
+        /// </summary>
+        public static string PrintTimeRemaining(long secs)
+        {
+            if (secs <= 0) return "";
+            if (secs < 60) return String.Format("{0}s", secs);
+            if (secs < 3600) return String.Format("{0}m {1}s", secs / 60, secs % 60);
+            return String.Format("{0}h {1}m {2}s", secs / 3600, secs / 60 % 60, secs % 60);
+        }
+
+        public static string PrintTimeRemaining(this TimeSpan timeSpan)
+        {
+            return PrintTimeRemaining((int)timeSpan.TotalSeconds);
+        }
+}
 }

@@ -1984,3 +1984,40 @@ All six calling views are blocked on their own errors, and `Galaxy.cshtml` addit
 `PwMatchMaker.cshtml` is now one error from compiling - `Utils.PrintTimeRemaining` - which would
 make Galaxy the first view with every one of its child actions available.
 
+## PrintTimeRemaining, and the last of Galaxy's blockers
+
+```
+compiles   57 -> 58
+```
+
+`Planetwars/PwMatchMaker.cshtml` compiles. Its one remaining error was
+`Utils.PrintTimeRemaining`, two overloads of pure string formatting - `"{0}h {1}m {2}s"` and a
+`TimeSpan` wrapper over the first - sitting in `Shared/PlasmaShared/Utils.cs`, the half that
+pulls in `System.Drawing` and therefore cannot compile on .NET 9.
+
+Moved to `Utils.Enumerable.cs`, the portable half, which is the same move now made for
+`PwPhase`, eleven `GlobalConst` members and `ZkDataContext.CurrentAccount()`. It stays in
+`PlasmaShared` rather than moving to the website because the game client reads it too -
+`ZeroKLobby` calls both overloads from four places.
+
+`Missions/Detail.cshtml` also reads it, but is blocked on `CS0234` from an unported controller,
+so it did not move.
+
+### What this unblocks
+
+All three of `Galaxy.cshtml`'s child actions now have a compiling partial:
+
+| child action | partial | component |
+| --- | --- | --- |
+| `Planetwars/Ladder` | compiles | written, runs |
+| `Planetwars/Events` | compiles | written, runs |
+| `Planetwars/MatchMaker` | **compiles now** | not written |
+
+`MatchMaker` is the first of the seven that carries `[Auth]`, so it is the first where a view
+component cannot inherit its authorization from a filter and has to perform the check itself.
+That is the part to get right, and it is the reason the child-action shims throw rather than
+invoke the action directly.
+
+Once it exists, `Galaxy.cshtml` becomes the first view that can actually be diverged - the first
+place the whole pattern is demonstrated end to end rather than component by component.
+
