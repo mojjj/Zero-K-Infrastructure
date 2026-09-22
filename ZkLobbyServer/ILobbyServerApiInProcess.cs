@@ -10,49 +10,44 @@ namespace ZkLobbyServer
     /// The half of the website's lobby-server surface that cannot cross a process boundary.
     ///
     /// Every member here names a type that exists only inside the running server - Battle,
-    /// ServerBattle, PwPhase, or the server itself - so none of them survives being called from
-    /// another process, and none of them compiles in the .NET 9 port at all. That is what
+    /// ServerBattle, or the server itself - so none of them survives being called from another
+    /// process, and none of them compiles in the .NET 9 port at all. That is what
     /// separates this interface from <see cref="ILobbyServerApi"/>, and the separation is now
     /// checked by a build rather than asserted in a comment.
     ///
-    /// This is the remaining Phase 1 work, enumerated. Each member needs either a DTO in place
-    /// of the live object, or an id in place of the reference:
+    /// **Nothing in Zero-K.info calls any of it any more.** Every member was replaced by one on
+    /// <see cref="ILobbyServerApi"/> that carries data instead of a live object:
     ///
-    ///   GetPlanetBattles(Planet)         - "a DTO away from being remotable", per its old note.
-    ///                                      Nine callers: PlanetwarsController x4,
-    ///                                      LobbyController, Planet.cshtml, Galaxy.cshtml.
-    ///   PlanetWarsPhase                  - PwPhase is a server enum; a DTO or a string.
-    ///                                      One caller: Planet.cshtml.
+    ///   ForceJoinBattle(string, Battle)  -> ForceJoinTourneyBattle(string, int)
+    ///   AddBattle(ServerBattle)          -> CreateTourneyBattle(TourneyPrototypeInfo)
+    ///   RemoveBattle(Battle)             -> RemoveTourneyBattle(int)
+    ///   GetPlanetBattles(Planet)         -> GetPlanetBattles(string) / GetPlanetWarsBattles()
+    ///   PlanetWarsPhase                  -> moved up unchanged; only its enum's FILE moved
+    ///   InProcess                        -> the escape hatch, unused
     ///
-    ///   ForceJoinBattle(string, Battle)  - done as ForceJoinTourneyBattle(string, int) on
-    ///                                      ILobbyServerApi; no callers left.
-    ///   AddBattle(ServerBattle)          - done as CreateTourneyBattle; no callers left.
-    ///   RemoveBattle(Battle)             - done as RemoveTourneyBattle; no callers left.
-    ///   InProcess                        - the escape hatch: NO CALLERS LEFT.
+    /// They stay declared because the lobby server implements and uses them itself. What changed
+    /// is who calls them, and that is the thing Phase 1 was about: the website's coupling to the
+    /// server's live object graph, not the graph's existence.
     ///
-    /// The last three battle members and the escape hatch stay declared here because the lobby
-    /// server itself still implements and uses them; what changed is that the website no longer
-    /// does. The website's only remaining non-crossable dependency is PlanetWars - the two
-    /// members above, and they are needed by views as much as by controllers, so the DTO has to
-    /// carry what Planet.cshtml and Galaxy.cshtml read (Users.Count and IsInGame).
-    ///
-    /// Check the escape hatch with, which should print nothing:
+    /// Both greps should print nothing, and CI runs them:
     ///
     ///     grep -rn "LobbyApi.InProcess" Zero-K.info/
+    ///     grep -rn "LobbyApi.GetPlanetBattles([^\"]" Zero-K.info/
     /// </summary>
     public interface ILobbyServerApiInProcess : ILobbyServerApi
     {
         Task ForceJoinBattle(string player, Battle bat);
 
-        /// <summary>Returns live <see cref="Battle"/> objects; a DTO away from being remotable.</summary>
+        /// <summary>
+        /// Returns live <see cref="Battle"/> objects. Superseded for the website by
+        /// <see cref="ILobbyServerApi.GetPlanetBattles(string)"/>, which returns
+        /// <see cref="PlanetBattleInfo"/>; kept because the server uses it.
+        /// </summary>
         List<Battle> GetPlanetBattles(Planet planet);
 
         Task AddBattle(ServerBattle battle);
 
         Task RemoveBattle(Battle battle);
-
-        /// <summary>Null when the matchmaker is not running.</summary>
-        PwPhase? PlanetWarsPhase { get; }
 
         /// <summary>
         /// The server itself, for the calls that still need its live object graph: the battle

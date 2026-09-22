@@ -68,6 +68,34 @@ namespace ZkLobbyServer
 
         public List<Battle> GetPlanetBattles(Planet planet) => server.GetPlanetBattles(planet);
 
+        public List<PlanetBattleInfo> GetPlanetBattles(string mapName) =>
+            server.GetPlanetWarsBattles().Where(x => x.MapName == mapName).Select(Describe).ToList();
+
+        public int? RedeemSessionToken(string token)
+        {
+            // ConcurrentDictionary.TryRemove throws on a null key, and the token arrives from a
+            // query string.
+            if (string.IsNullOrEmpty(token)) return null;
+            int accountID;
+            return server.SessionTokens.TryRemove(token, out accountID) ? (int?)accountID : null;
+        }
+
+        public List<PlanetBattleInfo> GetPlanetWarsBattles() =>
+            server.GetPlanetWarsBattles().Select(Describe).ToList();
+
+        /// <summary>
+        /// The live battle reduced to what the website reads. Same filter the server's own
+        /// GetPlanetBattles(Planet) applies - it compares MapName to planet.Resource.InternalName
+        /// - with the difference that the caller now reads that property instead of the server.
+        /// </summary>
+        private static PlanetBattleInfo Describe(Battle b) => new PlanetBattleInfo()
+        {
+            BattleID = b.BattleID,
+            MapName = b.MapName,
+            IsInGame = b.IsInGame,
+            UserCount = b.Users.Count,
+        };
+
         public Task AddBattle(ServerBattle battle) => server.AddBattle(battle);
 
         public Task RemoveBattle(Battle battle) => server.RemoveBattle(battle);

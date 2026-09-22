@@ -1351,3 +1351,102 @@ The inventory reclassifies accordingly:
 Same bucket, different blocker: it was failing on the controller type not existing, which is
 exactly the masking this document keeps running into - one declaration error, and everything
 behind it reports nothing. The totals are unchanged at 54 of 116.
+
+## The PlanetWars DTO, and a correction to the previous entry
+
+### `LobbyApi.InProcess` had not reached zero
+
+The previous entry, and PR #64, said the website's last use of the escape hatch was gone.
+**That was wrong.** There was a ninth, in `Global.asax.cs`:
+
+```csharp
+if (Global.LobbyApi?.InProcess?.SessionTokens.TryRemove(request[...], out id) == true)
+```
+
+The grep this project had been counting with was `grep -rn "LobbyApi.InProcess"`, and `.` in a
+basic regex matches any character, so `LobbyApi?.InProcess` should have matched it - but the
+literal text is `LobbyApi?.InProcess`, and `LobbyApi.InProcess` does not appear in it at all.
+The null-conditional put a character between the two halves the pattern expected to be adjacent.
+
+A grep was the wrong instrument. What found it in one build was **declaring the narrow type**:
+
+```csharp
+-public static ZkLobbyServer.ILobbyServerApiInProcess LobbyApi { get; private set; }
++public static ZkLobbyServer.ILobbyServerApi LobbyApi { get; private set; }
+```
+
+The object behind it is still an `InProcessLobbyServerApi` and the server still runs in the same
+process. What changed is that the website can no longer tell, and reaching for the live graph is
+now a compile error in the Framework build too - not only in the port, which never saw these
+call sites because it does not link these files.
+
+That use was the website's **single sign-on**: `ClientConnection` puts a token in the server's
+table at login, the game client puts it in a URL, and `Global.asax` redeemed it by removing it
+from a `ConcurrentDictionary` it had reached into. It is now:
+
+```csharp
+int? RedeemSessionToken(string token);
+```
+
+Single use, as `TryRemove` was. The null guard is new and necessary: the token arrives from a
+query string, and `ConcurrentDictionary.TryRemove` throws on a null key.
+
+This is worth naming as a security-relevant member rather than just a crossable one. The token
+is a bearer credential; a remote implementation has to be as trusted as the table it reads.
+
+### The battles
+
+Across all nine PlanetWars call sites, the surface of a live `Battle` turned out to be two
+members: `IsInGame`, and `Users.Count`. Nothing reads a name, a status, a rank or a map option.
+So `PlanetBattleInfo` carries `UserCount` rather than the collection - shipping a dictionary of
+`UserBattleStatus` per battle to answer `.Count` is payload nobody reads.
+
+`GetPlanetBattles(Planet)` became `GetPlanetBattles(string mapName)`. The server did nothing
+with the entity but read `planet.Resource.InternalName` off it - **a navigation property, on an
+entity the website's DbContext had loaded.** In one process that is a lazy load. In two it is
+not possible at all, and no DTO of `Battle` would have fixed it; the argument was the problem.
+
+A second call was added for the galaxy map:
+
+```csharp
+List<PlanetBattleInfo> GetPlanetWarsBattles();
+```
+
+`Galaxy.cshtml` called `GetPlanetBattles(p)` inside `@foreach (var p in Model.Planets)`, and the
+server's implementation walks the whole battle list per call. That is O(planets x battles) in
+this process already; as a remote call it would have been one round trip per planet. The call is
+now hoisted above the loop and the per-planet line filters the result.
+
+### `PwPhase` never needed a DTO
+
+It is an enum with two constants and no dependencies. It was non-crossable purely because of
+where its *file* was - `SpringieInterface/PlanetWarsMatchMakerState.cs`, beside server types.
+Moving it to `PlanetWarsApi.cs`, which the port links, is the entire change. The namespace is
+unchanged, so `Planet.cshtml` still reads `ZeroKWeb.PwPhase.AttackCollect` untouched.
+
+### What the view build shows
+
+Both PlanetWars views compile further than before, and the edited lines bind:
+
+```
+-waiting-on-controllers   Planetwars/Planet.cshtml  [CS0117 CS0234 CS1061 CS1929]
++other                    Planetwars/Planet.cshtml  [CS0117 CS1061 CS1929]
+-other                    Planetwars/Galaxy.cshtml  [CS1061 CS1929]
++other                    Planetwars/Galaxy.cshtml  [CS1929]
+```
+
+`Planet.cshtml` lost its CS0234 - that was `ZeroKWeb.PwPhase` not existing in the port - and
+`Galaxy.cshtml` lost its CS1061, which was `GetPlanetBattles` not being on the interface the
+shim returns. Neither view reports anything at a line this change touched. What is left in both
+is pre-existing and unrelated: `Html.Action`, `GlobalConst.DropshipsForFullWarpIPGain`,
+`GlobalConst.SelfDestructRefund`, `PrintStructureState`, `ZkDataContext.CurrentAccount`.
+
+Totals: `compiles` unchanged at 54 of 116, `waiting-on-controllers` 23 -> 22, `other` 30 -> 31.
+
+### A build gotcha worth recording
+
+`tools/build-website.sh` copies the tree with `git ls-files`, so **a new file that has not been
+`git add`ed does not exist as far as that build is concerned.** `PlanetWarsApi.cs` compiled
+locally and failed in the container with `CS2001: Source file could not be found`, which reads
+like a csproj error and is not one.
+

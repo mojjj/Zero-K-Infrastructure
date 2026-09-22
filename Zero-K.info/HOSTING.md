@@ -148,18 +148,31 @@ What is still blocked, in the order it has to be unblocked:
 
 ## Related work in progress
 
-`ILobbyServerApi` (see `ZkLobbyServer/ILobbyServerApi.cs`) is the seam being
-introduced so the website stops touching `ZkLobbyServer` directly. It is implemented
-in-process today and changes no behaviour; its purpose is to make the coupling
-explicit and countable before a transport is chosen. Members on the interface can move
-across a process boundary; anything still reached through `InProcess` cannot yet, and
-is the remaining work.
+`ILobbyServerApi` (see `ZkLobbyServer/ILobbyServerApi.cs`) is the seam introduced so the
+website stops touching `ZkLobbyServer` directly. It is implemented in-process today and
+changes no behaviour; its purpose was to make the coupling explicit and countable before
+a transport is chosen.
 
-Count what is left with:
+**The website no longer reaches past it.** `Global.LobbyApi` is declared as
+`ILobbyServerApi` rather than `ILobbyServerApiInProcess`, so the live battle list, the
+live `Battle` objects and the server itself are not merely unused - they do not compile.
+That is the check; there is no grep to run, and the earlier one here was wrong anyway.
+It matched `LobbyApi.InProcess` and so missed `Global.LobbyApi?.InProcess?.SessionTokens`
+in `Global.asax.cs`, which the narrowed type found immediately.
 
-    grep -rn "LobbyApi.InProcess" Zero-K.info/
+What this does **not** mean is that the server can move out today. Still in the way:
 
-As of this commit that is 8 uses, all in `TourneyController` - a tournament admin
-console over live `TourneyBattle` objects, which the Razor view also renders directly.
-Closing it needs a tournament API with DTOs rather than a mechanical translation, and
-it is the last blocker for running the lobby server in its own process.
+- **No transport.** Every member is satisfied by a method call in this process. Someone
+  has to choose one and write the remote implementation; the interface only guarantees
+  that each member *could* be served by one.
+- **`ReportUser(ZkDataContext db, ...)`** takes the caller's live DbContext, so it needs
+  the caller's transaction. It is crossable only in the sense that the remote version is
+  a different method - "report user X", with the server opening its own context.
+- **`AddPlanetWarsAttackOption(Planet, int)`** passes an EF entity. That works because
+  `ZkData` is shared, not because passing entities between processes is a good idea.
+- **`RedeemSessionToken`** is a bearer credential exchange. Whatever carries it has to be
+  as trusted as the token table is.
+
+The remaining `ILobbyServerApiInProcess` members are still implemented and still used -
+by the lobby server itself, and by the `Fixer` tool through `Global.Server`. What changed
+is that Zero-K.info is not one of their callers.
