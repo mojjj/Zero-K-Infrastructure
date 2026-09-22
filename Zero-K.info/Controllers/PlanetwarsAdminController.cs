@@ -78,7 +78,7 @@ namespace ZeroKWeb.Controllers
         {
             using (var db = new ZkDataContext())
             {
-                db.Database.CommandTimeout = 300;
+                db.Database.SetCommandTimeoutCompat(300);
 
                 var gal = db.Galaxies.Find(galaxyID);
                 gal.IsDirty = true;
