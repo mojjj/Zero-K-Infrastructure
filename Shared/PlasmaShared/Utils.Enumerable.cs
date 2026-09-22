@@ -115,5 +115,27 @@ namespace PlasmaShared
             foreach (var c in name.Where(Utils.ValidLobbyNameCharacter)) sb.Append(c);
             return sb.ToString();
         }
+
+        // Wanted by PlanetwarsAdminController, which the .NET 9 projects will link.
+        public static List<T> Shuffle<T>(this IEnumerable<T> source)
+        {
+            var list = source.ToList();
+            ShuffleInPlace(list);
+            return list;
+        }
+
+        public static void ShuffleInPlace<T>(IList<T> array)
+        {
+            var rng = new Random();
+            var n = array.Count;
+            while (n > 1)
+            {
+                var k = rng.Next(n);
+                n--;
+                var temp = array[n];
+                array[n] = array[k];
+                array[k] = temp;
+            }
+        }
     }
 }

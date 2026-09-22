@@ -743,7 +743,7 @@ that has to be decided or built.
 | controller | blocked on | kind |
 |---|---|---|
 | `Battles`, `Tourney`, `Users` | `ZkLobbyServer` / `Global.LobbyApi` - `ReplayStorage`, live `TourneyBattle` objects cast and mutated, and the lobby API itself | **Phase 1's coupling**, reached from Phase 3 |
-| `PlanetwarsAdmin` | `PlanetwarsEventCreator`, `Utils.Shuffle`, `Database.CommandTimeout` | ordinary porting; its `EntityFramework.Extensions` blocker is **solved** below |
+| `PlanetwarsAdmin` | `PlanetwarsEventCreator`, which calls `Global.LobbyApi` | **also Phase 1** - see below. `Utils.Shuffle` and `Database.CommandTimeout` are done |
 | `Clans`, `Maps`, and the two News controllers | `HttpPostedFileBase` | file upload; ASP.NET Core binds `IFormFile` |
 | `Maps` | `AutoRegistrator`, `ZkData.UnitSyncLib` | native interop with unitsync |
 | `Home` | `DotNetOpenAuth` | .NET Framework only, project discontinued |
@@ -789,6 +789,33 @@ file was an empty namespace that also compiled and would have thrown on an admin
 deletes planets. `ZeroKWeb.Render` now runs both operations inside a transaction it rolls
 back: that the row count matches the query, that the rows really changed, that a `null`
 assignment lands, and that the fixture is untouched afterwards.
+
+### Phase 1's seam cannot cross a process boundary yet, and that is measurable now
+
+`PlanetwarsAdminController` looked like ordinary porting: three blockers, two of them a file
+move and a call-site edit. The third, `PlanetwarsEventCreator`, calls `Global.LobbyApi` - so
+that controller joins `Battles`, `Tourney` and `Users`. **Four of the nine remaining
+controllers wait on the lobby-server split.**
+
+Trying to link the seam itself makes the shape of that work concrete. `ILobbyServerApi` was
+introduced in Phase 1 precisely so the coupling could cross a process boundary, and it does
+not compile on .NET 9 on its own:
+
+    ForceJoinBattle(string player, Battle bat)
+    List<Battle> GetPlanetBattles(Planet planet)
+    Task AddBattle(ServerBattle battle)
+    Task RemoveBattle(Battle battle)
+    PwPhase? PlanetWarsPhase { get; }
+
+`ServerBattle` is a live server-side object, and the interface says so in a comment beside
+those members - "these stay in-process until battles are modelled". What is new is the
+consequence: **the port cannot even declare `Global.LobbyApi`**, because its type does not
+exist outside the lobby server. Not one call, the type itself.
+
+So the Phase 1 work has a forcing function and a natural first step: **split
+`ILobbyServerApi` into the part that already crosses and the part that does not.** The
+crossable half would link into the port immediately, which would unblock the four controllers
+as far as their lobby calls go; the rest is the DTO design Phase 1 has been waiting for.
 
 ### The next structural blocker is unobtrusive AJAX
 
@@ -881,12 +908,12 @@ Of 116 views under `Zero-K.info/Views`:
 
 | | |
 |---|---|
-| **51** | compile against ASP.NET Core today |
+| **52** | compile against ASP.NET Core today |
 | **24** | name a type from the unported web project; blocked on it whatever else is also wrong |
 | **9** | Razor itself rejects: eight use `@helper`, removed in ASP.NET Core, and `Forum/Thread.cshtml` puts C# in a tag helper's attribute area |
 | **32** | something else missing |
 
-**Read the 51 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
+**Read the 52 carefully: it is not the 37 first reported.** The first version of this report said 37, and 37
 was wrong - see below. What is true is that the *view-language* work is small: nine files
 use a Razor construct that no longer exists. The rest is API surface, and most of it belongs
 to the web project rather than to the views.

@@ -7,10 +7,10 @@
 # other                  a package reference or an MVC 5 API
 
 total 116
-compiles                 51
+compiles                 52
 waiting-on-controllers   23
 razor-language           9
-other                    33
+other                    32
 
 waiting-on-controllers   Admin/TraceLogs.cshtml  [CS0234]
 waiting-on-controllers   Battles/BattleIndex.cshtml  [CS0234]
@@ -45,7 +45,6 @@ razor-language           Lobby/LobbyChatMessages.cshtml  [CS0234 RZ1002]
 razor-language           PlanetwarsAdmin/PlanetwarsAdminIndex.cshtml  [CS0234 RZ1002]
 razor-language           PostHistory/PostHistoryIndex.cshtml  [CS0246 RZ1002]
 other                    Battles/BattleDetail.cshtml  [CS0117 CS1061]
-other                    Clans/Create.cshtml  [CS1061]
 other                    Clans/Detail.cshtml  [CS1061]
 other                    Download/DownloadIndex.cshtml  [CS1061]
 other                    Factions/Detail.cshtml  [CS1061]

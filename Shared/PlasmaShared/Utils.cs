@@ -536,28 +536,6 @@ namespace PlasmaShared
             return val;
         }
 
-
-        public static List<T> Shuffle<T>(this IEnumerable<T> source)
-        {
-            var list = source.ToList();
-            ShuffleInPlace(list);
-            return list;
-        }
-
-        public static void ShuffleInPlace<T>(IList<T> array)
-        {
-            var rng = new Random();
-            var n = array.Count;
-            while (n > 1)
-            {
-                var k = rng.Next(n);
-                n--;
-                var temp = array[n];
-                array[n] = array[k];
-                array[k] = temp;
-            }
-        }
-
         public static string ExecuteConsoleCommand(string command, string args = null)
         {
             string response = null;
