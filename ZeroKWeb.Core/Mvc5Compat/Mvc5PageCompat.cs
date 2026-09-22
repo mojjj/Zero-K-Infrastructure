@@ -29,8 +29,19 @@ namespace ZeroKWeb.Compat
 
         /// <summary>
         /// MVC 5's Ajax helper. 18 views use it; see Mvc5Compat/AjaxCompat.cs.
+        ///
+        /// The url helper comes from THIS page's ViewContext rather than from Global.UrlHelper(),
+        /// which builds one from the ambient request. Two reasons, and the second is the one that
+        /// bit: a view already has the ActionContext its links should resolve against, so going
+        /// through the ambient is a longer way round to the same answer; and Global.UrlHelper()
+        /// returns null when nothing has called Global.Configure - which is every harness - so
+        /// the first component that rendered an Ajax form died on an ArgumentNullException from
+        /// inside UrlHelperExtensions rather than doing anything useful.
         /// </summary>
-        public Mvc5AjaxHelper Ajax => new Mvc5AjaxHelper(ZeroKWeb.Global.UrlHelper(), Output);
+        public Mvc5AjaxHelper Ajax => new Mvc5AjaxHelper(
+            (Context?.RequestServices?.GetService(typeof(Microsoft.AspNetCore.Mvc.Routing.IUrlHelperFactory))
+                as Microsoft.AspNetCore.Mvc.Routing.IUrlHelperFactory)?.GetUrlHelper(ViewContext),
+            Output);
 
         public Mvc5Server Server => new Mvc5Server(
             Context.RequestServices.GetService(typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment))
