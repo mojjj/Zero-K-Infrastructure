@@ -57,8 +57,10 @@
     <Compile Include="..\Zero-K.info\Models\CommentList.cs" Link="Linked\Models\CommentList.cs" />
     <Compile Include="..\Zero-K.info\Controllers\ModsController.cs" Link="Linked\Controllers\ModsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\MyController.cs" Link="Linked\Controllers\MyController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\PlanetwarsAdminController.cs" Link="Linked\Controllers\PlanetwarsAdminController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\ForumController.cs" Link="Linked\Controllers\ForumController.cs" />
     <Compile Include="..\Zero-K.info\AppCode\MemCache.cs" Link="Linked\MemCache.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\PlanetwarsEventCreator.cs" Link="Linked\PlanetwarsEventCreator.cs" />
     <!-- Phase 1's seam. Linked here on purpose: this project has no reference to
          ZkLobbyServer, so a member that names a server-side type fails this build. That is
          what keeps ILobbyServerApi crossable rather than merely intended to be. -->
