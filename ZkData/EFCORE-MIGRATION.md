@@ -1660,3 +1660,94 @@ report catches a compile error in either copy. **Nothing catches a behaviour dif
 two files that both compile**, which is why the standing rule is that the diff stays confined to
 the child-action call site.
 
+## LobbyController and PlanetwarsController link
+
+Both were blocked on things that turned out, again, to be about where code lives rather than
+what it does.
+
+```
+compiles                 52 -> 54
+waiting-on-controllers   21 -> 17
+```
+
+`Shared/ChatNotification.cshtml` and `Planetwars/Ladder.cshtml` now compile. `Lobby/LobbyChat`
+and `Planetwars/Events` moved out of `waiting-on-controllers` into `other` - still blocked, but
+on their own errors rather than on a missing controller. `Battles/BattleDetail`,
+`Planetwars/Planet`, `Lobby/LobbyChatHistory` and `Lobby/LobbyChatMessages` each lost an error
+code as a side effect of the constant moves.
+
+### Eleven constants were in the wrong file
+
+`GlobalConst.ModeratorChannel`, `Top20Channel`, `UserLogChannel`, `CoreChannel`,
+`DropshipsForFullWarpIPGain`, `SelfDestructRefund`, `BomberKillStructureChance`,
+`BomberKillIpChance`, `BomberKillIpAmount`, `PlanetWarsMaxTeamsize` and `InfluenceToLosePlanet`
+are plain `const` declarations with no dependencies. They sat in `GlobalConst.cs`, the half that
+needs WCF, purely because that is where they were typed. `InfluenceToLosePlanet` is the one
+worth noticing: its counterpart `InfluenceToCapturePlanet` was already in the portable half.
+
+`BaseSiteUrl` is not a constant - `SetMode` assigns it - so the port states the Local value in
+`ZkData.Core/GlobalConstMode.cs` beside the `Mode` it belongs to. That is a duplicated literal
+and can drift; it is recorded as such in the file.
+
+`ZkDataContext.CurrentAccount()` moved from `HtmlHelperExtensions.cs` to its `.Portable` half
+for the same reason: it reads `Global.AccountID` and a `ZkDataContext`, both of which the port
+has. `Planet.cshtml` reads it twice.
+
+### The website calls into ZkLobbyServer outside the seam
+
+Ten call sites in `PlanetwarsController`, `ClansController` and `FactionsController` call
+
+```csharp
+PlanetWarsTurnHandler.SetPlanetOwners(new PlanetwarsEventCreator(), db);
+```
+
+That is a **static call from Zero-K.info into the ZkLobbyServer assembly**, and
+`ILobbyServerApi` never modelled it: the seam covers what goes through `Global.LobbyApi`, and
+this does not. The earlier claim that the website no longer reaches past the seam was about
+`Global.LobbyApi`, and it was true about `Global.LobbyApi`; it was not a claim about the
+assembly reference, and it should not be read as one.
+
+It is not coupling to the *running* server, though. `SetPlanetOwners`, `WinGame` and
+`ReturnPeacefulDropshipsHome` take a `ZkDataContext` and an `IPlanetwarsEventCreator` and touch
+nothing else - database logic that happens to live in the lobby server's project. The methods
+that do need the server - `EndTurn`, `ProcessBattleResult`, `ProcessGalaxyTick`, all of which
+take a `ZkLobbyServer` parameter and reach `PlanetWarsMatchMaker` - stay where they are, and the
+website calls none of them. So the split is a relocation. Properly these three belong in
+`ZkData`; that is a larger move than this change.
+
+### PlanetwarsController's galaxy map is System.Drawing
+
+`GenerateGalaxyImage` returns a `Bitmap` and the `Index` action calls it to render and cache the
+galaxy JPEG. Both moved to `PlanetwarsController.Imaging.cs`, which the port does not link -
+the same split that let `PlanetwarsAdminController` be linked. The port therefore has no `Index`
+action for this controller; `Galaxy.cshtml` takes a `ZkData.Galaxy` rather than a controller
+type, so the view is unaffected.
+
+### Two EF6 call sites, one compat pair
+
+`db.Database.CommandTimeout = 5` became `SetCommandTimeoutCompat(5)`, which already existed in
+both twins. `DbSet.SqlQuery` needed a new pair, `SqlQueryCompat`, mapping to `FromSqlRaw` on EF
+Core. It returns a `List<T>` rather than a query because EF6's `DbSqlQuery` is not composable
+and EF Core's `FromSqlRaw` is - the narrower promise is the one both can keep. **That path is
+compile-verified only**: nothing here exercises the chat-history query, which wants a populated
+table and a request context.
+
+`Request.UserHostAddress` became `Request.UserHostAddressCompat()`, the pattern already used
+three times in `ForumController`.
+
+### A latent bug this exposed, and the structural fix
+
+`render-view.sh` and `run-host.sh` broke the moment `ChatNotification.cshtml` and
+`Ladder.cshtml` started compiling. The view inventory is measured against **ZeroKWeb.Core**, but
+`ZeroKWeb.Host` and `ZeroKWeb.Render` kept their own copies of the linked-source list, and those
+copies had fallen behind. The inventory was promising that views compile which two of the three
+projects could not build.
+
+`TourneyController` had been in that state for two merges - added to `ZeroKWeb.Core` alone -
+and went unnoticed only because `TourneyIndex.cshtml` was blocked on something else and so never
+entered the compiling set.
+
+The three lists are now one file, `port-sources.props`, imported by all three projects, which
+makes the drift impossible rather than detectable. `Mvc5Compat` stays in Host and Render because
+ZeroKWeb.Core owns those files natively.
+

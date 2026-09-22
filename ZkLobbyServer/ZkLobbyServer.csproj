@@ -163,6 +163,7 @@
     <Compile Include="SpringieInterface\PlanetWarsMatchMakerState.cs" />
     <Compile Include="SpringieInterface\PlanetWarsMatchMaker.cs" />
     <Compile Include="SpringieInterface\PlanetWarsTurnHandler.cs" />
+    <Compile Include="SpringieInterface\PlanetWarsTurnHandler.Portable.cs" />
     <Compile Include="SpringieInterface\PlayerJoinHandler.cs" />
     <Compile Include="SpringieInterface\StartSetup.cs" />
     <Compile Include="SpringRelaySource.cs" />

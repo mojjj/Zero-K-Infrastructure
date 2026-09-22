@@ -827,11 +827,6 @@ namespace System.Web.Mvc
         }
         
 
-        public static Account CurrentAccount(this ZkDataContext db)
-        {
-            if (Global.AccountID > 0 && Global.IsAccountAuthorized) return db.Accounts.Find(Global.AccountID);
-            else return null;
-        }
 
     }
 }

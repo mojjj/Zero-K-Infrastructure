@@ -1,4 +1,6 @@
-using System;
+﻿using System;
+using ZeroKWeb;   // Global.AccountID, shimmed in the port by Mvc5Compat/GlobalCompat.cs
+using ZkData;     // Account, ZkDataContext
 
 namespace System.Web.Mvc
 {
@@ -45,5 +47,16 @@ namespace System.Web.Mvc
             if (timeSpan.TotalDays < 365*2) return string.Format("{0} months", (int)(timeSpan.TotalDays / 30));
             return string.Format("{0} years", (int)(timeSpan.TotalDays/365));
         }
-    }
+    
+        /// <summary>
+        /// The signed-in account, from a context the caller already has. Pure ZkData and
+        /// Global, both of which the port has - it was in the MVC-dependent half only
+        /// because that is where it was written. Planet.cshtml reads it twice.
+        /// </summary>
+        public static Account CurrentAccount(this ZkDataContext db)
+        {
+            if (Global.AccountID > 0 && Global.IsAccountAuthorized) return db.Accounts.Find(Global.AccountID);
+            else return null;
+        }
+}
 }
