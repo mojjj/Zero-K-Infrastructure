@@ -12,3 +12,9 @@ namespace System.Web.Helpers { internal static class DeadUsingMarker { } }
 // no DbEntityEntry, no DbChangeTracker, no DbPropertyValues. Checked by what the file uses,
 // not by counting the name, which is the test that EntityFramework.Extensions failed.
 namespace System.Data.Entity.Infrastructure { internal static class DeadUsingMarker { } }
+
+// Dead in UsersController, checked by what the file uses rather than by counting the name:
+// no SqlFunctions from the first, no RouteValueDictionary, RouteData or RouteTable from the
+// second.
+namespace System.Data.Entity.SqlServer { internal static class DeadUsingMarker { } }
+namespace System.Web.Routing { internal static class DeadUsingMarker { } }

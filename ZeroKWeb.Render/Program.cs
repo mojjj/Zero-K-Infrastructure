@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Web.Mvc;
+using EntityFramework.Extensions;
 using ZkData;
 
 namespace ZeroKWeb.Render
@@ -91,6 +92,7 @@ namespace ZeroKWeb.Render
                 distinctRows + " distinct terrain combinations produced " + distinctHtml + " distinct renderings");
 
             failures += CheckPortedHelpers();
+            failures += CheckBatchOperations();
 
             Console.WriteLine();
             if (failures == 0)
@@ -166,6 +168,63 @@ namespace ZeroKWeb.Render
             Console.WriteLine((ok ? "   ok    " : "   FAIL  ") + what);
             if (!ok) Console.WriteLine("           wanted " + (expected ?? "(nothing)") + "\n           got    " + (actual ?? "(nothing)"));
             return ok ? 0 : 1;
+        }
+
+
+        /// <summary>
+        /// EF6's batch Delete and Update, translated onto EF Core's ExecuteDelete and
+        /// ExecuteUpdate, against the real database.
+        ///
+        /// This is checked rather than assumed because the alternative was an empty namespace
+        /// that compiled and would have thrown - and because these run one SQL statement over
+        /// every matching row, which is the kind of thing worth being sure about before an
+        /// admin page uses it to clear a galaxy. Everything here happens inside a transaction
+        /// that is rolled back.
+        /// </summary>
+        private static int CheckBatchOperations()
+        {
+            Console.WriteLine();
+            Console.WriteLine("EF6 batch operations over EF Core:");
+
+            var failures = 0;
+            using (var db = new ZkDataContext())
+            using (var transaction = db.Database.BeginTransaction())
+            {
+                try
+                {
+                    var before = db.Accounts.Count(a => a.Level != 4242);
+
+                    // Update: a member initialiser with a constant, the shape PlanetwarsAdmin uses.
+                    var updated = db.Accounts.Where(a => a.Level != 4242).Update(a => new Account { Level = 4242 });
+                    db.ChangeTracker.Clear();
+                    failures += Check(updated == before, "Update set " + updated + " rows, matching the query");
+                    failures += Check(db.Accounts.Count(a => a.Level == 4242) == before,
+                        "every row the query matched actually changed in the database");
+
+                    // Update with null, which the unassign-factions path relies on.
+                    db.Accounts.Where(a => a.Level == 4242).Update(a => new Account { FactionID = null });
+                    db.ChangeTracker.Clear();
+                    failures += Check(!db.Accounts.Any(a => a.FactionID != null), "a null assignment reaches the database");
+
+                    // Delete: filtered, then the whole set.
+                    var doomed = db.AccountRatings.Count();
+                    var deleted = db.AccountRatings.Where(r => r.AccountID > 0).Delete();
+                    db.ChangeTracker.Clear();
+                    failures += Check(deleted == doomed, "Delete removed " + deleted + " rows, matching the query");
+                    failures += Check(db.AccountRatings.Count() == 0, "the rows are gone");
+                }
+                finally
+                {
+                    transaction.Rollback();
+                }
+            }
+
+            using (var db = new ZkDataContext())
+            {
+                failures += Check(db.Accounts.Any(a => a.Level != 4242) && db.AccountRatings.Any(),
+                    "the fixture is left as it was found");
+            }
+            return failures;
         }
 
         private static int Check(bool ok, string what)
