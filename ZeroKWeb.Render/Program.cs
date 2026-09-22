@@ -93,6 +93,7 @@ namespace ZeroKWeb.Render
 
             failures += CheckPortedHelpers();
             failures += CheckBatchOperations();
+            failures += CheckChildActionTripwire();
 
             Console.WriteLine();
             if (failures == 0)
@@ -104,6 +105,67 @@ namespace ZeroKWeb.Render
             return 1;
         }
 
+
+        /// <summary>
+        /// The child-action shims throw, and this proves it.
+        ///
+        /// Four views compile only because ZeroKWeb.Core/Mvc5Compat/ChildActionCompat.cs
+        /// supplies signatures for Html.Action and Html.RenderAction, which ASP.NET Core
+        /// removed. The whole safety of that arrangement rests on those signatures FAILING
+        /// when reached, because three of the seven actions they stand in for carry [Auth] -
+        /// a shim that quietly rendered one to an anonymous visitor would be worse than a
+        /// view that does not compile.
+        ///
+        /// "It throws" is not something a compiler can check and not something the view
+        /// inventory can see, so it is checked here. A future edit that made one of these
+        /// return empty content instead - which would look like progress, and would move
+        /// views into `compiles` - fails this.
+        ///
+        /// The helper argument is null on purpose: these must throw before touching it.
+        /// </summary>
+        private static int CheckChildActionTripwire()
+        {
+            Console.WriteLine();
+            var failures = 0;
+            var cases = new (string What, Action Call)[]
+            {
+                ("Action(action)", () => ((IHtmlHelper)null).Action("MatchMaker")),
+                ("Action(action, routeValues)", () => ((IHtmlHelper)null).Action("Events", new { partial = true })),
+                ("Action(action, controller)", () => ((IHtmlHelper)null).Action("Ladder", "Planetwars")),
+                ("Action(action, controller, routeValues)", () => ((IHtmlHelper)null).Action("Events", "Planetwars", new { partial = true })),
+                ("RenderAction(action)", () => ((IHtmlHelper)null).RenderAction("MatchMaker")),
+                ("RenderAction(action, routeValues)", () => ((IHtmlHelper)null).RenderAction("CommanderProfile", new { profileNumber = 1 })),
+                ("RenderAction(action, controller)", () => ((IHtmlHelper)null).RenderAction("ChatNotification", "Lobby")),
+                ("RenderAction(action, controller, routeValues)", () => ((IHtmlHelper)null).RenderAction("Index", "Poll", new { pollID = 1 })),
+            };
+
+            foreach (var (what, call) in cases)
+            {
+                string outcome;
+                try
+                {
+                    call();
+                    outcome = "returned without throwing";
+                }
+                catch (NotSupportedException e)
+                {
+                    outcome = e.Message.Contains("child actions") && e.Message.Contains("[Auth]")
+                        ? null
+                        : "threw NotSupportedException, but the message no longer explains why: " + e.Message;
+                }
+                catch (Exception e)
+                {
+                    outcome = "threw " + e.GetType().Name + " rather than NotSupportedException";
+                }
+                failures += Check(outcome == null, "  " + what + " refuses to render" + (outcome == null ? "" : " - " + outcome));
+            }
+
+            // Every call site in the repository must bind to one of the overloads above. This
+            // is the count that, when it was wrong, had four views reporting CS1929/CS1503/CS1501
+            // for a gap in the shim rather than for anything about child actions.
+            failures += Check(cases.Length == 8, "  all eight overloads are covered");
+            return failures;
+        }
 
         /// <summary>
         /// The ported view helpers, against the exact HTML their MVC 5 originals emit.

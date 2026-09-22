@@ -149,10 +149,20 @@ views = sorted(str(p) for p in pathlib.Path("Zero-K.info/Views").rglob("*.cshtml
 RAZOR_LANGUAGE = {"RZ1002", "RZ1031"}
 UNPORTED = ("ZeroKWeb", "Controller", "AwardCalculator", "PwLadder")
 
+# MVC 5 child actions. ASP.NET Core removed them; ZeroKWeb.Core/Mvc5Compat/ChildActionCompat.cs
+# supplies signatures that THROW, so a view calling one compiles and then fails the moment it is
+# rendered. Counting those as "compiles" overstates how far the port is - TopMenu.cshtml and
+# CommentList.cshtml sat in that bucket while neither could actually render - so they get their
+# own, and it is the compiler that cannot see the difference, not the report.
+CHILD_ACTION = re.compile(r'\bHtml\s*\.\s*(Render)?Action\s*\(')
+
+def has_child_action(view):
+    return bool(CHILD_ACTION.search(pathlib.Path(view).read_text(encoding="utf-8-sig", errors="replace")))
+
 def classify(view):
     found = errors.get(view, [])
     if not found:
-        return "compiles"
+        return "child-action" if has_child_action(view) else "compiles"
     codes = {c for c, _ in found}
     if codes & RAZOR_LANGUAGE:
         return "razor-language"
@@ -175,11 +185,14 @@ for view in views:
 # pass the error limit can silence. There should be none; say so loudly if there are.
 unverified = [v for v in buckets["compiles"] if v not in rebatched]
 
-order = ["compiles", "waiting-on-controllers", "razor-language", "other"]
+order = ["compiles", "child-action", "waiting-on-controllers", "razor-language", "other"]
 print("# Razor views compiled against ASP.NET Core on .NET 9.")
 print("# GENERATED - run tools/view-port-report.sh --update.")
 print("#")
 print("# compiles               nothing stops this view today, verified in a small batch")
+print("# child-action           COMPILES BUT CANNOT RENDER - calls Html.Action/RenderAction,")
+print("#                        which ASP.NET Core removed; the shim throws. Needs a view")
+print("#                        component, and that rewrite does not compile on MVC 5.")
 print("# waiting-on-controllers names a type from the unported web project; blocked on it")
 print("# razor-language         Razor itself rejects it; needs rewriting regardless")
 print("# other                  a package reference or an MVC 5 API")
@@ -194,6 +207,9 @@ for name in order:
     if name == "compiles":
         continue
     for view in buckets[name]:
+        if name == "child-action":
+            print("%-24s %s" % (name, view.replace("Zero-K.info/Views/", "")))
+            continue
         detail = sorted({c for c, _ in errors[view]})
         print("%-24s %s  [%s]" % (name, view.replace("Zero-K.info/Views/", ""), " ".join(detail)))
 PYEOF
