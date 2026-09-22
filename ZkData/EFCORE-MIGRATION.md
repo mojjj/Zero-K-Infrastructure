@@ -1932,3 +1932,55 @@ so its two format strings decide most of the site's AJAX markup and now exist tw
 never uses is missing rather than ignored, so a view that started using one would fail to
 compile - which is right, because nothing would have verified its markup.
 
+## PlanetwarsEvents: the child action with six callers, and the first Ajax view rendered
+
+Third of seven, and the one that matters most by fanout: six of the fourteen child-action call
+sites are `Planetwars/Events`, from `Factions/Detail`, `Battles/BattleDetail`, `Clans/Detail`,
+`Planetwars/Galaxy`, `Planetwars/Planet` and `Shared/UserDetail`. Each passes a different filter
+and nothing else, which is why every parameter has a default - a view component is invoked with
+an anonymous object and the binder needs the rest optional.
+
+Unlike `ForumPostList` this one **runs**, because `Planetwars/Events.cshtml` compiles as of the
+Ajax helper. So `ZeroKWeb.Render` writes an `Events` row, invokes the component, and checks it
+comes back:
+
+```
+   ok      the event row reached the HTML
+   ok      Ajax.BeginForm emitted data-ajax through a real view
+   ok      the view's own AjaxOptions reached the attributes
+   ok      the partial rendered its body
+```
+
+The second and third lines are the part worth having. The Ajax helper was previously compared
+against captured MVC 5 output in isolation; this is the same markup arriving **through Razor**,
+from a view's own `Ajax.BeginForm` call, with the `AjaxOptions` the view itself constructs.
+
+### A null that only a real render could find
+
+The first run died with an `ArgumentNullException` from inside `UrlHelperExtensions.Action`.
+`ZkRazorPage.Ajax` was building its helper from `Global.UrlHelper()`, which returns null unless
+something has called `Global.Configure` - which no harness does.
+
+It now takes the url helper from **the page's own `ViewContext`**, which is both more direct - a
+view already has the `ActionContext` its links should resolve against - and not null. The
+ambient route was a longer way round to the same answer, and the long way round was broken.
+
+Worth noting that the byte-comparison checks could not have caught this: they call
+`AjaxCompat.BuildTag` with a supplied URL, precisely so they do not depend on routing. The
+helper was correct and unreachable.
+
+### Two faithful non-fixes
+
+- `Request.IsAjaxRequest()` is kept. A view component sees the parent request, which is what a
+  child action saw, so the question means the same thing.
+- `factionID` is a parameter of the action but not a field of `EventsResult`, so the view cannot
+  round-trip it through its own form. That is existing behaviour and is left alone; correcting it
+  would make the .NET 9 page behave differently from the MVC 5 one.
+
+### Still no caller
+
+All six calling views are blocked on their own errors, and `Galaxy.cshtml` additionally needs
+`Planetwars/MatchMaker`. So this component, like the other two, has no caller in a view yet.
+`PwMatchMaker.cshtml` is now one error from compiling - `Utils.PrintTimeRemaining` - which would
+make Galaxy the first view with every one of its child actions available.
+

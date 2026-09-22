@@ -556,6 +556,8 @@ namespace ZeroKWeb.Render
                     failures += Check(html.Contains(name), "  " + name + " is in the ladder");
                 }
                 failures += Check(!html.Contains("@"), "  no unprocessed Razor markers survived");
+
+                failures += await CheckEventsComponent();
             }
             finally
             {
@@ -597,10 +599,63 @@ namespace ZeroKWeb.Render
         }
 
         /// <summary>
+        /// PlanetwarsEvents, the child action with six callers.
+        ///
+        /// Unlike ForumPostList this one can be run: Planetwars/Events.cshtml compiles as of the
+        /// Ajax helper. So this renders the same partial six views ask for, through the same
+        /// component pipeline, and checks that a row written here comes back in the HTML.
+        ///
+        /// It also checks the Ajax markup that the helper produces IN A REAL VIEW rather than in
+        /// isolation - Events.cshtml opens with Ajax.BeginForm, and the data-ajax attributes in
+        /// the output are the byte-compared ones arriving through Razor.
+        ///
+        /// Runs inside the ladder check's setup block, so the Events row it writes is cleaned up
+        /// by the same finally.
+        /// </summary>
+        private static async Task<int> CheckEventsComponent()
+        {
+            Console.WriteLine();
+            var failures = 0;
+            var marker = "RenderCheckEvent-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+            int eventID;
+            using (var db = new ZkDataContext())
+            {
+                var ev = new Event { Text = marker, Time = DateTime.UtcNow, Turn = 0 };
+                db.Events.Add(ev);
+                db.SaveChanges();
+                eventID = ev.EventID;
+            }
+
+            try
+            {
+                var html = await InvokeViewComponent("PlanetwarsEvents", new { partial = true, pageSize = 40 });
+
+                failures += Check(html.Contains(marker), "  the event row reached the HTML");
+                failures += Check(html.Contains("data-ajax=\"true\""),
+                    "  Ajax.BeginForm emitted data-ajax through a real view");
+                failures += Check(html.Contains("data-ajax-update=\"#events\"")
+                                  && html.Contains("data-ajax-loading=\"#ajaxScrollProgress\""),
+                    "  the view's own AjaxOptions reached the attributes");
+                failures += Check(html.Contains("<div id='events'>"), "  the partial rendered its body");
+                failures += Check(!html.Contains("@"), "  no unprocessed Razor markers survived");
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var ev = db.Events.FirstOrDefault(e => e.EventID == eventID);
+                    if (ev != null) { db.Events.Remove(ev); db.SaveChanges(); }
+                }
+            }
+            return failures;
+        }
+
+        /// <summary>
         /// Invokes a view component by name through the MVC infrastructure, exactly as
         /// <c>@await Component.InvokeAsync("Name")</c> does from a view.
         /// </summary>
-        private static async Task<string> InvokeViewComponent(string name)
+        private static async Task<string> InvokeViewComponent(string name, object arguments = null)
         {
             var provider = BuildServices();
             var tempDataProvider = provider.GetRequiredService<ITempDataProvider>();
@@ -623,7 +678,9 @@ namespace ZeroKWeb.Render
 
                 var helper = provider.GetRequiredService<IViewComponentHelper>();
                 ((IViewContextAware)helper).Contextualize(viewContext);
-                var content = await helper.InvokeAsync(name);
+                var content = arguments == null
+                    ? await helper.InvokeAsync(name)
+                    : await helper.InvokeAsync(name, arguments);
 
                 using (var componentWriter = new StringWriter())
                 {
