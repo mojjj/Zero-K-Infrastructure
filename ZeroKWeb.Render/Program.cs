@@ -495,10 +495,17 @@ namespace ZeroKWeb.Render
                     };
                     db.Factions.Add(faction);
 
+                    // WinnerFactionID so Galaxy.cshtml takes its "PlanetWars ended" branch, which
+                    // is the one that invokes the ladder component. MiscVar.PlanetWarsMode reads
+                    // AllOffline with no row in the database, which is the case that branch sits
+                    // under, so nothing else needs seeding.
                     var galaxy = new Galaxy
                     {
                         IsDefault = true, IsDirty = false, Started = DateTime.UtcNow.AddDays(-2),
                         Width = 100, Height = 100, Turn = 0, AttackerSideCounter = 0,
+                        // The navigation, not the id: the faction has not been saved yet, so its
+                        // FactionID is still 0 and the foreign key would be rejected.
+                        WinnerFaction = faction, EndMessage = "RenderCheckEndMessage",
                     };
                     db.Galaxies.Add(galaxy);
                     db.SaveChanges();
@@ -559,6 +566,7 @@ namespace ZeroKWeb.Render
 
                 failures += await CheckEventsComponent();
                 failures += await CheckMatchMakerAuthorization();
+                failures += await CheckDivergedGalaxy(galaxyID, names);
             }
             finally
             {
@@ -633,7 +641,7 @@ namespace ZeroKWeb.Render
                 var html = await InvokeViewComponent("PlanetwarsEvents", new { partial = true, pageSize = 40 });
 
                 failures += Check(html.Contains(marker), "  the event row reached the HTML");
-                failures += Check(html.Contains("data-ajax=\"true\""),
+                    failures += Check(html.Contains("data-ajax=\"true\""),
                     "  Ajax.BeginForm emitted data-ajax through a real view");
                 failures += Check(html.Contains("data-ajax-update=\"#events\"")
                                   && html.Contains("data-ajax-loading=\"#ajaxScrollProgress\""),
@@ -692,6 +700,72 @@ namespace ZeroKWeb.Render
             failures += Check(html.Length == 0, "  an anonymous viewer gets empty content");
             failures += Check(!html.Contains("Match maker"),
                 "  it did not fall through to the matchmaker body");
+            return failures;
+        }
+
+        /// <summary>
+        /// The diverged Galaxy.cshtml, rendered with its three view components live.
+        ///
+        /// This is what the whole child-action exercise was for. PortedViews/Planetwars/Galaxy
+        /// replaces three @Html.Action calls with @await Component.InvokeAsync, and until now
+        /// every component had been exercised on its own. Here they run where they will actually
+        /// run: inside a view, activated by Razor, from one model.
+        ///
+        /// Two of the three appear in the output. The third, MatchMaker, is skipped by the VIEW -
+        /// its call sits behind `Global.IsAccountAuthorized &amp;&amp; CanPlayerPlanetWars()`, so an
+        /// anonymous render never reaches it. That is the same belt-and-braces shape as
+        /// TopMenu.cshtml guarding ChatNotification, and it means the component's own [Auth]
+        /// check is a second line of defence rather than the only one.
+        /// </summary>
+        private static async Task<int> CheckDivergedGalaxy(int galaxyID, List<string> ladderNames)
+        {
+            Console.WriteLine();
+            var failures = 0;
+
+            var marker = "RenderCheckGalaxyEvent-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            int eventID;
+            using (var db = new ZkDataContext())
+            {
+                var ev = new Event { Text = marker, Time = DateTime.UtcNow, Turn = 0 };
+                db.Events.Add(ev);
+                db.SaveChanges();
+                eventID = ev.EventID;
+            }
+
+            try
+            {
+                // The context stays open across the render. With lazy-loading proxies the model
+                // is a GalaxyProxy, and reading Model.WinnerFaction after the context is disposed
+                // throws from inside LazyLoader rather than returning null - so an entity handed
+                // to a view now has to outlive nothing. This is the second consequence of
+                // UseLazyLoadingProxies to surface in a harness, after the validation one.
+                using (var db = new ZkDataContext())
+                {
+                    var galaxy = db.Galaxies.Single(g => g.GalaxyID == galaxyID);
+                    var html = await Render("Planetwars/Galaxy", galaxy);
+
+                    failures += Check(html.Contains("PlanetWars ended"), "  the diverged Galaxy rendered");
+                    failures += Check(html.Contains("Top players"),
+                        "  the ladder COMPONENT ran inside the view");
+                    foreach (var name in ladderNames)
+                        failures += Check(html.Contains(name), "  " + name + " came through the ladder component");
+                    failures += Check(html.Contains(marker),
+                        "  the events COMPONENT ran inside the view");
+                failures += Check(html.Contains("data-ajax=\"true\""),
+                        "  the events component's Ajax form reached the page");
+                    failures += Check(!html.Contains("Match maker"),
+                        "  the view gated MatchMaker out for an anonymous render");
+                    failures += Check(!html.Contains("@"), "  no unprocessed Razor markers survived");
+                }
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var ev = db.Events.FirstOrDefault(e => e.EventID == eventID);
+                    if (ev != null) { db.Events.Remove(ev); db.SaveChanges(); }
+                }
+            }
             return failures;
         }
 
@@ -776,6 +850,12 @@ namespace ZeroKWeb.Render
                                                     + string.Join(", ", result.SearchedLocations));
 
             var httpContext = new DefaultHttpContext { RequestServices = provider };
+            // See InvokeViewComponent: without an endpoint, @Url.Action gets the router-based
+            // UrlHelper and throws. Galaxy.cshtml calls it; MapTags.cshtml does not, which is why
+            // this was not needed until a second view was rendered.
+            httpContext.SetEndpoint(new Microsoft.AspNetCore.Http.Endpoint(
+                _ => Task.CompletedTask, Microsoft.AspNetCore.Http.EndpointMetadataCollection.Empty, "render-harness"));
+
             var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
             var viewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary())
             {

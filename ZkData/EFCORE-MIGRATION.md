@@ -2088,3 +2088,78 @@ All three of its child actions have both a compiling partial and a component:
 It is the first view where the whole pattern can be demonstrated end to end, and the first
 divergence with more than one call site.
 
+## Galaxy.cshtml diverged, and rendered with its components live
+
+The second diverged view, and the first with more than one call site. Three
+`@Html.Action` become three `@await Component.InvokeAsync`, and the diff between the MVC 5
+original and `PortedViews/Planetwars/Galaxy.cshtml` is exactly those three lines.
+
+`ZeroKWeb.Render` now renders it, with two of the three components running inside:
+
+```
+   ok      the diverged Galaxy rendered
+   ok      the ladder COMPONENT ran inside the view
+   ok      player03 came through the ladder component
+   ok      the events COMPONENT ran inside the view
+   ok      the events component's Ajax form reached the page
+   ok      the view gated MatchMaker out for an anonymous render
+```
+
+The third is skipped by the **view**: its call sits behind
+`Global.IsAccountAuthorized && CanPlayerPlanetWars()`, so an anonymous render never reaches it -
+the same shape as `TopMenu.cshtml` guarding `ChatNotification`, and it means the component's own
+`[Auth]` check is a second line of defence rather than the only one.
+
+### The divergence mechanism was broken, and the first view was too simple to show it
+
+`PortedViews/Shared/CommentList.cshtml` compiled and rendered. Galaxy did not, with seven errors
+that made no sense - `Page`, `Server`, `File`, `PrintDate`, `PrintFaction`, `BBCode`,
+`ToNiceString` all "does not exist in the current context". Those are precisely what
+`_ViewImports.cshtml` supplies.
+
+The cause was one character:
+
+```
+working   LINK=[Views/Planetwars/Planet.cshtml]
+broken    LINK=[Views\Planetwars/Galaxy.cshtml]
+```
+
+`%(RecursiveDir)` comes back with forward slashes, so `Link="Views\%(RecursiveDir)..."` produced
+a mixed separator, and the Razor SDK does not walk that path looking for `_ViewImports.cshtml`.
+The diverged view compiled with **no imports at all**.
+
+`CommentList` hid this for a whole commit because it is simple enough to need nothing from
+imports. The `PORTED VIEW BROKEN` line added when `PortedViews` was introduced is what surfaced
+it, which is the first time one of this project's safety nets caught a defect in the thing it
+was built to watch rather than in a measurement.
+
+### Two more consequences of lazy-loading proxies
+
+Both surfaced only by rendering a real page.
+
+**An entity cannot outlive its context.** The galaxy was loaded in a `using` and rendered after
+disposal; `Model.WinnerFaction` then threw from inside `LazyLoader` rather than returning null.
+The context now stays open across the render.
+
+**A navigation must be set, not its id.** `WinnerFactionID = faction.FactionID` was 0 at the time
+- the faction had not been saved - and SQL Server rejected the foreign key. `WinnerFaction =
+faction` lets EF fix it up.
+
+### One production view edit, and what it does not verify
+
+The hoisted `Global.LobbyApi.GetPlanetWarsBattles()` from the PlanetWars DTO change is now
+guarded:
+
+```csharp
+var pwBattles = Global.LobbyApi?.GetPlanetWarsBattles() ?? new List<ZkLobbyServer.PlanetBattleInfo>();
+```
+
+Hoisting it out of the planet loop changed **when** the lobby server is needed: the per-planet
+call only ran if the galaxy had planets, and this runs always. `Global.LobbyApi` is never null in
+production, so this changes nothing there; it is the same guard `PlanetwarsEventCreator` already
+uses, and it lets the page render without battle overlays instead of failing.
+
+The edit is byte-identical in both copies, and the port compiles and renders it. **The MVC 5 copy
+is unverified**, as every MVC 5 view edit is - mono ships no `aspnet_compiler.exe`. The identical
+expression compiling on .NET 9 is evidence, not proof.
+

@@ -11,7 +11,19 @@
   -->
   <ItemGroup>
     <Content Remove="..\Zero-K.info\Views\Shared\CommentList.cshtml" />
+    <Content Remove="..\Zero-K.info\Views\Planetwars\Galaxy.cshtml" />
 
-    <Content Include="..\PortedViews\**\*.cshtml" Link="Views\%(RecursiveDir)%(Filename)%(Extension)" />
+    <!--
+      Link uses a FORWARD slash after Views, and it matters. %(RecursiveDir) comes back with
+      forward slashes here, so "Views\" produced "Views\Planetwars/Galaxy.cshtml" - a mixed
+      separator the Razor SDK does not walk when it looks for _ViewImports.cshtml. The diverged
+      view then compiled with no imports at all: no @inherits ZkRazorPage, no System.Web.Mvc, so
+      Page, PrintDate, BBCode and the rest were all "does not exist in the current context".
+
+      Shared/CommentList.cshtml hid this for a whole commit because it is simple enough not to
+      need a single thing from _ViewImports. Galaxy.cshtml, the second diverged view, needed
+      seven of them.
+    -->
+    <Content Include="..\PortedViews\**\*.cshtml" Link="Views/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
