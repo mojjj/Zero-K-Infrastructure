@@ -11,6 +11,19 @@ using PlasmaShared;
 using ZeroKWeb;
 using ZkData;
 
+// MvcHtmlString, not IHtmlContent, and that is deliberate.
+//
+// MVC 5's helpers all return MvcHtmlString. These were first written returning IHtmlContent,
+// which is the ASP.NET Core idiom and is what the views need - but it is NOT what the MVC 5
+// signature is, and the difference only shows when LINKED code stores a result:
+//
+//     List<MvcHtmlString> holders = new List<MvcHtmlString>();
+//     holders.Add(PrintAccount(helper, acc.Account));    // CS1503 on .NET 9 only
+//
+// PrintFactionRoleHolders does exactly that, and it is shared source, so it has to compile
+// against both. MvcHtmlString IS an IHtmlContent - it subclasses HtmlString - so matching the
+// MVC 5 signature costs nothing and every existing caller is unaffected.
+
 namespace System.Web.Mvc
 {
     /// <summary>
@@ -62,11 +75,11 @@ namespace System.Web.Mvc
         /// from a hand-written "/Users/Detail/{0}" rather than from routing, which is why it
         /// does not need the UrlHelper the clan link does.
         /// </summary>
-        public static IHtmlContent PrintAccount(this IHtmlHelper helper, Account account,
+        public static MvcHtmlString PrintAccount(this IHtmlHelper helper, Account account,
             bool colorize = true, bool ignoreDeleted = false, bool makeLinks = true)
         {
-            if (account == null) return new HtmlString("Nobody");
-            if (account.IsDeleted && !ignoreDeleted && !Global.IsModerator) return new HtmlString(account.Name);
+            if (account == null) return new MvcHtmlString("Nobody");
+            if (account.IsDeleted && !ignoreDeleted && !Global.IsModerator) return new MvcHtmlString(account.Name);
 
             var clanStr = "";
             if (account.Clan != null)
@@ -98,45 +111,45 @@ namespace System.Web.Mvc
                 user = string.Format("<a href='/Users/Detail/{0}' style='color:{1}' nicetitle='$user${0}'>{2}</a>",
                     account.AccountID, colorize ? color : "", name);
 
-            return new HtmlString(string.Format("{0}{1}{2}{3}{4}", flag, rank, clanStr, dudeStr, user));
+            return new MvcHtmlString(string.Format("{0}{1}{2}{3}{4}", flag, rank, clanStr, dudeStr, user));
         }
 
 
-        public static IHtmlContent AccountAvatar(this IHtmlHelper helper, Account account)
+        public static MvcHtmlString AccountAvatar(this IHtmlHelper helper, Account account)
         {
             // no null check on account in the original - it dereferences straight away
             if (account.IsDeleted) return null;
-            return new HtmlString(string.Format("<img src='/img/avatars/{0}.png' class='avatar'>", account.Avatar));
+            return new MvcHtmlString(string.Format("<img src='/img/avatars/{0}.png' class='avatar'>", account.Avatar));
         }
 
-        public static IHtmlContent PrintBadges(this IHtmlHelper helper, Account account,
+        public static MvcHtmlString PrintBadges(this IHtmlHelper helper, Account account,
             int? maxWidth = null, bool newlines = true)
         {
-            if (account == null || account.IsDeleted) return new HtmlString("");
+            if (account == null || account.IsDeleted) return new MvcHtmlString("");
             var badges = account.GetBadges();
-            return new HtmlString(string.Join("\n", badges.Select(x =>
+            return new MvcHtmlString(string.Join("\n", badges.Select(x =>
                 $"<img src='/img/badges/{x}.png' nicetitle='{x.Description()}' {(maxWidth != null ? $"style='width:{maxWidth}px;'" : "")}/>{(newlines ? "<br/>" : "")}")));
         }
 
-        public static IHtmlContent PrintInfluence(this IHtmlHelper helper, PlanetFaction planetFaction)
+        public static MvcHtmlString PrintInfluence(this IHtmlHelper helper, PlanetFaction planetFaction)
             => PrintInfluence(helper, planetFaction.Faction, planetFaction.Influence);
 
-        public static IHtmlContent PrintInfluence(this IHtmlHelper helper, Faction fac, double influence)
-            => new HtmlString(string.Format("<span style='color:{0}'>{1:0.#} ({2:0.#}%)</span>",
+        public static MvcHtmlString PrintInfluence(this IHtmlHelper helper, Faction fac, double influence)
+            => new MvcHtmlString(string.Format("<span style='color:{0}'>{1:0.#} ({2:0.#}%)</span>",
                 Faction.FactionColor(fac, Global.FactionID), influence,
                 100 * influence / GlobalConst.PlanetWarsMaximumIP));
 
-        public static IHtmlContent PrintInfluence(this IHtmlHelper helper, Faction faction, int influence, int shadowInfluence)
+        public static MvcHtmlString PrintInfluence(this IHtmlHelper helper, Faction faction, int influence, int shadowInfluence)
         {
             // the original builds the format string conditionally, and the non-breaking
             // spaces are written as &nbsp without the semicolon - kept as found
             var formatString = "<span style='color:{0}'>{1}</span>";
             if (shadowInfluence > 0) formatString += "&nbsp({2}&nbsp+&nbsp<span style='color:gray'>{3}</span>)";
-            return new HtmlString(string.Format(formatString, faction.Color,
+            return new MvcHtmlString(string.Format(formatString, faction.Color,
                 influence + shadowInfluence, influence, shadowInfluence));
         }
 
-        public static IHtmlContent Stars(this IHtmlHelper helper, StarType type, double? rating)
+        public static MvcHtmlString Stars(this IHtmlHelper helper, StarType type, double? rating)
         {
             if (rating.HasValue)
             {
@@ -144,11 +157,11 @@ namespace System.Web.Mvc
                 var starWidth = (int)(rating * 14.0);
                 // {2} is passed and never used by the format string - kept, since removing
                 // an unused argument is still a change to a literal being transcribed
-                return new HtmlString(string.Format(
+                return new MvcHtmlString(string.Format(
                     "<span class='{0}' style='width:{1}px'></span><span style='width:{3}px'></span>",
                     type, starWidth, rating, totalWidth - starWidth));
             }
-            return new HtmlString(string.Format("<span class='{0}' style='width:70px' title='No votes'></span>",
+            return new MvcHtmlString(string.Format("<span class='{0}' style='width:70px' title='No votes'></span>",
                 type == StarType.RedSkull ? StarType.WhiteSkull : StarType.WhiteStarSmall));
         }
 
@@ -162,25 +175,25 @@ namespace System.Web.Mvc
         /// BBCodeCached is not here. It reads Global.ForumPostCache, which is the web
         /// project's cache object rather than anything about rendering.
         /// </summary>
-        public static IHtmlContent BBCode(this IHtmlHelper helper, string str)
+        public static MvcHtmlString BBCode(this IHtmlHelper helper, string str)
         {
             if (str == null) return null;
-            return new HtmlString(new ZeroKWeb.ForumParser.ForumWikiParser().TranslateToHtml(str, helper));
+            return new MvcHtmlString(new ZeroKWeb.ForumParser.ForumWikiParser().TranslateToHtml(str, helper));
         }
 
 
-        public static IHtmlContent PrintMap(this IHtmlHelper helper, string name)
-            => new HtmlString(string.Format("<a href='{0}' title='$map${1}'>{1}</a>",
+        public static MvcHtmlString PrintMap(this IHtmlHelper helper, string name)
+            => new MvcHtmlString(string.Format("<a href='{0}' title='$map${1}'>{1}</a>",
                 Url(helper).Action("DetailName", "Maps", new { name }), name));
 
-        public static IHtmlContent PrintBattle(this IHtmlHelper helper, SpringBattlePlayer battlePlayer)
+        public static MvcHtmlString PrintBattle(this IHtmlHelper helper, SpringBattlePlayer battlePlayer)
         {
             if (battlePlayer == null) return null;
             return PrintBattle(helper, battlePlayer.SpringBattle,
                 battlePlayer.IsSpectator ? null : (bool?)battlePlayer.IsInVictoryTeam);
         }
 
-        public static IHtmlContent PrintBattle(this IHtmlHelper helper, SpringBattle battle, bool? isVictory = null)
+        public static MvcHtmlString PrintBattle(this IHtmlHelper helper, SpringBattle battle, bool? isVictory = null)
         {
             var icon = "";
             if (isVictory == true) icon = "battlewon.png";
@@ -201,7 +214,7 @@ namespace System.Web.Mvc
             // be rendered to a string here rather than handed over as IHtmlContent.
             var map = Render(PrintMap(helper, battle.ResourceByMapResourceID?.InternalName));
 
-            return new HtmlString(string.Format("<span><a href='{0}'>{4} B{1}</a> {2} on {3}</span>",
+            return new MvcHtmlString(string.Format("<span><a href='{0}'>{4} B{1}</a> {2} on {3}</span>",
                 Url(helper).Action("Detail", "Battles", new { id = battle.SpringBattleID }),
                 battle.SpringBattleID, battle.PlayerCount, map, icon));
         }
@@ -217,19 +230,19 @@ namespace System.Web.Mvc
         }
 
 
-        public static IHtmlContent PrintFactionTreaty(this IHtmlHelper helper, FactionTreaty treaty)
+        public static MvcHtmlString PrintFactionTreaty(this IHtmlHelper helper, FactionTreaty treaty)
         {
-            if (treaty == null) return new HtmlString("");
+            if (treaty == null) return new MvcHtmlString("");
             // the original's markup really does close a </span> it never opened
-            return new HtmlString(string.Format("<a href='{1}' nicetitle='$treaty${0}'>TR{0}</span></a>",
+            return new MvcHtmlString(string.Format("<a href='{1}' nicetitle='$treaty${0}'>TR{0}</span></a>",
                 treaty.FactionTreatyID,
                 Global.UrlHelper().Action("TreatyDetail", "Factions", new { id = treaty.FactionTreatyID })));
         }
 
-        public static IHtmlContent PrintPlanet(this IHtmlHelper helper, Planet planet)
+        public static MvcHtmlString PrintPlanet(this IHtmlHelper helper, Planet planet)
         {
-            if (planet == null) return new HtmlString("?");
-            return new HtmlString(string.Format(
+            if (planet == null) return new MvcHtmlString("?");
+            return new MvcHtmlString(string.Format(
                 "<a href='{0}' title='$planet${4}' style='{5}'><img src='/img/planets/{1}' width='{2}'>{3}</a>",
                 Global.UrlHelper().Action("Planet", "Planetwars", new { id = planet.PlanetID }),
                 planet.Resource.MapPlanetWarsIcon,
@@ -239,16 +252,16 @@ namespace System.Web.Mvc
                 planet.Faction != null ? "color:" + planet.Faction.Color : ""));
         }
 
-        public static IHtmlContent PrintStructureType(this IHtmlHelper helper, StructureType stype)
+        public static MvcHtmlString PrintStructureType(this IHtmlHelper helper, StructureType stype)
         {
             // the original calls Global.UrlHelper() here and never uses it; not carried over,
             // because carrying it would mean calling into request state for nothing
-            if (stype == null) return new HtmlString("");
-            return new HtmlString(string.Format("<span nicetitle='$structuretype${0}'>{1}</span>",
+            if (stype == null) return new MvcHtmlString("");
+            return new MvcHtmlString(string.Format("<span nicetitle='$structuretype${0}'>{1}</span>",
                 stype.StructureTypeID, stype.Name));
         }
 
-        public static IHtmlContent PrintRoleType(this IHtmlHelper helper, RoleType rt)
+        public static MvcHtmlString PrintRoleType(this IHtmlHelper helper, RoleType rt)
         {
             var factoids = new List<string>();
             if (rt.IsClanOnly) factoids.Add("clan based");
@@ -269,56 +282,56 @@ namespace System.Web.Mvc
             if (rt.RightEditTexts) factoids.Add("controls texts");
 
             // &nbsp without the semicolon, as found
-            return new HtmlString(string.Format("<span title=\"<b>{0}</b><ul>{1}</ul>\"><b>{2}</b></span>",
+            return new MvcHtmlString(string.Format("<span title=\"<b>{0}</b><ul>{1}</ul>\"><b>{2}</b></span>",
                 rt.Description,
                 string.Join("", factoids.Select(x => "<li>" + x + "</li>")),
                 rt.Name + "&nbsp"));
         }
 
-        public static IHtmlContent PrintDate(this IHtmlHelper helper, DateTime? dateTime)
-            => new HtmlString($"<span nicetitle=\"{dateTime}\">{dateTime.ToAgoString()}</span>");
+        public static MvcHtmlString PrintDate(this IHtmlHelper helper, DateTime? dateTime)
+            => new MvcHtmlString($"<span nicetitle=\"{dateTime}\">{dateTime.ToAgoString()}</span>");
 
-        public static IHtmlContent PrintEnergy(this IHtmlHelper helper, double? count)
-            => new HtmlString(string.Format("<span>{0}<img src='{1}' class='icon20'/></span>",
+        public static MvcHtmlString PrintEnergy(this IHtmlHelper helper, double? count)
+            => new MvcHtmlString(string.Format("<span>{0}<img src='{1}' class='icon20'/></span>",
                 Math.Floor(count ?? 0), GlobalConst.EnergyIcon));
 
-        public static IHtmlContent PrintMetal(this IHtmlHelper helper, double? cost)
+        public static MvcHtmlString PrintMetal(this IHtmlHelper helper, double? cost)
             // the span really does carry a style here and not on the others
-            => new HtmlString(string.Format("<span style='color:#00FFFF;'>{0}<img src='{1}' class='icon20'/></span>",
+            => new MvcHtmlString(string.Format("<span style='color:#00FFFF;'>{0}<img src='{1}' class='icon20'/></span>",
                 Math.Floor(cost ?? 0), GlobalConst.MetalIcon));
 
-        public static IHtmlContent PrintMetal(this IHtmlHelper helper, Account account)
+        public static MvcHtmlString PrintMetal(this IHtmlHelper helper, Account account)
         {
             if (account == null || account.Faction == null) return null;
             // width/height here, class='icon20' on the double? overload - the originals
             // really do differ, and transcription keeps the difference.
-            return new HtmlString(string.Format(
+            return new MvcHtmlString(string.Format(
                 "<span style='color:#00FFFF' nicetitle='Metal available to you/owned by faction'><img src='{0}' width='20' height='20'/>{1} / {2}</span>",
                 GlobalConst.MetalIcon, Math.Floor(account.GetMetalAvailable()), Math.Floor(account.Faction.Metal)));
         }
 
-        public static IHtmlContent PrintBombers(this IHtmlHelper helper, double? count)
+        public static MvcHtmlString PrintBombers(this IHtmlHelper helper, double? count)
             // no Math.Floor on this one, unlike its siblings
-            => new HtmlString(string.Format("<span>{0}<img src='{1}' class='icon20'/></span>",
+            => new MvcHtmlString(string.Format("<span>{0}<img src='{1}' class='icon20'/></span>",
                 count ?? 0, GlobalConst.BomberIcon));
 
-        public static IHtmlContent PrintBombers(this IHtmlHelper helper, Account account)
+        public static MvcHtmlString PrintBombers(this IHtmlHelper helper, Account account)
         {
             if (account == null || account.Faction == null) return null;
-            return new HtmlString(string.Format(
+            return new MvcHtmlString(string.Format(
                 "<span nicetitle='Bombers available to you/owned by faction'><img src='{0}' class='icon20'/>{1} / {2}</span>",
                 GlobalConst.BomberIcon, Math.Floor(account.GetBombersAvailable()), Math.Floor(account.Faction.Bombers)));
         }
 
-        public static IHtmlContent PrintWarps(this IHtmlHelper helper, double? count)
+        public static MvcHtmlString PrintWarps(this IHtmlHelper helper, double? count)
             // no Math.Floor, same as PrintBombers and unlike PrintEnergy
-            => new HtmlString(string.Format("<span>{0}<img src='{1}' class='icon20'/></span>",
+            => new MvcHtmlString(string.Format("<span>{0}<img src='{1}' class='icon20'/></span>",
                 count ?? 0, GlobalConst.WarpIcon));
 
-        public static IHtmlContent PrintWarps(this IHtmlHelper helper, Account account)
+        public static MvcHtmlString PrintWarps(this IHtmlHelper helper, Account account)
         {
             if (account == null || account.Faction == null) return null;
-            return new HtmlString(string.Format(
+            return new MvcHtmlString(string.Format(
                 "<span nicetitle='Warp cores available to you/owned by faction'><img src='{0}' class='icon20'/>{1} / {2}</span>",
                 GlobalConst.WarpIcon, Math.Floor(account.GetWarpAvailable()), Math.Floor(account.Faction.Warps)));
         }
@@ -337,8 +350,8 @@ namespace System.Web.Mvc
         /// .NET 9 - same five characters, nothing else - so naming it restores the original
         /// byte for byte and lets the method keep its original shape.
         /// </summary>
-        public static IHtmlContent PrintLines(this IHtmlHelper helper, string text)
-            => new HtmlString(System.Net.WebUtility.HtmlEncode(text).Replace("\n", "<br/>"));
+        public static MvcHtmlString PrintLines(this IHtmlHelper helper, string text)
+            => new MvcHtmlString(System.Net.WebUtility.HtmlEncode(text).Replace("\n", "<br/>"));
 
 
         /// <summary>
@@ -355,58 +368,58 @@ namespace System.Web.Mvc
             return factory.GetUrlHelper(context);
         }
 
-        public static IHtmlContent PrintDropships(this IHtmlHelper helper, double? count, Faction faction)
-            => new HtmlString(string.Format("<span>{0}<img src='{1}' class='icon20'/></span>",
+        public static MvcHtmlString PrintDropships(this IHtmlHelper helper, double? count, Faction faction)
+            => new MvcHtmlString(string.Format("<span>{0}<img src='{1}' class='icon20'/></span>",
                 Math.Floor(count ?? 0), faction.GetShipImageUrl()));
 
-        public static IHtmlContent PrintDropships(this IHtmlHelper helper, Account account)
+        public static MvcHtmlString PrintDropships(this IHtmlHelper helper, Account account)
         {
             if (account == null || account.Faction == null) return null;
-            return new HtmlString(string.Format(
+            return new MvcHtmlString(string.Format(
                 "<span nicetitle='Dropships available to you/owned by faction'><img src='{0}' class='icon20'/>{1} / {2}</span>",
                 account.Faction.GetShipImageUrl(), Math.Floor(account.GetDropshipsAvailable()),
                 Math.Floor(account.Faction.Dropships)));
         }
 
-        public static IHtmlContent PrintFaction(this IHtmlHelper helper, Faction fac, bool big = true)
+        public static MvcHtmlString PrintFaction(this IHtmlHelper helper, Faction fac, bool big = true)
         {
-            if (fac == null) return new HtmlString("");
+            if (fac == null) return new MvcHtmlString("");
             var url = Url(helper);
             if (big)
-                return new HtmlString(string.Format("<a href='{1}' nicetitle='$faction${2}'><img src='{0}'/></a>",
+                return new MvcHtmlString(string.Format("<a href='{1}' nicetitle='$faction${2}'><img src='{0}'/></a>",
                     fac.GetImageUrl(), url.Action("Detail", "Factions", new { id = fac.FactionID }), fac.FactionID));
 
             // two spaces before style= in the original, kept
-            return new HtmlString(string.Format(
+            return new MvcHtmlString(string.Format(
                 "<a href='{3}' nicetitle='$faction${4}'><span style='color:{0}'><img src='{1}'  style='width:16px;height:16px'/>{2}</span></a>",
                 fac.Color, fac.GetImageUrl(), fac.Shortcut,
                 url.Action("Detail", "Factions", new { id = fac.FactionID }), fac.FactionID));
         }
 
-        public static IHtmlContent PrintClan(this IHtmlHelper helper, Clan clan, bool colorize = true, bool big = false)
+        public static MvcHtmlString PrintClan(this IHtmlHelper helper, Clan clan, bool colorize = true, bool big = false)
         {
             var url = Url(helper);
             if (clan == null)
-                return new HtmlString(string.Format("<a href='{0}'>No Clan</a>", url.Action("Index", "Clans")));
+                return new MvcHtmlString(string.Format("<a href='{0}'>No Clan</a>", url.Action("Index", "Clans")));
 
             var color = Clan.ClanColor(clan, Global.ClanID);
             if (string.IsNullOrEmpty(color)) color = "#B0D0C0";
 
             if (big)
-                return new HtmlString(string.Format("<a href='{1}' nicetitle='$clan${2}'><img width='64' src='{0}'/></a>",
+                return new MvcHtmlString(string.Format("<a href='{1}' nicetitle='$clan${2}'><img width='64' src='{0}'/></a>",
                     clan.GetImageUrl(), url.Action("Detail", "Clans", new { id = clan.ClanID }), clan.ClanID));
 
-            return new HtmlString(string.Format(
+            return new MvcHtmlString(string.Format(
                 "<a href='{0}' nicetitle='$clan${4}'><img src='{1}' width='16'><span style='color:{2}'>{3}</span></a>",
                 url.Action("Detail", "Clans", new { id = clan.ClanID }), clan.GetImageUrl(),
                 colorize ? color : "", System.Net.WebUtility.HtmlEncode(clan.Shortcut), clan.ClanID));
         }
 
-        public static IHtmlContent PrintLines(this IHtmlHelper helper, IEnumerable<object> lines)
+        public static MvcHtmlString PrintLines(this IHtmlHelper helper, IEnumerable<object> lines)
         {
             var sb = new StringBuilder();
             foreach (var line in lines) sb.AppendFormat("{0}<br/>", line);
-            return new HtmlString(sb.ToString());
+            return new MvcHtmlString(sb.ToString());
         }
     }
 }

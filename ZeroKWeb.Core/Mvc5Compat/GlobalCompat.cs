@@ -124,6 +124,19 @@ namespace ZeroKWeb
         /// </summary>
         public static ForumPostCache ForumPostCache { get; } = new ForumPostCache();
 
+        /// <summary>
+        /// MVC 5's Global.MapPath, which resolved a ~/ path against the site root. The same answer
+        /// Mvc5Server.MapPath gives a view; this is for linked code that has no view to ask.
+        /// IncludeFile and IncludeWiki read files from disk through it.
+        /// </summary>
+        public static string MapPath(string virtualPath)
+        {
+            var environment = Context?.RequestServices?.GetService(
+                typeof(Microsoft.AspNetCore.Hosting.IWebHostEnvironment)) as Microsoft.AspNetCore.Hosting.IWebHostEnvironment;
+            var root = environment?.WebRootPath ?? System.IO.Directory.GetCurrentDirectory();
+            return System.IO.Path.Combine(root, (virtualPath ?? "").TrimStart('~', '/', '\\').Replace('/', System.IO.Path.DirectorySeparatorChar));
+        }
+
         // Session is opt-in in ASP.NET Core and the ported application has not decided about
         // it yet. False is what an unconfigured request would answer anyway.
         public static bool IsWebLobbyAccess => false;

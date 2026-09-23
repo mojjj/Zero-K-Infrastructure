@@ -12,25 +12,26 @@
 # other                  a package reference or an MVC 5 API
 
 total 123
-compiles                 73
+compiles                 82
 diverged                 3
-child-action             2
-waiting-on-controllers   21
+child-action             5
+waiting-on-controllers   18
 razor-language           1
-other                    23
+other                    14
 
 diverged                 Planetwars/Galaxy.cshtml  -> PortedViews/Planetwars/Galaxy.cshtml
 diverged                 Shared/CommentList.cshtml  -> PortedViews/Shared/CommentList.cshtml
 diverged                 Shared/TopMenu.cshtml  -> PortedViews/Shared/TopMenu.cshtml
+child-action             Clans/Detail.cshtml
+child-action             Factions/Detail.cshtml
 child-action             Forum/NewPost.cshtml
 child-action             My/Commanders.cshtml
+child-action             Planetwars/Planet.cshtml
 waiting-on-controllers   Admin/TraceLogs.cshtml  [CS1061]
 waiting-on-controllers   Battles/BattleIndex.cshtml  [CS1061]
 waiting-on-controllers   Charts/ChartsRatings.cshtml  [CS1061]
 waiting-on-controllers   Clans/ClansIndex.cshtml  [CS0234]
 waiting-on-controllers   Engines/EnginesIndex.cshtml  [CS0246]
-waiting-on-controllers   Forum/ForumIndex.cshtml  [CS1061]
-waiting-on-controllers   Forum/SearchResults.cshtml  [CS1061]
 waiting-on-controllers   Home/HomeIndex.cshtml  [CS0234]
 waiting-on-controllers   Ladders/LaddersFull.cshtml  [CS0246]
 waiting-on-controllers   Ladders/LaddersMaps.cshtml  [CS0246]
@@ -44,28 +45,18 @@ waiting-on-controllers   Missions/Detail.cshtml  [CS0234]
 waiting-on-controllers   Missions/Index.cshtml  [CS0234]
 waiting-on-controllers   PlanetwarsAdmin/PlanetwarsAdminIndex.cshtml  [CS1061]
 waiting-on-controllers   Tourney/TourneyIndex.cshtml  [CS1061]
-waiting-on-controllers   Users/UsersIndex.cshtml  [CS1061]
 razor-language           Forum/Thread.cshtml  [RZ1031]
 other                    Battles/BattleDetail.cshtml  [CS1061]
-other                    Clans/Detail.cshtml  [CS1061]
-other                    Contributions/ContributionsIndex.cshtml  [CS0103 CS1061]
-other                    Download/DownloadIndex.cshtml  [CS1061]
-other                    Factions/Detail.cshtml  [CS1061]
-other                    Factions/FactionTooltip.cshtml  [CS1061]
+other                    Contributions/ContributionsIndex.cshtml  [CS0103]
 other                    Factions/FactionTreatyDefinition.cshtml  [CS1061]
-other                    Factions/Index.cshtml  [CS1061]
 other                    Lobby/BlockedVPNs.cshtml  [CS1061]
 other                    LobbyNews/LobbyNewsIndex.cshtml  [CS1061]
-other                    Missions/TileList.cshtml  [CS1061]
-other                    Mods/GameModeDetail.cshtml  [CS1061]
-other                    Planetwars/Planet.cshtml  [CS1061]
 other                    Poll/PollUserVotes.cshtml  [CS1061]
 other                    PostHistory/PostHistoryIndex.cshtml  [CS0246]
 other                    Shared/DisplayTemplates/AccountRole.cshtml  [CS1061]
 other                    Shared/DisplayTemplates/Diff.cshtml  [CS0246]
 other                    Shared/DisplayTemplates/DiffPiece.cshtml  [CS0246]
 other                    Shared/DisplayTemplates/FactionTreaty.cshtml  [CS1061]
-other                    Shared/UserDetail.cshtml  [CS0103 CS1061]
-other                    Static/Index.cshtml  [CS1061]
+other                    Shared/UserDetail.cshtml  [CS0103]
 other                    Users/UserRoleList.cshtml  [CS1061]
 other                    _ViewStart.cshtml  [CS0428]
