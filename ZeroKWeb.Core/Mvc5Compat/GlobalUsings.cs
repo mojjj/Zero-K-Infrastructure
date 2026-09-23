@@ -37,3 +37,9 @@ global using ZeroKWeb.Compat;
 // ASP.NET Core keeps the same names in Microsoft.AspNetCore.Mvc.Filters. MapsController
 // declares a filter, and AuthAttribute implements one.
 global using Microsoft.AspNetCore.Mvc.Filters;
+
+// System.Web.WebPages.HelperResult, which AppCode/UniGrid/Col.cs names in a Func<object,
+// HelperResult>. ASP.NET Core's lives in Microsoft.AspNetCore.Mvc.Razor and is what a templated
+// Razor delegate actually produces, so the alias points there rather than at a shim - a shim
+// subclass would be a different type from what the views hand it.
+global using HelperResult = Microsoft.AspNetCore.Mvc.Razor.HelperResult;

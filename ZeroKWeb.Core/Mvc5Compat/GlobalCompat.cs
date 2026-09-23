@@ -43,6 +43,13 @@ namespace ZeroKWeb
 
         private static HttpContext Context => accessor?.HttpContext;
 
+        /// <summary>
+        /// The same request, for the System.Web.HttpContext.Current shim next door. Exposed
+        /// rather than duplicating the accessor, so there is one place that knows where the
+        /// ambient request comes from.
+        /// </summary>
+        public static HttpContext AmbientHttpContext => Context;
+
         public static Account Account => Context?.Items != null && Context.Items.TryGetValue(AccountItemKey, out var a)
             ? a as Account
             : null;
