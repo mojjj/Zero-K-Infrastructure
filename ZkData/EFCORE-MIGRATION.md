@@ -2021,3 +2021,70 @@ invoke the action directly.
 Once it exists, `Galaxy.cshtml` becomes the first view that can actually be diverged - the first
 place the whole pattern is demonstrated end to end rather than component by component.
 
+## PlanetwarsMatchMaker: the first [Auth] child action
+
+Fourth of seven, and the first that carries `[Auth]`. A view component inherits **nothing** from
+an action's filter pipeline - it is invoked from inside a view that was authorized for its own
+reasons, and no filter runs on the way in. So the check has to be written out:
+
+```csharp
+// [Auth], made explicit. Before anything else, and in particular before
+// Global.LobbyApi, which is null when no lobby server is attached.
+if (Global.Account == null) return Content("");
+```
+
+Same rule `AuthCompat` applies. MatchMaker's `[Auth]` names no Role, so there is no second test.
+
+This is precisely the hazard `Mvc5Compat/ChildActionCompat.cs` refuses to paper over. That file
+has said since it was written that a shim invoking the action directly would skip its filters and
+that three of the seven actions carry `[Auth]`. This is the first of the three to be written, and
+it confirms the shape of the problem: nothing about the component mechanism would have applied
+the attribute, and nothing would have complained.
+
+### A deliberate behaviour change
+
+MVC 5's `[Auth]` fails the whole **request** - it redirects to `Home/NotLoggedIn` with a
+`ReturnUrl`. A view component cannot do that sensibly: it renders a fragment inside someone
+else's page, and `Galaxy.cshtml` puts the matchmaker inline among other content.
+
+So an unauthorized viewer gets **empty content** and the rest of the page. That is a behaviour
+change, chosen rather than stumbled into, and it errs in the safe direction: it shows less than
+MVC 5 would, never more.
+
+### Verified to refuse, unverified to allow
+
+`ZeroKWeb.Render` checks the deny path with two assertions, and the second is the one with teeth:
+
+- an anonymous viewer gets empty content;
+- **it does not throw.** `Global.LobbyApi` is null in every harness, so a component that
+  evaluated `IsPlanetWarsMatchMakerRunning` before checking the account dies with a
+  `NullReferenceException`.
+
+That second assertion was confirmed by breaking it on purpose - moving the gate below the lobby
+access - and watching the check fail:
+
+```
+   FAIL    the [Auth] gate runs before Global.LobbyApi - threw NullReferenceException
+```
+
+So reordering those two lines fails a check rather than shipping a page that renders matchmaking
+state to whoever asks.
+
+The **permit** path is not checked and cannot be here: it needs an authenticated account, which
+waits on authentication middleware, and a running lobby server, which no harness has. This
+component is verified to refuse and unverified to allow, and that asymmetry is worth stating
+plainly rather than leaving for someone to discover.
+
+### Galaxy.cshtml is now divergeable
+
+All three of its child actions have both a compiling partial and a component:
+
+| child action | partial | component |
+| --- | --- | --- |
+| `Planetwars/Ladder` | compiles | runs |
+| `Planetwars/Events` | compiles | runs |
+| `Planetwars/MatchMaker` | compiles | deny path runs |
+
+It is the first view where the whole pattern can be demonstrated end to end, and the first
+divergence with more than one call site.
+

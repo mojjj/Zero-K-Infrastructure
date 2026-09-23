@@ -558,6 +558,7 @@ namespace ZeroKWeb.Render
                 failures += Check(!html.Contains("@"), "  no unprocessed Razor markers survived");
 
                 failures += await CheckEventsComponent();
+                failures += await CheckMatchMakerAuthorization();
             }
             finally
             {
@@ -648,6 +649,49 @@ namespace ZeroKWeb.Render
                     if (ev != null) { db.Events.Remove(ev); db.SaveChanges(); }
                 }
             }
+            return failures;
+        }
+
+        /// <summary>
+        /// PlanetwarsMatchMaker refuses an anonymous viewer, and refuses EARLY.
+        ///
+        /// It is the first of the seven child actions carrying [Auth], and a view component
+        /// inherits nothing from a filter pipeline, so the check lives in the component itself.
+        /// That makes it code, and code that is not exercised is a claim rather than a fact.
+        ///
+        /// Two assertions, and the second is the one with teeth:
+        ///
+        /// - An anonymous viewer gets empty content. Global.Account is null here because nothing
+        ///   populates HttpContext.Items, which is exactly the state an anonymous request is in.
+        /// - It does not throw. Global.LobbyApi is null in every harness, so a component that
+        ///   evaluated IsPlanetWarsMatchMakerRunning before checking the account would die with a
+        ///   NullReferenceException. Passing this proves the gate comes first - reordering those
+        ///   two lines fails here rather than shipping a page that renders matchmaking state to
+        ///   whoever asks.
+        ///
+        /// The PERMIT path is not checked and cannot be: it needs an authenticated account, which
+        /// waits on authentication middleware, and a running lobby server, which no harness has.
+        /// This component is verified to refuse and unverified to allow.
+        /// </summary>
+        private static async Task<int> CheckMatchMakerAuthorization()
+        {
+            Console.WriteLine();
+            var failures = 0;
+            string html;
+            try
+            {
+                html = await InvokeViewComponent("PlanetwarsMatchMaker");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("   FAIL    the [Auth] gate runs before Global.LobbyApi - threw "
+                                  + e.GetType().Name + ": " + e.Message);
+                return 1;
+            }
+
+            failures += Check(html.Length == 0, "  an anonymous viewer gets empty content");
+            failures += Check(!html.Contains("Match maker"),
+                "  it did not fall through to the matchmaker body");
             return failures;
         }
 
