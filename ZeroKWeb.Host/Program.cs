@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ZeroKWeb.Compat;
 using ZkData;
 
 namespace ZeroKWeb.Host
@@ -45,12 +47,22 @@ namespace ZeroKWeb.Host
             builder.WebHost.UseUrls(Url);
             builder.Services.AddControllersWithViews();
             builder.Services.AddHttpContextAccessor();
+            builder.Services.AddZkAuthentication();
 
             var app = builder.Build();
 
             // The ambient Global the views read. Nothing signs anyone in yet, so it answers
             // the same as it does for an anonymous request - see Mvc5Compat/GlobalCompat.cs.
             ZeroKWeb.Global.Configure(app.Services.GetRequiredService<IHttpContextAccessor>());
+
+            // Order matters and is not interchangeable: UseAuthentication populates
+            // HttpContext.User from the cookie, UseZkAccount turns that name into an Account and
+            // publishes it where Global reads it, and UseAuthorization runs [Auth] against the
+            // result. Putting UseZkAccount first leaves every [Auth] page redirecting a signed-in
+            // visitor, which looks exactly like a broken cookie.
+            app.UseAuthentication();
+            app.UseZkAccount();
+            app.UseAuthorization();
 
             // Home/Index as the default, like the MVC 5 route table - not Forum. With Forum as the
             // default, Html.ActionLink("Forum index", "Index") renders as "/" because routing elides
@@ -60,7 +72,7 @@ namespace ZeroKWeb.Host
 
             if (args.Contains("--serve"))
             {
-                Console.WriteLine("serving on " + Url + " - try " + Url + "/Forum/Path/3");
+                Console.WriteLine("serving on " + Url + " - try " + Url + "/Home/NotLoggedIn, /Tourney, /Harness/ForumPath/3");
                 await app.RunAsync();
                 return 0;
             }
@@ -76,6 +88,134 @@ namespace ZeroKWeb.Host
             }
         }
 
+
+        /// <summary>
+        /// Signing in, end to end: the real password check, a real cookie, and [Auth] telling the
+        /// difference between "not signed in" and "not allowed".
+        ///
+        /// This is the check that says identity works, and it is worth being precise about what
+        /// it proves. It does NOT use a back door - the password goes through ZkAuth.Verify,
+        /// which is Account.AccountVerify and a BCrypt comparison, and the account is recovered
+        /// from the cookie by the same middleware a browser goes through.
+        ///
+        /// The fixture stores PasswordBcrypt as NULL for every account, so one is set here with
+        /// Account.SetPasswordPlain - production code - and put back afterwards.
+        ///
+        /// The three status codes are the point:
+        ///   anonymous     -> 302, redirected to NotLoggedIn
+        ///   signed in     -> 403 on a page whose [Auth] names a Role the account lacks
+        ///   signed in     -> Whoami names the account
+        /// A port that recognised nobody would give 302 for all three, and a port that ignored
+        /// roles would give 200.
+        /// </summary>
+        private static async Task<int> CheckSignIn()
+        {
+            Console.WriteLine();
+            Console.WriteLine("signing in:");
+
+            const string password = "harness-check-password";
+            string name;
+            int accountID;
+            string originalHash;
+
+            using (var db = new ZkDataContext())
+            {
+                var account = db.Accounts.OrderBy(a => a.AccountID).First();
+                name = account.Name;
+                accountID = account.AccountID;
+                originalHash = account.PasswordBcrypt;
+                account.SetPasswordPlain(password);
+                db.SaveChanges();
+            }
+
+            var failures = 0;
+            try
+            {
+                var handler = new HttpClientHandler { UseCookies = true, CookieContainer = new System.Net.CookieContainer(), AllowAutoRedirect = false };
+                using (var client = new HttpClient(handler))
+                {
+                    var anonymous = await client.GetAsync(Url + "/Charts");
+                    failures += Check(anonymous.StatusCode == System.Net.HttpStatusCode.Redirect,
+                        "  an anonymous request to an [Auth] page is redirected (" + (int)anonymous.StatusCode + ")");
+
+                    var wrong = await client.PostAsync(Url + "/Harness/Login", new FormUrlEncodedContent(
+                        new[] { new KeyValuePair<string, string>("login", name),
+                                new KeyValuePair<string, string>("password", password + "-wrong") }));
+                    failures += Check((await wrong.Content.ReadAsStringAsync()).Contains("Invalid login"),
+                        "  a wrong password is refused");
+
+                    var signIn = await client.PostAsync(Url + "/Harness/Login", new FormUrlEncodedContent(
+                        new[] { new KeyValuePair<string, string>("login", name),
+                                new KeyValuePair<string, string>("password", password) }));
+                    failures += Check(signIn.StatusCode == System.Net.HttpStatusCode.Redirect,
+                        "  the right password signs in");
+
+                    var whoami = await (await client.GetAsync(Url + "/Harness/Whoami")).Content.ReadAsStringAsync();
+                    failures += Check(whoami.Contains("signed in as " + name),
+                        "  the cookie comes back as an Account (" + whoami.Trim() + ")");
+
+                    // 403, not 302: the account is recognised and then found to lack the Role.
+                    var authorized = await client.GetAsync(Url + "/Charts");
+                    failures += Check(authorized.StatusCode == System.Net.HttpStatusCode.Forbidden,
+                        "  a signed-in request is refused by ROLE, not by identity ("
+                        + (int)authorized.StatusCode + ")");
+
+                    // The ban check. Global.asax writes three lines and calls Response.End() for a
+                    // site-banned account; nothing about the port would have complained if that
+                    // had been left out of the middleware, and a banned account would simply have
+                    // browsed. So it is exercised rather than trusted.
+                    int punishmentID;
+                    using (var db = new ZkDataContext())
+                    {
+                        var punishment = new Punishment
+                        {
+                            AccountID = accountID,
+                            BanSite = true,
+                            BanExpires = DateTime.UtcNow.AddHours(1),
+                            Reason = "harness ban check",
+                            CreatedAccountID = accountID,
+                            // NOT NULL, and a default DateTime is 0001-01-01, which SQL Server's
+                            // datetime cannot hold - it starts at 1753.
+                            Time = DateTime.UtcNow,
+                        };
+                        db.Punishments.Add(punishment);
+                        db.SaveChanges();
+                        punishmentID = punishment.PunishmentID;
+                    }
+                    try
+                    {
+                        var banned = await client.GetAsync(Url + "/Harness/Whoami");
+                        var bannedBody = await banned.Content.ReadAsStringAsync();
+                        failures += Check(bannedBody.Contains("You are banned!"),
+                            "  a site-banned account is stopped, with the reason");
+                        failures += Check(!bannedBody.Contains("signed in as"),
+                            "  and does not reach the page it asked for");
+                    }
+                    finally
+                    {
+                        using (var db = new ZkDataContext())
+                        {
+                            var punishment = db.Punishments.FirstOrDefault(x => x.PunishmentID == punishmentID);
+                            if (punishment != null) { db.Punishments.Remove(punishment); db.SaveChanges(); }
+                        }
+                    }
+
+                    await client.GetAsync(Url + "/Harness/Logout");
+                    var after = await (await client.GetAsync(Url + "/Harness/Whoami")).Content.ReadAsStringAsync();
+                    failures += Check(after.Contains("not signed in"), "  signing out takes it away again");
+                }
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var account = db.Accounts.Single(a => a.AccountID == accountID);
+                    account.PasswordBcrypt = originalHash;
+                    db.SaveChanges();
+                }
+            }
+            return failures;
+        }
 
         /// <summary>The real site's folder, found by walking up from the binary.</summary>
         private static string FindSiteRoot()
@@ -107,10 +247,10 @@ namespace ZeroKWeb.Host
 
             using (var client = new HttpClient())
             {
-                var response = await client.GetAsync(Url + "/Forum/Path/" + category);
+                var response = await client.GetAsync(Url + "/Harness/ForumPath/" + category);
                 var html = await response.Content.ReadAsStringAsync();
 
-                Console.WriteLine("GET /Forum/Path/" + category + " -> " + (int)response.StatusCode);
+                Console.WriteLine("GET /Harness/ForumPath/" + category + " -> " + (int)response.StatusCode);
                 Console.WriteLine();
                 Console.WriteLine(html.Trim());
                 Console.WriteLine();
@@ -120,11 +260,21 @@ namespace ZeroKWeb.Host
                 failures += Check(html.Contains(expectedTitle),
                     "the category came out of the database and into the HTML (" + expectedTitle + ")");
                 // Html.ActionLink is why this project exists: it needs routing to produce a URL.
-                failures += Check(html.Contains("href=\"/Forum\""),
-                    "Html.ActionLink resolved through routing to /Forum");
+                //
+                // /Harness, not /Forum. ForumPath.cshtml writes ActionLink("Forum index", "Index")
+                // with no controller named, so it resolves against the AMBIENT one - which is this
+                // harness controller, not Forum. That changed when the real ForumController was
+                // linked into this project and the harness's had to stop sharing its name.
+                //
+                // What the check is for is unaffected: the link still goes through routing rather
+                // than being a literal, and "Index" is elided as the route default, which is the
+                // behaviour that made a Forum default route indistinguishable from a broken link.
+                failures += Check(html.Contains("href=\"/Harness\""),
+                    "Html.ActionLink resolved through routing to the ambient controller");
                 failures += Check(!html.Contains("@"), "no unprocessed Razor markers survived");
 
                 failures += await CheckItServesAPage(client);
+                failures += await CheckSignIn();
 
                 Console.WriteLine();
                 if (failures == 0)

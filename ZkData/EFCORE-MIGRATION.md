@@ -2163,3 +2163,130 @@ The edit is byte-identical in both copies, and the port compiles and renders it.
 is unverified**, as every MVC 5 view edit is - mono ships no `aspnet_compiler.exe`. The identical
 expression compiling on .NET 9 is evidence, not proof.
 
+## Can the site be run on Linux yet? Partly, and here is exactly how far
+
+`./tools/run-host.sh --serve` puts it on http://127.0.0.1:5199. Probing real routes:
+
+| route | result |
+| --- | --- |
+| `/Home/NotLoggedIn` | **200**, 10 KB, full layout |
+| `/Harness/ForumPath/9` | **200**, breadcrumb from the database |
+| `/Tourney` | **200** - the real controller, denying an anonymous user |
+| `/Forum/Thread/1`, `/Charts`, `/My` | **302** to NotLoggedIn - `[Auth]` working |
+| `/Forum`, `/Mods` | **500** - *the view was not found* |
+| `/Planetwars`, `/Lobby` | **404** - no `Index` action in the linked half |
+
+**The routing and controller layer works.** Linked controllers are discovered, `[Auth]` redirects,
+the database is read, and views render with the real layout. What is missing is narrower than it
+looked: views that compile, and a way to sign in.
+
+The 500s are not port defects. `Forum/ForumIndex.cshtml` is blocked on `@helper` (`RZ1002`) and
+`Mods/GameModesIndex.cshtml` on `CS0103 CS0117 CS0246`, so `run-host.sh` excludes them from its
+view set and MVC then cannot find them. The 404s are `PlanetwarsController.Index`, which lives in
+the `System.Drawing` half this project does not link, and `LobbyController`, which has no `Index`.
+
+### The harness had grown a collision
+
+`/Forum` was returning `AmbiguousMatchException`. `ZeroKWeb.Host` carried its own
+`ForumController` from when the real one was not linked; `port-sources.props` now links
+`ZeroKWeb.Controllers.ForumController` into the same assembly, and two classes with the same
+controller name are both discovered.
+
+Renamed to `HarnessController`, which had two consequences worth recording because neither is
+obvious:
+
+- **View lookup is by controller name**, so `PartialView("ForumPath", ...)` stopped resolving -
+  a `HarnessController` searches `Views/Harness` and `Views/Shared`. Now given by full path.
+- **`ActionLink` with no controller resolves against the ambient one**, so the breadcrumb's
+  "Forum index" link became `/Harness` rather than `/Forum`. The check asserts the new value; what
+  it exists to prove - that the link goes through routing rather than being a literal - is intact.
+
+### What "runnable for manual testing" still needs
+
+1. **Signing in.** Nothing populates `HttpContext.Items`, so `Global.Account` is always null and
+   every `[Auth]` page redirects. The MVC 5 site uses FormsAuthentication with a custom
+   `IPrincipal` that *is* an `Account`; ASP.NET Core's `User` is a `ClaimsPrincipal` and cannot
+   be. This is a design decision, not a translation, and it is the single largest thing between
+   here and a browsable site.
+2. **Views.** 58 of 116 compile. Every page whose view does not is a 500 even though its
+   controller works.
+3. **Controllers.** 8 of 32 are linked. The rest 404.
+
+## Authentication: you can sign in now
+
+The largest thing between the port and a browsable site. Identity, not authorization - `AuthCompat`
+made a linked controller's `[Auth]` mean what it says; this is what makes it ever answer yes.
+
+### The shape MVC 5 uses cannot survive
+
+`Global.asax` does `HttpContext.Current.User = acc`, which works because `ZkData.Account`
+implements `IPrincipal` and `IIdentity`. ASP.NET Core's `HttpContext.User` is a `ClaimsPrincipal`
+and cannot be an entity.
+
+So the two halves are separated: cookie authentication carries the **name** as a claim, and
+middleware turns that name back into an `Account` and puts it in `HttpContext.Items`, where
+`GlobalCompat` already looks. **46 views and every linked controller read `Global.Account` and
+none of them change.**
+
+The per-request logic is `Global.asax`'s, in its order, including the two parts that are easy to
+leave out:
+
+- the **session-token path**, so a player arriving from the game client is signed in;
+- the **ban check**, which in MVC 5 writes three lines and calls `Response.End()`.
+
+What is deliberately not reproduced is `FormsAuthentication.SetAuthCookie` on every authenticated
+request - MVC 5 re-issues the cookie to slide its expiry, and cookie authentication does that
+itself with `SlidingExpiration`.
+
+The cookie is **not** named `.ASPXAUTH`. Sharing a name with the Framework site would invite the
+two to read each other's cookies, and the ticket formats have nothing in common; the failure
+would be a confusing 500 rather than a clean "not signed in".
+
+### Nothing is bypassed
+
+`AuthServiceClient.VerifyAccountHashed` turns out not to be a service call at all despite the
+name - it is `Account.AccountVerify` and a BCrypt comparison, entirely portable. `ZkAuth.Verify`
+calls the same thing, so signing in on .NET 9 exercises the real check.
+
+The fixture stores `PasswordBcrypt` as NULL for every account, so there is nothing to sign in as.
+`ZkData.Core -- set-password <name> <password>` calls `Account.SetPasswordPlain`, which is
+production code - the same BCrypt-of-MD5 the lobby server writes at registration.
+
+### What the check proves, and how it is kept honest
+
+`run-host.sh` signs in against a running server:
+
+```
+   ok      an anonymous request to an [Auth] page is redirected (302)
+   ok      a wrong password is refused
+   ok      the right password signs in
+   ok      the cookie comes back as an Account (signed in as player01 ...)
+   ok      a signed-in request is refused by ROLE, not by identity (403)
+   ok      a site-banned account is stopped, with the reason
+   ok      and does not reach the page it asked for
+   ok      signing out takes it away again
+```
+
+**302 then 403 on the same URL is the assertion that matters.** A port that recognised nobody
+would answer 302 both times; one that ignored roles would answer 200. Only a port that
+distinguishes "not signed in" from "not allowed" gives those two.
+
+The ban check was confirmed by breaking it on purpose - replacing the lookup with `null` - and
+watching both of its assertions fail. Without that, dropping it would have been invisible, and a
+site-banned account would simply have browsed.
+
+### The sixth misplaced constant
+
+`GlobalConst.SessionTokenVariable` was in the half that needs WCF. Moved, like `PwPhase`, the
+eleven balance and channel constants, `CurrentAccount()`, `PrintTimeRemaining` and
+`SetPlanetOwners` before it.
+
+### What this does not do
+
+- **`HomeController` is still not linked**, so the site's own login page is not ported - it needs
+  `DotNetOpenAuth`. The sign-in form lives in `ZeroKWeb.Host`, which is a harness, and is clearly
+  labelled as such.
+- **Nothing registers or resets a password**, and no external identity provider is wired up.
+- The three status codes are checked; the *pages* an authenticated user reaches are only as good
+  as the 58 views that compile.
+
