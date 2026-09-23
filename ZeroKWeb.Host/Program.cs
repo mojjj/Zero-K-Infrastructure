@@ -117,6 +117,7 @@ namespace ZeroKWeb.Host
             string name;
             int accountID;
             string originalHash;
+            AdminLevel originalAdminLevel;
 
             using (var db = new ZkDataContext())
             {
@@ -124,6 +125,14 @@ namespace ZeroKWeb.Host
                 name = account.Name;
                 accountID = account.AccountID;
                 originalHash = account.PasswordBcrypt;
+
+                // The role assertion below reads 403 as "recognised, then refused". That only
+                // holds if the account HAS no role, and `ZkData.Core -- grant` can have given it
+                // one - which is exactly what happened while testing by hand, turning the 403
+                // into a 200 and the check into a puzzle. The check owns this state now.
+                originalAdminLevel = account.AdminLevel;
+                account.AdminLevel = AdminLevel.None;
+
                 account.SetPasswordPlain(password);
                 db.SaveChanges();
             }
@@ -153,6 +162,18 @@ namespace ZeroKWeb.Host
                     var whoami = await (await client.GetAsync(Url + "/Harness/Whoami")).Content.ReadAsStringAsync();
                     failures += Check(whoami.Contains("signed in as " + name),
                         "  the cookie comes back as an Account (" + whoami.Trim() + ")");
+
+                    // The layout, signed in. TopMenu calls a child action for authenticated
+                    // visitors only, so this page was 200 anonymous and 500 signed in until that
+                    // call became a view component - on EVERY page, because TopMenu is the layout.
+                    // Anonymous rendering cannot catch that, which is why it is asserted here.
+                    var layout = await client.GetAsync(Url + "/Home/NotLoggedIn");
+                    var layoutHtml = await layout.Content.ReadAsStringAsync();
+                    failures += Check(layout.StatusCode == System.Net.HttpStatusCode.OK,
+                        "  a page with the layout still renders when signed in ("
+                        + (int)layout.StatusCode + ")");
+                    failures += Check(layoutHtml.Contains("menu"),
+                        "  TopMenu rendered for a signed-in visitor");
 
                     // 403, not 302: the account is recognised and then found to lack the Role.
                     var authorized = await client.GetAsync(Url + "/Charts");
@@ -211,6 +232,7 @@ namespace ZeroKWeb.Host
                 {
                     var account = db.Accounts.Single(a => a.AccountID == accountID);
                     account.PasswordBcrypt = originalHash;
+                    account.AdminLevel = originalAdminLevel;
                     db.SaveChanges();
                 }
             }
