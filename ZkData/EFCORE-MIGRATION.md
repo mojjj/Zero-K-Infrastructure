@@ -2290,3 +2290,73 @@ eleven balance and channel constants, `CurrentAccount()`, `PrintTimeRemaining` a
 - The three status codes are checked; the *pages* an authenticated user reaches are only as good
   as the 58 views that compile.
 
+## The admin tool, and the thing signing in immediately broke
+
+`ZkData.Core -- grant <account> <none|moderator|superadmin|tourney|no-tourney>`. Signing in gets
+an ordinary player; everything worth testing by hand - the admin pages, the tournament console,
+moderation - is behind `AdminLevel`, and nothing in the fixture has any. `tourney` sets the flag
+on its own, which a moderator cannot, because `Global.IsTourneyController` is
+`AdminLevel >= Moderator || the flag`.
+
+`grant` and `set-password` now refuse a database this repository does not create, unless
+`ZK_ALLOW_DANGEROUS_WRITE=1`. It is a name check rather than a security boundary; what it guards
+against is a terminal with an hour-old production connection string still exported.
+
+### Authentication made the site LESS browsable, for one commit
+
+The tool alone achieved nothing, because granting an admin level and reloading gave 500 on every
+page. So did being signed in at all:
+
+```
+anonymous     GET /Home/NotLoggedIn -> 200
+signed in     GET /Home/NotLoggedIn -> 500
+```
+
+`TopMenu.cshtml` is part of the layout - it is on every page - and it calls
+
+```cshtml
+@if (Global.IsAccountAuthorized)
+{
+    Html.RenderAction("ChatNotification", "Lobby");
+}
+```
+
+While nobody could sign in, that guard was never true and the tripwire never fired.
+`ChildActionCompat.cs` has said since it was written that TopMenu's guard *"is why the site
+layout can render at all before this is resolved"*. That was exactly right, and it stopped being
+true on the day identity started working.
+
+`LobbyChatNotificationViewComponent` is the fix, and `Shared/TopMenu.cshtml` is the third
+diverged view. The component keeps two details of the original that look like accidents and are
+not: the whole read is wrapped in a try/catch that traces and continues, so a chat-history
+timeout cannot take the layout down with it, and `LastChatRead` is advanced in a **separate**
+context afterwards, so it is written even when the read failed.
+
+It is the second of the three `[Auth]` child actions. The check is explicit even though TopMenu
+guards the call as well - this is the inner of two, and it is the one that holds if the view's
+guard is ever edited away.
+
+### Two checks, and a control that did not control
+
+`run-host.sh` now asserts a signed-in visitor still gets the layout. It was confirmed by putting
+`Html.RenderAction` back into the diverged TopMenu and watching both assertions fail with 500.
+
+The first attempt at that control did nothing: removing the `Content Remove` from
+`port-views.props` still passed, because `run-host.sh` builds its view set by excluding every view
+the inventory NAMES - and the inventory names diverged views too. The original was excluded either
+way, so the diverged copy was still the only one compiled. A control that cannot fail is worth
+less than no control, because it is believed.
+
+### The role assertion owned state it did not set
+
+`a signed-in request is refused by ROLE` reads 403 as "recognised, then refused", which only holds
+if the account has no role. Running `grant player01 moderator` by hand turned it into a 200 and
+the check into a puzzle. The check now sets `AdminLevel.None` itself and restores it, like it
+already did for the password.
+
+```
+compiles                 58
+diverged                  3
+child-action              2
+```
+

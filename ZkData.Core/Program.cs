@@ -19,6 +19,38 @@ namespace ZkData.Core
     /// </summary>
     public static class Program
     {
+        /// <summary>
+        /// Refuses to hand out a password or an admin level unless the connection string names a
+        /// database this repository creates.
+        ///
+        /// `set-password` and `grant` write to whatever ZK_CONNECTION_STRING points at, and one of
+        /// them is privilege escalation. The failure being guarded against is not malice, it is a
+        /// terminal that still has a production connection string exported from an hour ago.
+        ///
+        /// It is a name check, not a security boundary - anyone who means to can set
+        /// ZK_ALLOW_DANGEROUS_WRITE=1. That is the point: the barrier is there to be noticed, not
+        /// to be unbreakable.
+        /// </summary>
+        private static bool IsADevelopmentDatabase()
+        {
+            if (Environment.GetEnvironmentVariable("ZK_ALLOW_DANGEROUS_WRITE") == "1") return true;
+
+            var catalog = (ZkDataContext.ConnectionString ?? "")
+                .Split(';')
+                .Select(part => part.Split('=', 2))
+                .Where(pair => pair.Length == 2 && pair[0].Trim().Equals("Initial Catalog", StringComparison.OrdinalIgnoreCase))
+                .Select(pair => pair[1].Trim())
+                .FirstOrDefault() ?? "";
+
+            var known = new[] { "zk_test", "zk_efcore", "zk_local", "zero-k_local" };
+            if (known.Any(k => catalog.Equals(k, StringComparison.OrdinalIgnoreCase))) return true;
+
+            Console.Error.WriteLine("refusing to write credentials to database '" + catalog + "'.");
+            Console.Error.WriteLine("this command is for a local test database (" + string.Join(", ", known) + ").");
+            Console.Error.WriteLine("if you really mean it: ZK_ALLOW_DANGEROUS_WRITE=1");
+            return false;
+        }
+
         public static int Main(string[] args)
         {
             var command = args.FirstOrDefault() ?? "summary";
@@ -60,6 +92,7 @@ namespace ZkData.Core
                         // bypass. Point it at the test database, not at anything real.
                         case "set-password":
                         {
+                            if (!IsADevelopmentDatabase()) return 2;
                             var name = args.Skip(1).FirstOrDefault();
                             var password = args.Skip(2).FirstOrDefault();
                             if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(password))
@@ -77,6 +110,51 @@ namespace ZkData.Core
                             db.SaveChanges();
                             Console.WriteLine("set a password for " + account.Name + " (AccountID "
                                               + account.AccountID + ")");
+                            return 0;
+                        }
+
+                        // The other half of being able to look at the site by hand. Signing in
+                        // gets an ordinary player; most of what is worth testing - the admin
+                        // pages, the tournament console, moderation - is behind AdminLevel, and
+                        // nothing in the fixture has any.
+                        //
+                        // Global.IsTourneyController is `AdminLevel >= Moderator || the flag`, so
+                        // `tourney` exists to test the flag ON ITS OWN, which a moderator cannot.
+                        case "grant":
+                        {
+                            if (!IsADevelopmentDatabase()) return 2;
+
+                            var name = args.Skip(1).FirstOrDefault();
+                            var role = args.Skip(2).FirstOrDefault()?.ToLowerInvariant();
+                            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(role))
+                            {
+                                Console.Error.WriteLine(
+                                    "usage: grant <account name> <none|moderator|superadmin|tourney|no-tourney>");
+                                return 2;
+                            }
+                            var account = db.Accounts.FirstOrDefault(x => x.Name == name);
+                            if (account == null)
+                            {
+                                Console.Error.WriteLine("no account named " + name);
+                                return 2;
+                            }
+
+                            switch (role)
+                            {
+                                case "none": account.AdminLevel = AdminLevel.None; break;
+                                case "moderator": account.AdminLevel = AdminLevel.Moderator; break;
+                                case "superadmin": account.AdminLevel = AdminLevel.SuperAdmin; break;
+                                case "tourney": account.IsTourneyController = true; break;
+                                case "no-tourney": account.IsTourneyController = false; break;
+                                default:
+                                    Console.Error.WriteLine("unknown role '" + role
+                                        + "' - one of none, moderator, superadmin, tourney, no-tourney");
+                                    return 2;
+                            }
+
+                            db.SaveChanges();
+                            Console.WriteLine(account.Name + " is now AdminLevel " + account.AdminLevel
+                                              + ", IsTourneyController " + account.IsTourneyController);
                             return 0;
                         }
 

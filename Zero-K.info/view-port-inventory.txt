@@ -13,17 +13,17 @@
 
 total 116
 compiles                 58
-diverged                 2
-child-action             3
+diverged                 3
+child-action             2
 waiting-on-controllers   17
 razor-language           9
 other                    27
 
 diverged                 Planetwars/Galaxy.cshtml  -> PortedViews/Planetwars/Galaxy.cshtml
 diverged                 Shared/CommentList.cshtml  -> PortedViews/Shared/CommentList.cshtml
+diverged                 Shared/TopMenu.cshtml  -> PortedViews/Shared/TopMenu.cshtml
 child-action             Forum/NewPost.cshtml
 child-action             My/Commanders.cshtml
-child-action             Shared/TopMenu.cshtml
 waiting-on-controllers   Admin/TraceLogs.cshtml  [CS0234]
 waiting-on-controllers   Battles/BattleIndex.cshtml  [CS0234]
 waiting-on-controllers   Battles/BattleTileList.cshtml  [CS0234]
