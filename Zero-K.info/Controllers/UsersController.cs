@@ -637,7 +637,7 @@ namespace ZeroKWeb.Controllers
             if (AuthServiceClient.VerifyAccountPlain(acc.Name, oldPassword) == null)
             {
                 Trace.TraceWarning("Failed password check for {0} on attempted password change", Global.Account.Name);
-                Global.LobbyApi.LogIpFailure(Request.UserHostAddress);
+                Global.LobbyApi.LogIpFailure(Request.UserHostAddressCompat());
                 return Content("Invalid password");
             }
             if (newPassword != newPassword2) return Content("New passwords do not match");

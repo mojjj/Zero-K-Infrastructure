@@ -155,5 +155,28 @@ namespace PlasmaShared
         {
             return PrintTimeRemaining((int)timeSpan.TotalSeconds);
         }
-}
+
+        /// <summary>
+        /// Pairs each item with its position. Pure generics with no dependencies, moved here
+        /// from Utils.cs so LaddersController can be linked - the eighth thing found stranded
+        /// in the half that needs System.Drawing.
+        /// </summary>
+        public static IEnumerable<Indexed<T>> ToIndexedList<T>(this IEnumerable<T> enumeration)
+        {
+            return enumeration.Select((x, i) => new Indexed<T>(x, i));
+        }
+    }
+
+    /// <summary>Beside the class, as it was in Utils.cs.</summary>
+    public struct Indexed<T>
+    {
+        public readonly T Item;
+        public readonly int Index;
+
+        public Indexed(T item, int index)
+        {
+            Item = item;
+            Index = index;
+        }
+    }
 }

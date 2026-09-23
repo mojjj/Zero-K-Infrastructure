@@ -22,6 +22,7 @@
     <Compile Include="..\Zero-K.info\AppCode\PlanetwarsEventCreator.cs" Link="Linked\PlanetwarsEventCreator.cs" />
     <Compile Include="..\Zero-K.info\AppCode\ForumPostIndexer.cs" Link="Linked\ForumPostIndexer.cs" />
     <Compile Include="..\Zero-K.info\AppCode\ForumPostCache.cs" Link="Linked\ForumPostCache.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\AuthServiceClient.cs" Link="Linked\AuthServiceClient.cs" />
     <Compile Include="..\Zero-K.info\ForumParser\**\*.cs" Link="Linked\ForumParser\%(RecursiveDir)%(Filename).cs" />
     <Compile Include="..\Zero-K.info\Models\CommentList.cs" Link="Linked\Models\CommentList.cs" />
     <Compile Include="..\Zero-K.info\AppCode\UniGrid\*.cs" Link="Linked\UniGrid\%(Filename).cs" />
@@ -34,6 +35,22 @@
     <Compile Include="..\Zero-K.info\Controllers\TourneyController.cs" Link="Linked\Controllers\TourneyController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\LobbyController.cs" Link="Linked\Controllers\LobbyController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\PlanetwarsController.cs" Link="Linked\Controllers\PlanetwarsController.cs" />
+    <!--
+      Not here, and why:
+        Clans   - HttpPostedFileBase. Deliberately unshimmed: it compiles as a shim and ASP.NET
+                  Core's model binder ignores it, so every upload would silently do nothing.
+        Engines  - SharpCompress, a package the port does not reference, used for engine archives.
+        Missions - VikingErik.Mvc.ResumingActionResults, an MVC 5 package for resumable downloads.
+        Admin    - ZkData/DbCloner.cs, not linked into ZkData.Core.
+        Battles  - ZkLobbyServer.ReplayStorage, a STATIC call into the lobby server, like
+                   PlanetWarsTurnHandler was. The seam does not cover it either.
+        Ladders  - Global.AwardCalculator, whose class is AppCode/LadderCalculator.cs and needs
+                   both ZkLobbyServer and EntityFramework.Extensions.
+        Home    - DotNetOpenAuth.
+        Maps    - HttpPostedFileBase and unitsync interop.
+      The rest of the 24 have not been tried.
+    -->
+    <Compile Include="..\Zero-K.info\Controllers\UsersController.cs" Link="Linked\Controllers\UsersController.cs" />
 
     <!--
       Phase 1's seam, linked on purpose: these projects have no reference to ZkLobbyServer, so a
