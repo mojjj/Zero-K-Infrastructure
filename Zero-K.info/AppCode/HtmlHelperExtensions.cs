@@ -40,14 +40,9 @@ namespace System.Web.Mvc
             return new MvcHtmlString(new ForumWikiParser().TranslateToHtml(str, helper));
         }
 
-        public static MvcHtmlString BBCodeCached(this HtmlHelper helper, ForumPost post) {
-            return Global.ForumPostCache.GetCachedHtml(post, helper);
-        }
 
-        public static MvcHtmlString BBCodeCached(this HtmlHelper helper, News news)
-        {
-            return Global.ForumPostCache.GetCachedHtml(news, helper);
-        }
+
+
 
 
         /// <summary>
@@ -607,54 +602,7 @@ namespace System.Web.Mvc
                     ));
         }
 
-        /// <summary>
-        ///     <para>Returns the sum of the + and - votes on the specified <see cref="ForumPost"/></para>
-        ///     <para>The + and - numbers serve as links to vote on the post</para>
-        ///     <para>Also includes a link to cancel an existing vote</para>
-        ///     <para>The tooltip displays the people who voted for each option</para>
-        /// </summary>
-        /// <param name="blockPost">Removes the vote links; is true if the viewer's <see cref="Account"/> is banned or has too many net downvotes</param>
-        public static MvcHtmlString PrintPostRating(this HtmlHelper helper, ForumPost post, bool blockPost = false) {
-            var url = Global.UrlHelper();
-            bool noLink = (Global.Account == null || Global.AccountID == post.AuthorAccountID || Global.Account.Level < GlobalConst.MinLevelForForumVote || Global.Account.VotesAvailable <= 0 || blockPost);
-            AccountForumVote previousVote = post.AccountForumVotes.SingleOrDefault(x => x.AccountID == Global.AccountID);
-            bool upvoted = (previousVote != null && previousVote.Vote > 0);
-            bool downvoted = (previousVote != null && previousVote.Vote < 0);
-            bool votersVisible = (!GlobalConst.OnlyAdminsSeePostVoters || (Global.Account?.AdminLevel >= AdminLevel.Moderator));
-            /*
-            return new MvcHtmlString(string.Format("<input type='' name='upvote' value='{3}{0}{4}' title='Upvote'> / <input type='submit' name='downvote' value='{5}{1}{6}'> {2}",
-                    string.Format("<font {0}>+{1}</font>", post.Upvotes > 0 ? "color='LawnGreen'" : "", post.Upvotes),
-                    string.Format("<font {0}>-{1}</font>", post.Downvotes > 0 ? "color='Tomato'" : "", post.Downvotes),
-                    previousVote != null ? string.Format("(<input type='submit' name='clearvote' value='clear'>)") : "",
-                    upvoted ? "<strong>" : "",
-                    upvoted ? "</strong>" : "",
-                    downvoted ? "<strong>" : "",
-                    downvoted ? "</strong>" : ""));
-            */
 
-            string upvote = string.Format("<{0} nicetitle='{1}'>{2}{3}{4}{5}",
-                !noLink? string.Format("a href='{0}'", url.Action("VotePost", "Forum", new { forumPostID = post.ForumPostID, delta = 1 })) : "span",
-                votersVisible? string.Format("$forumVotes${0}", post.ForumPostID) : "Upvote",
-                upvoted ? "<strong>" : "",
-                string.Format("<font {0}>+{1}</font>", post.Upvotes > 0 ? "color='LawnGreen'" : "", post.Upvotes),
-                upvoted ? "</strong>" : "",
-                !noLink? "</a>" : "</span>"
-            );
-            string downvote = string.Format("<{0} nicetitle='{1}'>{2}{3}{4}{5}",
-                !noLink? string.Format("a href='{0}'", url.Action("VotePost", "Forum", new { forumPostID = post.ForumPostID, delta = -1 })) : "span",
-                votersVisible? string.Format("$forumVotes${0}", post.ForumPostID) : "Downvote",
-                downvoted ? "<strong>" : "",
-                string.Format("<font {0}>-{1}</font>", post.Downvotes > 0 ? "color='Tomato'" : "", post.Downvotes),
-                downvoted ? "</strong>" : "",
-                !noLink? "</a>" : "</span>"
-            );
-
-            return new MvcHtmlString(string.Format("{0} / {1} {2}",
-                    upvote,
-                    downvote,
-                    previousVote != null ? string.Format("(<a href='{0}'>cancel</a>)", url.Action("CancelVotePost", "Forum", new {forumPostID = post.ForumPostID})) : ""
-                    ));
-        }
 
         public static MvcHtmlString PrintMediaWikiEdit(this HtmlHelper helper, MediaWikiRecentChanges.MediaWikiEdit edit)
         {

@@ -12,12 +12,12 @@
 # other                  a package reference or an MVC 5 API
 
 total 123
-compiles                 68
+compiles                 72
 diverged                 3
 child-action             2
 waiting-on-controllers   22
 razor-language           1
-other                    27
+other                    23
 
 diverged                 Planetwars/Galaxy.cshtml  -> PortedViews/Planetwars/Galaxy.cshtml
 diverged                 Shared/CommentList.cshtml  -> PortedViews/Shared/CommentList.cshtml
@@ -55,12 +55,10 @@ other                    Factions/Detail.cshtml  [CS1061]
 other                    Factions/FactionTooltip.cshtml  [CS1061]
 other                    Factions/FactionTreatyDefinition.cshtml  [CS1061]
 other                    Factions/Index.cshtml  [CS1061]
-other                    Forum/DeletePostPrompt.cshtml  [CS1061]
 other                    Lobby/BlockedVPNs.cshtml  [CS1061]
 other                    LobbyNews/LobbyNewsIndex.cshtml  [CS1061]
 other                    Missions/TileList.cshtml  [CS1061]
 other                    Mods/GameModeDetail.cshtml  [CS1061]
-other                    News/Index.cshtml  [CS1061]
 other                    Planetwars/Planet.cshtml  [CS1061]
 other                    Poll/PollUserVotes.cshtml  [CS1061]
 other                    PostHistory/PostHistoryIndex.cshtml  [CS0246]
@@ -68,9 +66,7 @@ other                    Shared/DisplayTemplates/AccountRole.cshtml  [CS1061]
 other                    Shared/DisplayTemplates/Diff.cshtml  [CS0246]
 other                    Shared/DisplayTemplates/DiffPiece.cshtml  [CS0246]
 other                    Shared/DisplayTemplates/FactionTreaty.cshtml  [CS1061]
-other                    Shared/DisplayTemplates/ForumPost.cshtml  [CS1061]
 other                    Shared/UserDetail.cshtml  [CS0103 CS1061]
 other                    Static/Index.cshtml  [CS1061]
 other                    Users/UserRoleList.cshtml  [CS1061]
-other                    Wiki/WikiIndex.cshtml  [CS1061]
 other                    _ViewStart.cshtml  [CS0428]

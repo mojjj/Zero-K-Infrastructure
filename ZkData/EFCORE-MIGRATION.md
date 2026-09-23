@@ -2600,3 +2600,67 @@ a passing one that only looked at the row count would have implied the page work
 This is the sharpest example so far of what `compiles` does and does not buy. `Forum/PostList` is
 in the `compiles` bucket, renders its body, its grid and its form - and shows no posts.
 
+## The forum post display template, and two silent renderings
+
+```
+compiles   68 -> 72
+```
+
+`Views/Shared/DisplayTemplates/ForumPost.cshtml` compiles, and the check that asserted a post's
+text was **missing** now asserts it is there. That check was written to fail the moment the gap
+closed, and it did exactly that - which is the whole argument for writing it that way.
+
+Getting there needed three moves and turned up two failures that produced no error at all.
+
+### The helpers moved
+
+`BBCodeCached` (two overloads) and `PrintPostRating` moved from `HtmlHelperExtensions.cs` to its
+`.Portable` half, `ForumPostCache.cs` is linked, and `GlobalCompat` gained `ForumPostCache`. None
+of it is MVC 5 specific - `MvcHtmlString` is shimmed and `HtmlHelper` is aliased - so this is the
+same relocation made for `PwPhase`, `CurrentAccount`, `PrintTimeRemaining` and the rest.
+`GlobalConst.OnlyAdminsSeePostVoters` was the **seventh** constant found stranded in the half
+that needs WCF, next to `MinLevelForForumVote`, which was already portable.
+
+`ForumPostCache.cs` carried `using System.Runtime.Remoting.Messaging;` and uses nothing from it -
+checked by the test this port settled on, *"does anything in the file use what the namespace
+provides?"*, rather than by counting occurrences. Removed.
+
+### Html.DisplayFor(m => x) renders nothing on ASP.NET Core
+
+`PostList.cshtml` drew each post with
+
+```cshtml
+grid.AddCol("sort", x => Html.DisplayFor(m => x))
+```
+
+MVC 5 evaluates that expression and picks a display template from the runtime type. ASP.NET Core
+resolves `DisplayFor` against the **model**, and `x` is a captured loop variable rather than a
+property of it, so the template was never invoked. Every row rendered empty, **with no error**.
+
+Replaced by naming the template outright, which is equivalent here and behaves the same on both.
+
+### And Html.Partial does not survive ToString()
+
+Naming it was not enough. `UniGrid` formats a cell with
+`AppendFormat("<td>{0}</td>", value)`, which calls `ToString()`. On MVC 5 `Html.Partial` returns
+an `MvcHtmlString` whose `ToString` **is** the html; on ASP.NET Core it returns an `IHtmlContent`
+whose `ToString` is the type name.
+
+The same expression compiles on both and renders on one. `AppCode/HtmlCompat.cs` and its twin in
+`ZeroKWeb.Core` put `PartialString` behind one name - the same move as `DbCompat` and
+`HttpCompat`.
+
+Both of these failures looked identical from outside: a grid of empty cells, no exception, no
+warning. The only reason either was found is that the check asserted a **specific string from the
+database** appears in the output, rather than that the page rendered.
+
+### Two harness gaps, both faithful fixes rather than shims
+
+- `UniGrid`'s constructor reads `HttpContext.Current`, and nothing had called `Global.Configure`
+  in `ZeroKWeb.Render`. Fixed by publishing the request through an `IHttpContextAccessor`, the way
+  middleware does - not by letting the shim hand back an empty context, which would have rendered
+  page 1 of everything and looked right.
+- `Mvc5Request.Url` builds `"{Scheme}://{Host}..."`, and a bare `DefaultHttpContext` has neither,
+  so it threw `UriFormatException` as soon as a view read `Request.Url`. The harness now sets
+  them, because a real request always has them.
+
