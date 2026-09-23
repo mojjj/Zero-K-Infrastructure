@@ -60,7 +60,7 @@ namespace ZeroKWeb.Host
 
             if (args.Contains("--serve"))
             {
-                Console.WriteLine("serving on " + Url + " - try " + Url + "/Forum/Path/3");
+                Console.WriteLine("serving on " + Url + " - try " + Url + "/Home/NotLoggedIn, /Tourney, /Harness/ForumPath/3");
                 await app.RunAsync();
                 return 0;
             }
@@ -107,10 +107,10 @@ namespace ZeroKWeb.Host
 
             using (var client = new HttpClient())
             {
-                var response = await client.GetAsync(Url + "/Forum/Path/" + category);
+                var response = await client.GetAsync(Url + "/Harness/ForumPath/" + category);
                 var html = await response.Content.ReadAsStringAsync();
 
-                Console.WriteLine("GET /Forum/Path/" + category + " -> " + (int)response.StatusCode);
+                Console.WriteLine("GET /Harness/ForumPath/" + category + " -> " + (int)response.StatusCode);
                 Console.WriteLine();
                 Console.WriteLine(html.Trim());
                 Console.WriteLine();
@@ -120,8 +120,17 @@ namespace ZeroKWeb.Host
                 failures += Check(html.Contains(expectedTitle),
                     "the category came out of the database and into the HTML (" + expectedTitle + ")");
                 // Html.ActionLink is why this project exists: it needs routing to produce a URL.
-                failures += Check(html.Contains("href=\"/Forum\""),
-                    "Html.ActionLink resolved through routing to /Forum");
+                //
+                // /Harness, not /Forum. ForumPath.cshtml writes ActionLink("Forum index", "Index")
+                // with no controller named, so it resolves against the AMBIENT one - which is this
+                // harness controller, not Forum. That changed when the real ForumController was
+                // linked into this project and the harness's had to stop sharing its name.
+                //
+                // What the check is for is unaffected: the link still goes through routing rather
+                // than being a literal, and "Index" is elided as the route default, which is the
+                // behaviour that made a Forum default route indistinguishable from a broken link.
+                failures += Check(html.Contains("href=\"/Harness\""),
+                    "Html.ActionLink resolved through routing to the ambient controller");
                 failures += Check(!html.Contains("@"), "no unprocessed Razor markers survived");
 
                 failures += await CheckItServesAPage(client);

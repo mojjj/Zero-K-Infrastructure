@@ -2163,3 +2163,52 @@ The edit is byte-identical in both copies, and the port compiles and renders it.
 is unverified**, as every MVC 5 view edit is - mono ships no `aspnet_compiler.exe`. The identical
 expression compiling on .NET 9 is evidence, not proof.
 
+## Can the site be run on Linux yet? Partly, and here is exactly how far
+
+`./tools/run-host.sh --serve` puts it on http://127.0.0.1:5199. Probing real routes:
+
+| route | result |
+| --- | --- |
+| `/Home/NotLoggedIn` | **200**, 10 KB, full layout |
+| `/Harness/ForumPath/9` | **200**, breadcrumb from the database |
+| `/Tourney` | **200** - the real controller, denying an anonymous user |
+| `/Forum/Thread/1`, `/Charts`, `/My` | **302** to NotLoggedIn - `[Auth]` working |
+| `/Forum`, `/Mods` | **500** - *the view was not found* |
+| `/Planetwars`, `/Lobby` | **404** - no `Index` action in the linked half |
+
+**The routing and controller layer works.** Linked controllers are discovered, `[Auth]` redirects,
+the database is read, and views render with the real layout. What is missing is narrower than it
+looked: views that compile, and a way to sign in.
+
+The 500s are not port defects. `Forum/ForumIndex.cshtml` is blocked on `@helper` (`RZ1002`) and
+`Mods/GameModesIndex.cshtml` on `CS0103 CS0117 CS0246`, so `run-host.sh` excludes them from its
+view set and MVC then cannot find them. The 404s are `PlanetwarsController.Index`, which lives in
+the `System.Drawing` half this project does not link, and `LobbyController`, which has no `Index`.
+
+### The harness had grown a collision
+
+`/Forum` was returning `AmbiguousMatchException`. `ZeroKWeb.Host` carried its own
+`ForumController` from when the real one was not linked; `port-sources.props` now links
+`ZeroKWeb.Controllers.ForumController` into the same assembly, and two classes with the same
+controller name are both discovered.
+
+Renamed to `HarnessController`, which had two consequences worth recording because neither is
+obvious:
+
+- **View lookup is by controller name**, so `PartialView("ForumPath", ...)` stopped resolving -
+  a `HarnessController` searches `Views/Harness` and `Views/Shared`. Now given by full path.
+- **`ActionLink` with no controller resolves against the ambient one**, so the breadcrumb's
+  "Forum index" link became `/Harness` rather than `/Forum`. The check asserts the new value; what
+  it exists to prove - that the link goes through routing rather than being a literal - is intact.
+
+### What "runnable for manual testing" still needs
+
+1. **Signing in.** Nothing populates `HttpContext.Items`, so `Global.Account` is always null and
+   every `[Auth]` page redirects. The MVC 5 site uses FormsAuthentication with a custom
+   `IPrincipal` that *is* an `Account`; ASP.NET Core's `User` is a `ClaimsPrincipal` and cannot
+   be. This is a design decision, not a translation, and it is the single largest thing between
+   here and a browsable site.
+2. **Views.** 58 of 116 compile. Every page whose view does not is a 500 even though its
+   controller works.
+3. **Controllers.** 8 of 32 are linked. The rest 404.
+
