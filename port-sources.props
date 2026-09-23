@@ -41,7 +41,6 @@
                   Core's model binder ignores it, so every upload would silently do nothing.
         Engines  - SharpCompress, a package the port does not reference, used for engine archives.
         Missions - VikingErik.Mvc.ResumingActionResults, an MVC 5 package for resumable downloads.
-        Admin    - ZkData/DbCloner.cs, not linked into ZkData.Core.
         Ladders  - Global.AwardCalculator, whose class is AppCode/LadderCalculator.cs and needs
                    both ZkLobbyServer and EntityFramework.Extensions.
         Home    - DotNetOpenAuth.
@@ -50,6 +49,7 @@
     -->
     <Compile Include="..\Zero-K.info\Controllers\UsersController.cs" Link="Linked\Controllers\UsersController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\BattlesController.cs" Link="Linked\Controllers\BattlesController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\AdminController.cs" Link="Linked\Controllers\AdminController.cs" />
 
     <!--
       Phase 1's seam, linked on purpose: these projects have no reference to ZkLobbyServer, so a
@@ -72,6 +72,13 @@
       coupling. It is linked whole; there was nothing to split.
     -->
     <Compile Include="..\ZkLobbyServer\ReplayStorage.cs" Link="Linked\ReplayStorage.cs" />
+
+    <!--
+      DbCloner: 229 lines of plain ADO.NET over System.Data.SqlClient, which all three of these
+      projects already reference. It lives in ZkData and was simply never linked; AdminController
+      is its only caller in the website, and the Fixer tool is the other.
+    -->
+    <Compile Include="..\ZkData\DbCloner.cs" Link="Linked\DbCloner.cs" />
   </ItemGroup>
 
   <!--

@@ -24,7 +24,7 @@ diverged                 Shared/CommentList.cshtml  -> PortedViews/Shared/Commen
 diverged                 Shared/TopMenu.cshtml  -> PortedViews/Shared/TopMenu.cshtml
 child-action             Forum/NewPost.cshtml
 child-action             My/Commanders.cshtml
-waiting-on-controllers   Admin/TraceLogs.cshtml  [CS0234]
+waiting-on-controllers   Admin/TraceLogs.cshtml  [CS1061]
 waiting-on-controllers   Battles/BattleIndex.cshtml  [CS1061]
 waiting-on-controllers   Charts/ChartsRatings.cshtml  [CS1061]
 waiting-on-controllers   Clans/ClansIndex.cshtml  [CS0234]

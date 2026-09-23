@@ -2759,3 +2759,43 @@ That is worth stating because it cuts both ways: it means neither needed a desig
 **the assembly reference is still the thing to count**, not `Global.LobbyApi`. There may be more,
 and the way to find them is the way these two were found - by linking something and being told.
 
+## AdminController links, and the view-helper gap is now measured
+
+`DbCloner` was the whole blocker: 229 lines of plain ADO.NET over `System.Data.SqlClient`, which
+all three port projects already reference. It lives in `ZkData` and had simply never been linked.
+`GlobalConst.ZkDataContextConnectionString` was already in the portable half - only its
+assignment, in `SetMode`, is not.
+
+`compiles` does not move. `Admin/TraceLogs.cshtml` goes from `CS0234` to `CS1061`: it has its
+controller and now wants `EnumCheckboxesFor`.
+
+### 28 views, 16 helpers
+
+That is the same shape as `UsersIndex` and `BattleIndex`, so it was worth measuring rather than
+chasing one at a time. Building **only** the `CS1061` views - which are declaration-clean, so
+their bodies bind - gives the whole gap:
+
+```
+ 32  PostLink                 8  MultiSelectFor            2  GetFactionItems
+ 24  EnumDropDownListFor      6  Print                     2  GetFileName
+ 14  IncludeWiki              4  PrintFactionRoleHolders   2  PrintSeconds
+  8  PrintSpringLink          2  EnumCheckboxesFor         2  PrintRankProgress
+                              2  PrintClanRoleHolders      2  PrintTotalPostRating
+                              2  IncludeFile               2  PrintStructureState
+```
+
+All sixteen are in `AppCode/HtmlHelperExtensions.cs` - the MVC-dependent half - and the three
+moved for the forum post template were the first of them. Two dominate: `PostLink` and
+`EnumDropDownListFor` account for more than half the uses.
+
+This is a relocation problem rather than a porting one, and the compiler checks it on both sides,
+so it is not the transcription hazard that the first ten helpers were. It is the largest single
+cluster left in front of the views.
+
+### The count is not the point here
+
+Linking `Users`, `Battles` and `Admin` has moved `compiles` by one view in total. What it has
+moved is the *kind* of blocker: `CS0234`, a missing controller, is a dependency question with an
+answer somewhere else in the tree; `CS1061`, a missing helper, is a file move. Three controllers
+were worth linking to turn nine views' worth of the first into the second.
+
