@@ -2492,3 +2492,63 @@ cleared the last one from a batch, and the run died silently.
 A silent exit is the worst shape this project keeps meeting, and this time the report was the
 thing that had it. Now `|| true`.
 
+## GridHelpers becomes seven partial views
+
+`App_Code/GridHelpers.cshtml` is gone, and with it `AppCode/HelperPage.cs`, which existed only to
+give it access to `Html`.
+
+```
+compiles   58 -> 68     (of which 7 are the new partials)
+total     116 -> 123
+```
+
+Three real views moved: `Lobby/LobbyChatMessages`, `Mods/GameModesIndex` and `Forum/PostList`.
+The rest of the fourteen are now blocked on other things, and `CS0103` for `GridHelpers` is gone
+from every one of them.
+
+### Why partial views
+
+An `@helper` **page** in `App_Code` is a WebPages feature with no ASP.NET Core equivalent at all -
+a different problem from the in-view `@helper` blocks, which became local delegates. A partial
+view is the one shape **both** stacks have, so the 14 call sites change from
+
+```cshtml
+@GridHelpers.RenderTable(grid)
+```
+
+to `@Html.Partial("~/Views/Shared/Grid/RenderTable.cshtml", grid)` and **nothing diverges**.
+`Html.Partial` exists in MVC 5 and in ASP.NET Core, takes a model in both, and
+`tools/razor-v3-check` says all seven partials are valid Razor v3.
+
+Two shapes did not carry over directly:
+
+- `Column(grid, col)` took **two** arguments and a partial view takes one model, so
+  `GridColumnModel` exists for that and nothing else.
+- `RenderTable(grid, cssClass)` had an optional second argument, which arrives through
+  `ViewData`. One call site passes it.
+
+### A split that had to be undone
+
+The previous commit moved `RenderCsv` into a Framework-only `UniGrid.Csv.cs`, because it writes
+onto the response and calls `Response.End()`. That was wrong, and the next step is what showed
+it: `RenderTable.cshtml` is **shared by both stacks** and calls `grid.RenderCsv()`, so the method
+has to exist in both.
+
+Reverted, and replaced by a tripwire: `HttpContext.Current.Response` throws, with the reason. It
+throws at the **property**, not at `End()`, because a shim that let `Clear`, `AddHeader` and
+`BinaryWrite` through and failed at the end would have already put a CSV into a response that
+then continues as HTML - the difference between a clear error and a corrupt download.
+
+A file split could not keep one source here; a tripwire could.
+
+### And another missing overload
+
+`Forum/PostList.cshtml` then reported `CS7036`: `Ajax.BeginForm(action, controller, routeValues,
+options)` - a four-argument shape the Ajax shim did not have. The same kind of gap as the four
+missing child-action overloads, found the same way, by a view that finally got far enough to ask
+for it.
+
+`Forum/PostList.cshtml` compiling matters beyond the count: it is what
+`ForumPostListViewComponent` renders. That component has been written and unrunnable since it was
+the first of the seven; it can now be exercised.
+

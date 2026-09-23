@@ -233,6 +233,9 @@ namespace ZeroKWeb.Compat
         public IDisposable BeginForm(string action, string controller, AjaxOptions options)
             => Form(action, controller, null, options, null);
 
+        public IDisposable BeginForm(string action, string controller, object routeValues, AjaxOptions options)
+            => Form(action, controller, routeValues, options, null);
+
         public IDisposable BeginForm(string action, string controller, object routeValues, AjaxOptions options,
                                      object htmlAttributes)
             => Form(action, controller, routeValues, options, htmlAttributes);

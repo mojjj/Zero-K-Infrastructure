@@ -83,7 +83,7 @@
             </div>
 
             <div>
-                @GridHelpers.RenderTable(grid)
+                @Html.Partial("~/Views/Shared/Grid/RenderTable.cshtml", grid)
             </div>
         } else
         {

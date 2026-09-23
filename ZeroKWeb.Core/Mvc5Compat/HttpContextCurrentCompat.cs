@@ -35,6 +35,50 @@ namespace System.Web
         public Mvc5AmbientContext(Microsoft.AspNetCore.Http.HttpContext context) => this.context = context;
 
         public HttpRequest Request => new HttpRequest(context?.Request);
+
+        /// <summary>
+        /// A tripwire, and the earliest possible one.
+        ///
+        /// One caller: UniGrid.RenderCsv, which does Clear, ClearHeaders, AddHeader, BinaryWrite
+        /// and then Response.End() - System.Web's response MODEL, not just its types. ASP.NET
+        /// Core has no End(): a view cannot abort the request it is being rendered into. The
+        /// shape a port would use is a FileResult returned by an action.
+        ///
+        /// So it throws HERE rather than on End(), because a shim that let the writes through and
+        /// failed at the end would have already put a CSV into a response that then continues as
+        /// HTML. Failing before anything is written is the difference between a clear error and a
+        /// corrupt download.
+        ///
+        /// The alternative was splitting RenderCsv into a Framework-only file, which is what this
+        /// port did at first. It had to come back: Views/Shared/Grid/RenderTable.cshtml is shared
+        /// by both stacks and calls grid.RenderCsv(), so the method has to exist in both. A
+        /// tripwire keeps one source where a file split could not.
+        /// </summary>
+        public HttpResponse Response => throw new NotSupportedException(
+            "HttpContext.Current.Response is not available on ASP.NET Core. The only caller is "
+            + "UniGrid.RenderCsv, which writes a CSV onto the response and calls Response.End() - "
+            + "a view aborting its own request, which ASP.NET Core does not support. Grid CSV "
+            + "export needs an action returning a FileResult. See "
+            + "ZeroKWeb.Core/Mvc5Compat/HttpContextCurrentCompat.cs.");
+    }
+
+    /// <summary>
+    /// Declared so `HttpResponse response = HttpContext.Current.Response;` compiles. Nothing ever
+    /// holds one - the property above throws first - and every member throws too, so a future
+    /// caller that finds another way here fails the same way rather than silently doing nothing.
+    /// </summary>
+    public sealed class HttpResponse
+    {
+        private static Exception Unsupported() => new NotSupportedException(
+            "System.Web's HttpResponse is not available on ASP.NET Core.");
+
+        public string ContentType { get => throw Unsupported(); set => throw Unsupported(); }
+        public void Clear() => throw Unsupported();
+        public void ClearContent() => throw Unsupported();
+        public void ClearHeaders() => throw Unsupported();
+        public void AddHeader(string name, string value) => throw Unsupported();
+        public void BinaryWrite(byte[] buffer) => throw Unsupported();
+        public void End() => throw Unsupported();
     }
 
     /// <summary>

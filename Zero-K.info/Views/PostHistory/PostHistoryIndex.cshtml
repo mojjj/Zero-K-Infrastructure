@@ -37,7 +37,7 @@
     {
         <span>To display differences between versions, select one or more edits in the list using checkboxes and click "diff selected"</span><br/>
         <input type="submit" value="Diff selected" class="textbutton"/>
-        @GridHelpers.RenderTable(grid)
+        @Html.Partial("~/Views/Shared/Grid/RenderTable.cshtml", grid)
     }
 
     @if (ViewBag.DiffModel != null)

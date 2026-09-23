@@ -67,7 +67,6 @@
     <Compile Include="AppCode\DosProtector.cs" />
     <Compile Include="AppCode\ForumPostCache.cs" />
     <Compile Include="AppCode\ForumPostIndexer.cs" />
-    <Compile Include="AppCode\HelperPage.cs" />
     <Compile Include="AppCode\LadderCalculator.cs" />
     <Compile Include="AppCode\MemCache.cs" />
     <Compile Include="AppCode\NullTempDataProvider.cs" />
@@ -76,10 +75,9 @@
     <Compile Include="AppCode\UniGrid\Col.cs" />
     <Compile Include="AppCode\UniGrid\HCol.cs" />
     <Compile Include="AppCode\UniGrid\IUniGrid.cs" />
-    <Compile Include="AppCode\UniGrid\IUniGrid.Csv.cs" />
+    <Compile Include="AppCode\UniGrid\GridColumnModel.cs" />
     <Compile Include="AppCode\UniGrid\IUniGridCol.cs" />
     <Compile Include="AppCode\UniGrid\UniGrid.cs" />
-    <Compile Include="AppCode\UniGrid\UniGrid.Csv.cs" />
     <Compile Include="AppCode\UniGrid\UniGridCol.cs" />
     <Compile Include="App_Start\BundleConfig.cs" />
     <Compile Include="App_Start\WebApiConfig.cs" />
@@ -248,7 +246,6 @@
     <Content Include="Views\Mods\GameModeEdit.cshtml" />
     <Content Include="Views\Mods\GameModesIndex.cshtml" />
     <Content Include="Views\Maps\PlanetImageSelect.cshtml" />
-    <Content Include="App_Code\GridHelpers.cshtml" />
     <Content Include="Img\fanart\zk_logo_alt.xcf" />
     <Content Include="Img\structures\defgrid.xcf" />
     <Content Include="Img\structures\superweapon.xcf" />
