@@ -3,6 +3,24 @@
 @model ZeroKWeb.Controllers.PlanetwarsAdminController.PlanetwarsAdminModel
 
 @{
+    // Templated Razor delegates, in place of @helper blocks. @helper does not exist in ASP.NET
+    // Core; this form parses in BOTH Razor v3 and the .NET 9 generator, which
+    // tools/razor-v3-check/check.sh establishes rather than assumes. A templated delegate's
+    // parameter is always called `item`.
+    Func<Galaxy, object> AdminColumn =
+        @<text>@if (item.IsDefault)
+        {
+            <span style="color: red; font-weight: bold">SELECTED</span>
+        }
+        else
+        {
+            @Html.PostLink("Select", "SetDefault", null, new { galaxyID = item.GalaxyID })
+            <span>&nbsp;|&nbsp;</span>
+            @Html.PostLink("Delete", "Delete", null, new { galaxyID = item.GalaxyID }, "js_confirm")
+        }</text>;
+}
+
+@{
     Page.Title = "Planetwars Admin";
     var grid = new UniGrid<Galaxy>(Model.Galaxies, "Galaxy maps");
     grid.AddCol("ID", x => x.GalaxyID).SetSort(x => x.GalaxyID);
@@ -15,21 +33,6 @@
     grid.AddCol("Turn", x => x.Turn).SetSort(x => x.Turn);
     grid.AddCol("Admin", AdminColumn);
 }
-
-@helper AdminColumn(Galaxy gal)
-{
-    if (gal.IsDefault)
-    {
-        <span style="color: red; font-weight: bold">SELECTED</span>
-    }
-    else
-    {
-        @Html.PostLink("Select", "SetDefault", null, new { galaxyID = gal.GalaxyID })
-        <span>&nbsp;|&nbsp;</span>
-        @Html.PostLink("Delete", "Delete", null, new { galaxyID = gal.GalaxyID }, "js_confirm")
-    }
-}
-
 <div id="grid">
     <h1>@Page.Title</h1>
 
