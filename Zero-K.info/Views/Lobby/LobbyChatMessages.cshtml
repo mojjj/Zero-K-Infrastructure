@@ -46,4 +46,4 @@
     chatGrid.AddCol("Text", TxtChatCol).SetSort(x => x.Text);
 }
 
-@GridHelpers.RenderTable(chatGrid)
+@Html.Partial("~/Views/Shared/Grid/RenderTable.cshtml", chatGrid)

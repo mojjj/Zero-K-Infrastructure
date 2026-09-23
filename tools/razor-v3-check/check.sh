@@ -18,7 +18,9 @@ RAZOR="$CACHE/packages/microsoft.aspnet.razor/3.2.3/lib/net45"
 # ASSUMED to be valid on MVC 5, and MVC 5 is the build still serving the site - so an edit that
 # ASP.NET Core accepts and Razor v3 does not would break production and pass every check here.
 if [ "${1:-}" = "--all" ]; then
-    set -- $(find Zero-K.info/Views Zero-K.info/App_Code -name '*.cshtml' | sort)
+    # App_Code included when it exists: GridHelpers.cshtml lived there until it became partial
+    # views, and a repository that still has one should still have it checked.
+    set -- $(find Zero-K.info/Views Zero-K.info/App_Code -name '*.cshtml' 2>/dev/null | sort)
 fi
 
 docker run --rm -v "$PWD":/src -v "$CACHE":/cache -w /src mono:6.12 bash -c '
