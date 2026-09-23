@@ -12,10 +12,10 @@
 # other                  a package reference or an MVC 5 API
 
 total 123
-compiles                 72
+compiles                 73
 diverged                 3
 child-action             2
-waiting-on-controllers   22
+waiting-on-controllers   21
 razor-language           1
 other                    23
 
@@ -25,8 +25,7 @@ diverged                 Shared/TopMenu.cshtml  -> PortedViews/Shared/TopMenu.cs
 child-action             Forum/NewPost.cshtml
 child-action             My/Commanders.cshtml
 waiting-on-controllers   Admin/TraceLogs.cshtml  [CS0234]
-waiting-on-controllers   Battles/BattleIndex.cshtml  [CS0234]
-waiting-on-controllers   Battles/BattleTileList.cshtml  [CS0234]
+waiting-on-controllers   Battles/BattleIndex.cshtml  [CS1061]
 waiting-on-controllers   Charts/ChartsRatings.cshtml  [CS1061]
 waiting-on-controllers   Clans/ClansIndex.cshtml  [CS0234]
 waiting-on-controllers   Engines/EnginesIndex.cshtml  [CS0246]

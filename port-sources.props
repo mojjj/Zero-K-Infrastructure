@@ -42,8 +42,6 @@
         Engines  - SharpCompress, a package the port does not reference, used for engine archives.
         Missions - VikingErik.Mvc.ResumingActionResults, an MVC 5 package for resumable downloads.
         Admin    - ZkData/DbCloner.cs, not linked into ZkData.Core.
-        Battles  - ZkLobbyServer.ReplayStorage, a STATIC call into the lobby server, like
-                   PlanetWarsTurnHandler was. The seam does not cover it either.
         Ladders  - Global.AwardCalculator, whose class is AppCode/LadderCalculator.cs and needs
                    both ZkLobbyServer and EntityFramework.Extensions.
         Home    - DotNetOpenAuth.
@@ -51,6 +49,7 @@
       The rest of the 24 have not been tried.
     -->
     <Compile Include="..\Zero-K.info\Controllers\UsersController.cs" Link="Linked\Controllers\UsersController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\BattlesController.cs" Link="Linked\Controllers\BattlesController.cs" />
 
     <!--
       Phase 1's seam, linked on purpose: these projects have no reference to ZkLobbyServer, so a
@@ -64,5 +63,22 @@
     <Compile Include="..\ZkLobbyServer\TourneyApi.cs" Link="Linked\TourneyApi.cs" />
     <Compile Include="..\ZkLobbyServer\PlanetWarsApi.cs" Link="Linked\PlanetWarsApi.cs" />
     <Compile Include="..\ZkLobbyServer\SpringieInterface\PlanetWarsTurnHandler.Portable.cs" Link="Linked\PlanetWarsTurnHandler.Portable.cs" />
+    <!--
+      Replay storage. Like PlanetWarsTurnHandler before it, this lives in ZkLobbyServer and has
+      nothing to do with the running server: it is an Azure blob container plus a local directory,
+      reached through MiscVar and GlobalConst. BattlesController calls ReplayStorage.Instance
+      directly, which is the second website-to-lobby-server static call found outside
+      ILobbyServerApi - and, like the first, it turned out to be a misplaced file rather than
+      coupling. It is linked whole; there was nothing to split.
+    -->
+    <Compile Include="..\ZkLobbyServer\ReplayStorage.cs" Link="Linked\ReplayStorage.cs" />
+  </ItemGroup>
+
+  <!--
+    Azure.Storage.Blobs, for ReplayStorage above, at the version ZkLobbyServer.csproj pins. Here
+    rather than in each project because all three import this file and all three link that source.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.15.0" />
   </ItemGroup>
 </Project>

@@ -2728,3 +2728,34 @@ namespace provides rather than by counting occurrences.
 `UsersController`'s one `Request.UserHostAddress` moved onto `UserHostAddressCompat()`, the
 pattern already used four times.
 
+## BattlesController links, and the second lobby-server dependency was misplaced too
+
+```
+compiles   72 -> 73
+```
+
+`Battles/BattleTileList.cshtml` compiles; `Battles/BattleIndex.cshtml` moved from `CS0234` to
+`CS1061`, so it is short a member rather than a controller.
+
+`ReplayStorage` was the blocker, and it is the **second** website-to-lobby-server static call
+found outside `ILobbyServerApi`, after `PlanetWarsTurnHandler`. Like the first, it turned out not
+to be coupling at all: 107 lines of Azure blob container and local directory, reached through
+`MiscVar` and `GlobalConst`, touching no server state. It lives in `ZkLobbyServer` because that is
+where it was written.
+
+Unlike `PlanetWarsTurnHandler` there was nothing to split - the whole file is portable - so it is
+linked whole, with `Azure.Storage.Blobs` at the version `ZkLobbyServer.csproj` already pins. The
+package reference sits in `port-sources.props` rather than in each project, because all three
+import that file and all three link that source.
+
+`GlobalConst.SpringieDataDir` came with it: the **ninth** thing found stranded in the half that
+needs WCF. A settable static property with a hardcoded Windows default and a `// todo hack solve`
+from whoever wrote it.
+
+### Two for two
+
+Both dependencies the seam did not model have been misplaced files rather than real coupling.
+That is worth stating because it cuts both ways: it means neither needed a design, and it means
+**the assembly reference is still the thing to count**, not `Global.LobbyApi`. There may be more,
+and the way to find them is the way these two were found - by linking something and being told.
+
