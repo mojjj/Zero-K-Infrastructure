@@ -13,6 +13,16 @@ Windows, Linux and CI.
 ## Start it
 
     docker compose -f db/docker-compose.yml up -d
+
+If a harness ever fails with a SQL Server connection error, run
+
+    ./db/require-db.sh
+
+It says which of the four things is actually wrong - no container, a stopped one, one that is
+still starting, or a missing database - and how to fix that one. `tools/render-view.sh`,
+`tools/run-host.sh`, `db/compare-ratings.sh` and `db/efcore-schema.sh` call it themselves, so
+they now stop with that message instead of a stack trace. They skip it when
+`ZK_CONNECTION_STRING` is set, since the database is then not theirs to check.
     ./db/wait-for-db.sh
 
 Listening on `127.0.0.1:14330` - deliberately not 1433, so it cannot collide with a real

@@ -25,6 +25,13 @@ body() { sed -n '/^tables: /,$p' "$1" | tail -n +2; }
 
 ./tools/dotnet.sh build ZkData.Core/ZkData.Core.csproj -v q --nologo >/dev/null
 
+# Checked before anything is built or run: without it a stopped container surfaces as a
+# forty-frame SqlClient stack trace in the middle of the output. Not conditional here - this
+# script always builds its own zk_efcore database and never honours an outside connection string.
+# --server-only because it CREATES that database a few lines down, so requiring it to exist
+# already would fail every clean run.
+./db/require-db.sh --server-only
+
 ZK_CONNECTION_STRING="$(DB_NAME=zk_efcore ./db/connection-string.sh)" \
     ./tools/dotnet.sh run --project ZkData.Core --no-build -- create >/dev/null
 
