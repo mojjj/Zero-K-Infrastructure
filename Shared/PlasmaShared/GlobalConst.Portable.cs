@@ -93,6 +93,12 @@ namespace ZkData
         // The query/form key the game client puts a one-use lobby session token in, so a player
         // arriving from the client is signed in without typing a password. Read by Global.asax on
         // the Framework side and by Mvc5Compat/ZkAuthentication.cs on the port's.
+        // Where replays and other Springie data live on disk. A settable property with a
+        // hardcoded Windows default and a "todo hack solve" from whoever wrote it; ReplayStorage
+        // reads it, and moving it here is what lets that file be linked. The ninth thing found
+        // stranded in the half that needs WCF.
+        public static string SpringieDataDir { get; set; } = @"c:\projekty\springie_spring"; // todo hack solve
+
         public const string SessionTokenVariable = "asmallcake";
 
         public const string ModeratorChannel = "zkadmin";
