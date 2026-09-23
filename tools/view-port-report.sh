@@ -76,6 +76,32 @@ build() {
         > "$out" 2>&1 && return 0 || return $?
 }
 
+# Before anything about the views: do the LINKED SOURCES compile?
+#
+# ZeroKWeb.Core cannot normally answer that. Its views carry declaration errors, so Roslyn binds
+# no method body in the project - including the bodies of every linked controller. A controller
+# with a CS0103 in a method still DECLARES its type, so a view's @model binds and the view is
+# reported as compiling, while ZeroKWeb.Render - which holds only working views, and therefore
+# binds bodies - cannot build at all.
+#
+# That is not hypothetical: four controllers were linked on the strength of a clean ZeroKWeb.Core
+# build and three of them did not compile. Building with NO views removes the declaration errors
+# and makes the linked C# report itself.
+#
+# CS5001 is expected and ignored: with no views there is no generated entry point.
+{
+    echo "<Project><ItemGroup>"
+    find Zero-K.info/Views -name '*.cshtml' | sort       | sed 's|/|\\|g; s|^|    <Content Remove="..\\|; s|$|" />|'
+    echo "</ItemGroup></Project>"
+} > "$PROPS"
+./tools/dotnet.sh build ZeroKWeb.Core/ZeroKWeb.Core.csproj -v q --nologo > "$WORK/sources.txt" 2>&1 || true
+rm -f "$PROPS"
+if grep -E 'error CS' "$WORK/sources.txt" | grep -qv 'CS5001'; then
+    echo "the LINKED SOURCES do not compile, so any view inventory would be meaningless:" >&2
+    grep -E 'error CS' "$WORK/sources.txt" | grep -v 'CS5001' | sed 's|/repo/||' | sort -u | head -20 >&2
+    exit 2
+fi
+
 build "" "$WORK/pass1.txt" && rc=0 || rc=$?
 
 # A build that failed for a reason this report cannot see - no SDK, a restore failure, a

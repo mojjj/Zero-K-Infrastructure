@@ -2664,3 +2664,67 @@ database** appears in the output, rather than that the page rendered.
   so it threw `UriFormatException` as soon as a view read `Request.Url`. The harness now sets
   them, because a real request always has them.
 
+## Linking more controllers, and the measurement that said they were fine
+
+`UsersController` links. Seven were tried; the other six could not, and finding that out exposed
+a hole in the report itself.
+
+### The inventory over-reported, and I believed it
+
+Four controllers were linked on the strength of a clean `ZeroKWeb.Core` build. Three of them do
+not compile:
+
+```
+AdminController.cs(22,34):   CS0246  DbCloner
+BattlesController.cs(233,31): CS0103  ReplayStorage
+LaddersController.cs(19,43):  CS0117  Global.AwardCalculator
+UsersController.cs(637,17):   CS0103  AuthServiceClient
+```
+
+**ZeroKWeb.Core cannot see any of that.** Its views carry declaration errors, so Roslyn binds no
+method body in the project - including every linked controller's. A controller with a `CS0103` in
+a method still DECLARES its type, so a view's `@model` binds and the view is reported as
+compiling, while `ZeroKWeb.Render` - which holds only working views, and therefore binds bodies -
+cannot build at all.
+
+This document has recorded that limitation since the view harness was built. It did not stop it
+being believed, because nothing checked.
+
+Now `tools/view-port-report.sh` builds with **no views at all** before it measures anything. With
+no views there are no declaration errors, so the linked C# reports itself, and a failure exits 2:
+
+```
+the LINKED SOURCES do not compile, so any view inventory would be meaningless:
+Zero-K.info/Controllers/AdminController.cs(22,34): error CS0246: ... 'DbCloner' ...
+```
+
+Confirmed by relinking `AdminController` on purpose.
+
+### What the six need
+
+| controller | blocker |
+| --- | --- |
+| `Clans` | `HttpPostedFileBase` - deliberately unshimmed; ASP.NET Core's binder ignores it, so uploads would silently do nothing |
+| `Engines` | `SharpCompress`, a package the port does not reference |
+| `Missions` | `VikingErik.Mvc.ResumingActionResults`, an MVC 5 package |
+| `Admin` | `ZkData/DbCloner.cs`, not linked into `ZkData.Core` |
+| `Battles` | **`ZkLobbyServer.ReplayStorage`** - another static call into the lobby server, like `PlanetWarsTurnHandler`. The seam does not cover this one either. |
+| `Ladders` | `Global.AwardCalculator`, whose class needs both `ZkLobbyServer` and `EntityFramework.Extensions` |
+
+`Battles` is the one worth noticing: it is the **second** website→lobby-server dependency found
+outside `ILobbyServerApi`, and it was found the same way - by trying to link something and being
+told.
+
+### Cleanups on the way
+
+`Indexed<T>` and `ToIndexedList` moved to the portable half of `Utils.cs` - the eighth thing
+found stranded there. It is a prerequisite for `LaddersController` and not sufficient on its own,
+which is why that controller is still unlinked.
+
+Three dead usings removed from `LaddersController` (`System.Data.Entity.Core.Objects`,
+`System.Web.UI`, `System.Web.Helpers`), each checked by asking whether the file uses anything the
+namespace provides rather than by counting occurrences.
+
+`UsersController`'s one `Request.UserHostAddress` moved onto `UserHostAddressCompat()`, the
+pattern already used four times.
+

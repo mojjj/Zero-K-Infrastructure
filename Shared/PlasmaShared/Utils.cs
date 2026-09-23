@@ -41,10 +41,6 @@ namespace PlasmaShared
             return d == floored ? d : floored.AddMinutes(1);
         }
 
-        public static IEnumerable<Indexed<T>> ToIndexedList<T>(this IEnumerable<T> enumeration)
-        {
-            return enumeration.Select((x, i) => new Indexed<T>(x, i));
-        }
 
         public static IEnumerable<TSource> DistinctBy<TSource, TKey>(this IEnumerable<TSource> source, Func<TSource, TKey> keySelector)
         {
@@ -928,17 +924,5 @@ namespace PlasmaShared
                 }
             }
         }        
-    }
-
-    public struct Indexed<T>
-    {
-        public readonly T Item;
-        public readonly int Index;
-
-        public Indexed(T item, int index)
-        {
-            Item = item;
-            Index = index;
-        }
     }
 }
