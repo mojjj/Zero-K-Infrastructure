@@ -2552,3 +2552,51 @@ for it.
 `ForumPostListViewComponent` renders. That component has been written and unrunnable since it was
 the first of the seven; it can now be exercised.
 
+## ForumPostList runs: all four components, not three
+
+It was the first view component written - the reference for the whole divergence mechanism - and
+the only one that had never been executed, because `Forum/PostList.cshtml` calls `GridHelpers`.
+The grid work cleared that.
+
+```
+   ok      the grid rendered one row for the seeded post (1)
+   ok      PostList.cshtml rendered its body
+   ok      the grid partials rendered inside it
+   ok      its Ajax form reached the page
+```
+
+That last line is the grid's first end-to-end proof: `RenderTable.cshtml` invoking `GridJs`,
+`Pager`, `Hidden`, `TableHeader`, `Column` and `TableData` through `Html.Partial`, in a real
+render, from real rows.
+
+### The ambient request had to be published
+
+The first run died in `UniGrid`'s constructor with a `NullReferenceException`: it reads its page
+number and sort column from `HttpContext.Current`, and nothing had ever called
+`Global.Configure` in `ZeroKWeb.Render`.
+
+Fixed by registering an `IHttpContextAccessor` and publishing the context the harness builds,
+which is what an ASP.NET Core application does through middleware. **Not** by making the shim
+return an empty context when there is none: a grid that quietly sees no request would have
+rendered page 1 of everything and looked fine.
+
+### What is deliberately asserted as ABSENT
+
+The row is there and it is **empty**. `PostList` renders each post with `Html.DisplayFor`, which
+looks for `Views/Shared/DisplayTemplates/ForumPost.cshtml` - a view that does not compile yet
+(`CS1061`) and so is not in the harness's set. ASP.NET Core falls back to a default display
+rather than failing, so the page renders and says nothing.
+
+So the check asserts the post's text is **missing**:
+
+```
+   ok      the post's TEXT is still missing - DisplayTemplates/ForumPost.cshtml does not compile
+```
+
+When that template starts compiling this check fails, which is the reminder to turn it into an
+assertion that the text is there. An absent assertion would have left the gap to be discovered;
+a passing one that only looked at the row count would have implied the page works.
+
+This is the sharpest example so far of what `compiles` does and does not buy. `Forum/PostList` is
+in the `compiles` bucket, renders its body, its grid and its form - and shows no posts.
+
