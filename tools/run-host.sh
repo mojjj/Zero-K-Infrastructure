@@ -2,7 +2,10 @@
 # Serves a real Zero-K view over HTTP on .NET 9 and checks the response.
 #
 #     ./tools/run-host.sh            request it once and check
-#     ./tools/run-host.sh --serve    leave it running on http://localhost:5199
+#     ./tools/run-host.sh --serve    leave it running on http://127.0.0.1:5199
+#
+# --serve BUILDS FIRST. Nothing is listening until it prints "serving on ..."; a browser opened
+# before that reports ERR_CONNECTION_REFUSED, which is the build still running, not a failure.
 #
 # Only the views the inventory says compile are included - a project that does not build
 # serves nothing - so the set is generated here from the committed inventory.
@@ -35,6 +38,16 @@ trap 'rm -f "$PROPS"' EXIT
 # forty-frame SqlClient stack trace in the middle of the output. Skipped when
 # ZK_CONNECTION_STRING points somewhere else, since then the database is not ours to check.
 if [ -z "${ZK_CONNECTION_STRING:-}" ]; then DB_NAME="${DB_NAME:-zk_test}" ./db/require-db.sh; fi
+
+# `dotnet run` builds first, and building means the Razor generator compiling every view in the
+# set - a minute or two, during which the only output is MSBuild warnings. With --serve that
+# looks exactly like a server that has started and is ignoring you, so say what is happening.
+# Reported as ERR_CONNECTION_REFUSED by someone who opened the browser before it was ready.
+case " $* " in
+    *" --serve "*)
+        echo "building first - this takes a minute or two; the URL appears when it is ready" >&2
+        ;;
+esac
 
 ZK_CONNECTION_STRING="${ZK_CONNECTION_STRING:-$(DB_NAME="${DB_NAME:-zk_test}" ./db/connection-string.sh)}" \
     ./tools/dotnet.sh run --project ZeroKWeb.Host -- "$@"
