@@ -23,6 +23,10 @@
     <Compile Include="..\Zero-K.info\AppCode\ForumPostIndexer.cs" Link="Linked\ForumPostIndexer.cs" />
     <Compile Include="..\Zero-K.info\ForumParser\**\*.cs" Link="Linked\ForumParser\%(RecursiveDir)%(Filename).cs" />
     <Compile Include="..\Zero-K.info\Models\CommentList.cs" Link="Linked\Models\CommentList.cs" />
+    <!-- The grid, minus its CSV export: see AppCode/UniGrid/UniGrid.Csv.cs. -->
+    <Compile Include="..\Zero-K.info\AppCode\UniGrid\*.cs"
+             Exclude="..\Zero-K.info\AppCode\UniGrid\*.Csv.cs"
+             Link="Linked\UniGrid\%(Filename).cs" />
 
     <Compile Include="..\Zero-K.info\Controllers\ModsController.cs" Link="Linked\Controllers\ModsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\MyController.cs" Link="Linked\Controllers\MyController.cs" />

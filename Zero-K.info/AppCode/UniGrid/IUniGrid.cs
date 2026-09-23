@@ -4,7 +4,7 @@ using System.Web.Mvc;
 
 namespace ZeroKWeb
 {
-    public interface IUniGrid
+    public partial interface IUniGrid
     {
         IEnumerable<IUniGridCol> BaseCols { get; }
         string ID { get; }
@@ -20,7 +20,6 @@ namespace ZeroKWeb
         bool RenderHeaders { get; }
         bool AllowCsvExport { get; }
         MvcHtmlString RenderTableRows();
-        void RenderCsv(Encoding encoding = null, string delimiter = ";");
         List<string> SelectedKeys { get; } 
     }
 }

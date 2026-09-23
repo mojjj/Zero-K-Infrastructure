@@ -2444,3 +2444,51 @@ Between them they block **14 views**.
 `@helper` becomes a local delegate; a helper page has to become a class or a component, and
 `HelperPage.cs` exists only to give it access to `Html`.
 
+## The grid, half of it: UniGrid links
+
+`AppCode/UniGrid/` is the first half of the cluster that blocks 14 views. It now compiles on
+.NET 9. **No view moves yet**, and that is not a disappointment - the sets are identical: every
+view that uses `UniGrid` also calls `GridHelpers`, so neither half unblocks anything alone.
+
+What it needed:
+
+- **`MvcHtmlString`**, shimmed as a subclass of ASP.NET Core's `HtmlString`. The two differ only
+  in name, so a subclass lets linked code keep returning `MvcHtmlString` while every API that
+  wants an `IHtmlContent` accepts the same object.
+- **`HelperResult`**, aliased onto `Microsoft.AspNetCore.Mvc.Razor.HelperResult` rather than
+  shimmed - a subclass would be a different type from what a templated Razor delegate produces,
+  which is exactly what the views now hand it.
+- **A `System.Web.WebPages` namespace containing nothing.** `Col.cs` writes
+  `using System.Web.WebPages;`, and a using of a namespace no type declares is CS0246, so
+  something has to declare it.
+- **`HttpContext.Current`**, shimmed. `UniGrid`'s constructor reads its own page number, sort
+  column and selection out of the ambient request, because a grid is built inside a view with
+  `new UniGrid<T>(...)` and there is nothing to pass it. Same trade as `Global.Account`: ASP.NET
+  Core removed the ambient on purpose, and keeping it changes one thing at a time.
+
+### The CSV export could not come
+
+`RenderCsv` is System.Web's response **model**, not just its types: `Clear`, `ClearHeaders`,
+`AddHeader`, `BinaryWrite`, and `Response.End()` - which aborts the request from inside a view.
+ASP.NET Core has no equivalent to `End()`, and the shape a port would use is a `FileResult`
+returned by an action rather than a side effect performed by a grid. That is a design question,
+so it is split into `UniGrid.Csv.cs` and left where it works - along with `IUniGrid.Csv.cs`,
+because the interface declared the member too and C# allows partial interfaces.
+
+`GenerateCsv`, which builds the text, stayed in the portable half. Only the delivery moved.
+
+### A latent bug that progress triggered
+
+`tools/view-port-report.sh` began exiting 1 with **no output at all**.
+
+```bash
+offenders=$(grep -oE '...error CS(0246|0234)' batch.txt | sed ... | sort -u)
+```
+
+`grep` exits 1 when it finds nothing, and the script runs under `set -e -o pipefail`. For as long
+as every batch contained at least one declaration error this never fired. Linking `UniGrid`
+cleared the last one from a batch, and the run died silently.
+
+A silent exit is the worst shape this project keeps meeting, and this time the report was the
+thing that had it. Now `|| true`.
+

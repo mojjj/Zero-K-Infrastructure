@@ -8,7 +8,7 @@ using System.Web.Mvc;
 
 namespace ZeroKWeb
 {
-    public class UniGrid<T> : IUniGrid
+    public partial class UniGrid<T> : IUniGrid
     {
         public List<UniGridCol<T>> Cols = new List<UniGridCol<T>>();
 
@@ -84,29 +84,6 @@ namespace ZeroKWeb
                                           })));
             }
             return sb.ToString();
-        }
-
-        /// <summary>
-        /// Generate CSV and send to browser
-        /// </summary>
-        /// <param name="encoding">warning default encoding windows-1250</param>
-        /// <param name="delimiter"></param>
-        public void RenderCsv(Encoding encoding = null, string delimiter = ";") {
-            if (!AllowCsvExport) return;
-            if (encoding == null) encoding = Encoding.GetEncoding("windows-1250");
-            var csv = GenerateCsv(delimiter);
-
-            HttpResponse response = HttpContext.Current.Response;
-            response.Clear();
-            response.ClearContent();
-            response.ClearHeaders();
-            response.ContentType = "text/csv";
-            var name = CsvFileName;
-            if (string.IsNullOrEmpty(name)) name = Title;
-            if (string.IsNullOrEmpty(name)) name = "export";
-            response.AddHeader("Content-Disposition", string.Format("attachment;filename={0}.csv", name));
-            response.BinaryWrite(encoding.GetBytes(csv));
-            response.End();
         }
 
         /// <summary>

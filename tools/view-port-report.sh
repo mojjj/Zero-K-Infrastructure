@@ -116,8 +116,12 @@ for ((i = 0; i < total; i += BATCH)); do
     # six builds and four minutes when a single body-level CS0246 tripped it - take the views
     # that reported the error out and re-run the remainder once. Those views keep the errors
     # they just reported; the rest get a compilation with nothing suppressing them.
+    # `|| true`, because grep exits 1 when it finds nothing and this script runs under
+    # `set -e -o pipefail`. A batch in which NO view has a declaration error - which is what
+    # progress eventually looks like - killed the whole run with no message at all. It did that
+    # the first time linking UniGrid made a batch come out clean.
     offenders=$(grep -oE 'Zero-K\.info/Views/[^(]+\([0-9]+,[0-9]+\): error CS(0246|0234)' "$WORK/batch.txt" \
-                | sed -E 's/\(.*//' | sort -u)
+                | sed -E 's/\(.*//' | sort -u || true)
     if [ -n "$offenders" ]; then
         echo "   $(echo "$offenders" | wc -l) view(s) reported a type error; re-running the rest without them" >&2
         remainder=$(comm -23 <(printf '%s\n' "${keep_arr[@]}" | sort) <(printf '%s\n' "$offenders" | sort))

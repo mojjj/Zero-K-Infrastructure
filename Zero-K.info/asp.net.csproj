@@ -76,8 +76,10 @@
     <Compile Include="AppCode\UniGrid\Col.cs" />
     <Compile Include="AppCode\UniGrid\HCol.cs" />
     <Compile Include="AppCode\UniGrid\IUniGrid.cs" />
+    <Compile Include="AppCode\UniGrid\IUniGrid.Csv.cs" />
     <Compile Include="AppCode\UniGrid\IUniGridCol.cs" />
     <Compile Include="AppCode\UniGrid\UniGrid.cs" />
+    <Compile Include="AppCode\UniGrid\UniGrid.Csv.cs" />
     <Compile Include="AppCode\UniGrid\UniGridCol.cs" />
     <Compile Include="App_Start\BundleConfig.cs" />
     <Compile Include="App_Start\WebApiConfig.cs" />
