@@ -50,6 +50,36 @@ namespace ZkData.Core
                         case "rate":
                             return RatingRun.Run(db, args.Skip(1).FirstOrDefault());
 
+                        // A development convenience, and deliberately a thin one: the fixture
+                        // stores PasswordBcrypt as NULL for every account, so there is nothing to
+                        // sign in as while testing the site by hand.
+                        //
+                        // It calls Account.SetPasswordPlain, which is production code - the same
+                        // BCrypt(MD5-of-password) the lobby server writes at registration - so
+                        // logging in afterwards exercises the real verification rather than a
+                        // bypass. Point it at the test database, not at anything real.
+                        case "set-password":
+                        {
+                            var name = args.Skip(1).FirstOrDefault();
+                            var password = args.Skip(2).FirstOrDefault();
+                            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(password))
+                            {
+                                Console.Error.WriteLine("usage: set-password <account name> <password>");
+                                return 2;
+                            }
+                            var account = db.Accounts.FirstOrDefault(x => x.Name == name);
+                            if (account == null)
+                            {
+                                Console.Error.WriteLine("no account named " + name);
+                                return 2;
+                            }
+                            account.SetPasswordPlain(password);
+                            db.SaveChanges();
+                            Console.WriteLine("set a password for " + account.Name + " (AccountID "
+                                              + account.AccountID + ")");
+                            return 0;
+                        }
+
                         case "summary":
                         default:
                             var model = db.Model;

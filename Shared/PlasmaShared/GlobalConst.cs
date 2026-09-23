@@ -121,7 +121,6 @@ namespace ZkData
         public const double EloWeightLearnFactor = 10;
         public const double EloWeightMalusFactor = -80;
 
-        public const string SessionTokenVariable = "asmallcake";
 
         public const string MissionScriptFileName = "_missionScript.txt";
         public const string MissionSlotsFileName = "_missionSlots.xml";

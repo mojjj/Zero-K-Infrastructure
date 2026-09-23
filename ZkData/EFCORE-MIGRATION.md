@@ -2212,3 +2212,81 @@ obvious:
    controller works.
 3. **Controllers.** 8 of 32 are linked. The rest 404.
 
+## Authentication: you can sign in now
+
+The largest thing between the port and a browsable site. Identity, not authorization - `AuthCompat`
+made a linked controller's `[Auth]` mean what it says; this is what makes it ever answer yes.
+
+### The shape MVC 5 uses cannot survive
+
+`Global.asax` does `HttpContext.Current.User = acc`, which works because `ZkData.Account`
+implements `IPrincipal` and `IIdentity`. ASP.NET Core's `HttpContext.User` is a `ClaimsPrincipal`
+and cannot be an entity.
+
+So the two halves are separated: cookie authentication carries the **name** as a claim, and
+middleware turns that name back into an `Account` and puts it in `HttpContext.Items`, where
+`GlobalCompat` already looks. **46 views and every linked controller read `Global.Account` and
+none of them change.**
+
+The per-request logic is `Global.asax`'s, in its order, including the two parts that are easy to
+leave out:
+
+- the **session-token path**, so a player arriving from the game client is signed in;
+- the **ban check**, which in MVC 5 writes three lines and calls `Response.End()`.
+
+What is deliberately not reproduced is `FormsAuthentication.SetAuthCookie` on every authenticated
+request - MVC 5 re-issues the cookie to slide its expiry, and cookie authentication does that
+itself with `SlidingExpiration`.
+
+The cookie is **not** named `.ASPXAUTH`. Sharing a name with the Framework site would invite the
+two to read each other's cookies, and the ticket formats have nothing in common; the failure
+would be a confusing 500 rather than a clean "not signed in".
+
+### Nothing is bypassed
+
+`AuthServiceClient.VerifyAccountHashed` turns out not to be a service call at all despite the
+name - it is `Account.AccountVerify` and a BCrypt comparison, entirely portable. `ZkAuth.Verify`
+calls the same thing, so signing in on .NET 9 exercises the real check.
+
+The fixture stores `PasswordBcrypt` as NULL for every account, so there is nothing to sign in as.
+`ZkData.Core -- set-password <name> <password>` calls `Account.SetPasswordPlain`, which is
+production code - the same BCrypt-of-MD5 the lobby server writes at registration.
+
+### What the check proves, and how it is kept honest
+
+`run-host.sh` signs in against a running server:
+
+```
+   ok      an anonymous request to an [Auth] page is redirected (302)
+   ok      a wrong password is refused
+   ok      the right password signs in
+   ok      the cookie comes back as an Account (signed in as player01 ...)
+   ok      a signed-in request is refused by ROLE, not by identity (403)
+   ok      a site-banned account is stopped, with the reason
+   ok      and does not reach the page it asked for
+   ok      signing out takes it away again
+```
+
+**302 then 403 on the same URL is the assertion that matters.** A port that recognised nobody
+would answer 302 both times; one that ignored roles would answer 200. Only a port that
+distinguishes "not signed in" from "not allowed" gives those two.
+
+The ban check was confirmed by breaking it on purpose - replacing the lookup with `null` - and
+watching both of its assertions fail. Without that, dropping it would have been invisible, and a
+site-banned account would simply have browsed.
+
+### The sixth misplaced constant
+
+`GlobalConst.SessionTokenVariable` was in the half that needs WCF. Moved, like `PwPhase`, the
+eleven balance and channel constants, `CurrentAccount()`, `PrintTimeRemaining` and
+`SetPlanetOwners` before it.
+
+### What this does not do
+
+- **`HomeController` is still not linked**, so the site's own login page is not ported - it needs
+  `DotNetOpenAuth`. The sign-in form lives in `ZeroKWeb.Host`, which is a harness, and is clearly
+  labelled as such.
+- **Nothing registers or resets a password**, and no external identity provider is wired up.
+- The three status codes are checked; the *pages* an authenticated user reaches are only as good
+  as the 58 views that compile.
+

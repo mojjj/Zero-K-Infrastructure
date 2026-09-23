@@ -88,6 +88,11 @@ namespace ZkData
         // Channel names. Plain strings with no dependencies; they were in GlobalConst.cs only
         // because that is where they were written. LobbyController reads ModeratorChannel four
         // times, and ChannelManager and ChatRelay read all four, so the port needs them here.
+        // The query/form key the game client puts a one-use lobby session token in, so a player
+        // arriving from the client is signed in without typing a password. Read by Global.asax on
+        // the Framework side and by Mvc5Compat/ZkAuthentication.cs on the port's.
+        public const string SessionTokenVariable = "asmallcake";
+
         public const string ModeratorChannel = "zkadmin";
         public const string Top20Channel = "zktop20";
         public const string UserLogChannel = "zklog";

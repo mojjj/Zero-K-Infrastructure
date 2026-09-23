@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using ZeroKWeb.Compat;
 using ZkData;
 
 namespace ZeroKWeb.Host.Controllers
@@ -41,5 +43,58 @@ namespace ZeroKWeb.Host.Controllers
 
         // ForumPath.cshtml calls ActionLink("Forum index", "Index", "Forum"), which now resolves
         // against the REAL ForumController - the thing this harness exists to demonstrate.
+
+        /// <summary>
+        /// A sign-in form, so the site can be looked at as a logged-in user.
+        ///
+        /// It lives in the harness rather than in the site because the site's own login is
+        /// HomeController's, and HomeController is not linked - it needs DotNetOpenAuth. What
+        /// this does NOT do is bypass anything: the password goes through ZkAuth.Verify, which is
+        /// Account.AccountVerify and a BCrypt comparison, the same check the real site makes.
+        ///
+        /// Fixture accounts have no password at all (make-fixture.py writes PasswordBcrypt as
+        /// NULL), so give one to an account first:
+        ///
+        ///     ./tools/dotnet.sh run --project ZkData.Core -- set-password player01 zktest
+        /// </summary>
+        [HttpGet]
+        public IActionResult Login(string returnUrl = null) => Content(
+            "<!DOCTYPE html><html><body style='font-family:sans-serif'>"
+            + "<h3>Harness sign-in</h3>"
+            + "<form method='post'>"
+            + "<input name='login' placeholder='account' autofocus /> "
+            + "<input name='password' type='password' placeholder='password' /> "
+            + "<input type='hidden' name='returnUrl' value='" + System.Net.WebUtility.HtmlEncode(returnUrl ?? "") + "' />"
+            + "<button type='submit'>sign in</button>"
+            + "</form>"
+            + "<p>No fixture account has a password until you set one:<br/>"
+            + "<code>./tools/dotnet.sh run --project ZkData.Core -- set-password player01 zktest</code></p>"
+            + "</body></html>", "text/html");
+
+        [HttpPost]
+        public async Task<IActionResult> Login(string login, string password, string returnUrl)
+        {
+            var account = ZkAuth.Verify(login, password);
+            if (account == null) return Content("Invalid login name or password");
+
+            await ZkAuth.SignIn(HttpContext, account);
+            return Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> Logout()
+        {
+            await ZkAuth.SignOut(HttpContext);
+            return Redirect("/");
+        }
+
+        /// <summary>What the site thinks of you, for checking a sign-in worked.</summary>
+        [HttpGet]
+        public IActionResult Whoami() => Content(
+            ZeroKWeb.Global.Account == null
+                ? "not signed in"
+                : "signed in as " + ZeroKWeb.Global.Account.Name
+                  + " (AccountID " + ZeroKWeb.Global.Account.AccountID
+                  + ", AdminLevel " + ZeroKWeb.Global.Account.AdminLevel + ")");
     }
 }
