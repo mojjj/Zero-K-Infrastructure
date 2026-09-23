@@ -31,5 +31,10 @@ trap 'rm -f "$PROPS"' EXIT
     echo "</ItemGroup></Project>"
 } > "$PROPS"
 
+# Checked before anything is built or run: without it a stopped container surfaces as a
+# forty-frame SqlClient stack trace in the middle of the output. Skipped when
+# ZK_CONNECTION_STRING points somewhere else, since then the database is not ours to check.
+if [ -z "${ZK_CONNECTION_STRING:-}" ]; then DB_NAME="${DB_NAME:-zk_test}" ./db/require-db.sh; fi
+
 ZK_CONNECTION_STRING="${ZK_CONNECTION_STRING:-$(DB_NAME="${DB_NAME:-zk_test}" ./db/connection-string.sh)}" \
     ./tools/dotnet.sh run --project ZeroKWeb.Host -- "$@"
