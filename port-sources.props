@@ -21,6 +21,7 @@
     <Compile Include="..\Zero-K.info\AppCode\MemCache.cs" Link="Linked\MemCache.cs" />
     <Compile Include="..\Zero-K.info\AppCode\PlanetwarsEventCreator.cs" Link="Linked\PlanetwarsEventCreator.cs" />
     <Compile Include="..\Zero-K.info\AppCode\ForumPostIndexer.cs" Link="Linked\ForumPostIndexer.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\ForumPostCache.cs" Link="Linked\ForumPostCache.cs" />
     <Compile Include="..\Zero-K.info\ForumParser\**\*.cs" Link="Linked\ForumParser\%(RecursiveDir)%(Filename).cs" />
     <Compile Include="..\Zero-K.info\Models\CommentList.cs" Link="Linked\Models\CommentList.cs" />
     <Compile Include="..\Zero-K.info\AppCode\UniGrid\*.cs" Link="Linked\UniGrid\%(Filename).cs" />

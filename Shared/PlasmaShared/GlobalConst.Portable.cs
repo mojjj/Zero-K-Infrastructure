@@ -44,6 +44,8 @@ namespace ZkData
         public const int MaxUsernameLength = 25;
         public const int MinDurationForElo = 60;
         public const int MinLevelForForumVote = 2;
+        // Beside MinLevelForForumVote, which was already here; PrintPostRating reads both.
+        public const bool OnlyAdminsSeePostVoters = false;
         public const double PlanetMetalPerTurn = 1;
         public const double PlanetWarsEnergyToMetalRatio = 0.0;
         public const double PlanetWarsMaximumIP = 100.0; //maximum IP on each planet

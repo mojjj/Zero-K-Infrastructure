@@ -117,6 +117,13 @@ namespace ZeroKWeb
         /// </summary>
         public static ForumPostIndexer ForumPostIndexer { get; } = new ForumPostIndexer();
 
+        /// <summary>
+        /// The parsed-BBCode cache. The real Global constructs one at application start; nothing
+        /// starts an application here, so it is created on first use. It is a plain dictionary
+        /// keyed by post id and edit time, so an empty one behaves exactly like a cold one.
+        /// </summary>
+        public static ForumPostCache ForumPostCache { get; } = new ForumPostCache();
+
         // Session is opt-in in ASP.NET Core and the ported application has not decided about
         // it yet. False is what an unconfigured request would answer anyway.
         public static bool IsWebLobbyAccess => false;

@@ -860,8 +860,10 @@ namespace ZeroKWeb.Render
                 //
                 // Asserted as absent on purpose: when that template starts compiling this check
                 // fails, which is the reminder to turn it into an assertion that the text IS there.
-                failures += Check(!html.Contains(marker),
-                    "  the post's TEXT is still missing - DisplayTemplates/ForumPost.cshtml does not compile");
+                // Was asserted as ABSENT until DisplayTemplates/ForumPost.cshtml compiled, precisely
+                // so that it would fail when the gap closed and force this line to be written.
+                // It did, and this is that line.
+                failures += Check(html.Contains(marker), "  the post's TEXT rendered, through its display template");
             }
             finally
             {
@@ -891,6 +893,13 @@ namespace ZeroKWeb.Render
             // check, only that the view runs and the model reaches the HTML.
             httpContext.SetEndpoint(new Microsoft.AspNetCore.Http.Endpoint(
                 _ => Task.CompletedTask, Microsoft.AspNetCore.Http.EndpointMetadataCollection.Empty, "render-harness"));
+            // A real request always has these; a bare DefaultHttpContext does not, and
+            // Mvc5Request.Url builds "{Scheme}://{Host}..." out of them - which threw
+            // UriFormatException the moment a view rendered that reads Request.Url, namely the
+            // forum post display template.
+            httpContext.Request.Scheme = "http";
+            httpContext.Request.Host = new HostString("localhost");
+
             PublishAmbient(provider, httpContext);
 
             var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
@@ -967,6 +976,13 @@ namespace ZeroKWeb.Render
             // this was not needed until a second view was rendered.
             httpContext.SetEndpoint(new Microsoft.AspNetCore.Http.Endpoint(
                 _ => Task.CompletedTask, Microsoft.AspNetCore.Http.EndpointMetadataCollection.Empty, "render-harness"));
+            // A real request always has these; a bare DefaultHttpContext does not, and
+            // Mvc5Request.Url builds "{Scheme}://{Host}..." out of them - which threw
+            // UriFormatException the moment a view rendered that reads Request.Url, namely the
+            // forum post display template.
+            httpContext.Request.Scheme = "http";
+            httpContext.Request.Host = new HostString("localhost");
+
             PublishAmbient(provider, httpContext);
 
             var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
