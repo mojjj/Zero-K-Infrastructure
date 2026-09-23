@@ -99,6 +99,13 @@ jobs:
       # first: whether the EF Core model would BUILD this schema, and whether it can READ
       # this data. A relationship with an invented shadow foreign key answers yes to
       # neither, but only the second one fails loudly - which is how it was found.
+      # Placed before the .NET 9 work because it is about the OTHER build: a view edited for the
+      # port can be compiled there and only assumed to be valid on MVC 5, which is the stack
+      # still serving the site. This asks MVC 5's own Razor parser. It restores nothing itself -
+      # build-website.sh above has already pulled Razor 3 into the NuGet cache.
+      - name: Check every view still parses as Razor v3 (MVC 5)
+        run: ./tools/razor-v3-check/check.sh --all
+
       - name: Check the EF Core model against the EF6 schema
         run: ./db/efcore-schema.sh --check
 

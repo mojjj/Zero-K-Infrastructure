@@ -2360,3 +2360,87 @@ diverged                  3
 child-action              2
 ```
 
+## @helper, and the first time an MVC 5 view edit could be checked
+
+```
+razor-language   9 -> 1
+```
+
+The one left is `Forum/Thread.cshtml`, which is `RZ1031` - a tag helper in an attribute area, a
+different problem.
+
+### The rewrite is single-source, and that is a measured claim
+
+`@helper` does not exist in ASP.NET Core. The replacement is a **templated Razor delegate**:
+
+```cshtml
+Func<LobbyChatHistory, object> TxtChatCol =
+    @<text>@if (item.IsEmote) { <span style="color: violet">@item.Text</span> }
+           else { <span>@item.Text</span> }</text>;
+```
+
+`UniGrid.AddCol` takes a `Func<T, object>`, which an `@helper`-generated method satisfied by
+returning `HelperResult`; a delegate satisfies it directly. The parameter of a templated delegate
+is always called `item`, so bodies are rewritten to use that name.
+
+**Both stacks accept this**, so the views are edited in place and there is no new divergence.
+Until now that would have been a guess.
+
+### tools/razor-v3-check
+
+This repository has said from the start that nothing here can check an MVC 5 view, and has
+treated every view edit as unverifiable on the Framework side - the side still serving the site.
+That is true of **compilation**: mono ships no `aspnet_compiler.exe`. It is not true of
+**syntax**. `System.Web.Razor` 3.2.3 is already in the NuGet cache `build-website.sh` restores,
+and its parser will say what Razor v3 accepts.
+
+```
+./tools/razor-v3-check/check.sh --all
+```
+
+117 views, and CI runs it. Two notes on getting it working:
+
+- The bare `RazorEngineHost` **throws** on `@helper` rather than reporting it, which would have
+  made every `@helper` view look like a crash in the tool instead of a finding.
+  `WebPageRazorHost` is the host MVC 5 actually uses.
+- It is **parse-level only**. `@await Component.InvokeAsync("X")` parses here perfectly happily -
+  it is syntactically fine and would fail to *compile*, which this never sees.
+
+It earned its place immediately: it rejected a nested `@{ }` I had written into
+`PostHistoryIndex.cshtml`, which ASP.NET Core's parser tolerates and Razor v3 does not. That
+would have compiled on .NET 9, passed every check in this repository, and broken the live site.
+
+### And the C# compiler caught what the parser could not
+
+Four of the eight views then failed on .NET 9 with
+
+```
+CS0841: Cannot use local variable 'StickyMark' before it is declared
+```
+
+An `@helper` is a generated **method**, callable before its declaration. A delegate is a
+**local**, and is not. The declarations had to move above the grid setup that uses them - which
+is a real behavioural difference between the two constructs, not a formatting preference.
+
+### Where the eight views went
+
+Not to `compiles`. They report their real blockers now:
+
+| view | now blocked on |
+| --- | --- |
+| `Lobby/LobbyChatMessages`, `LobbyChatHistory` | `UniGrid`, `GridHelpers` |
+| `Clans/ClansIndex`, `Engines/EnginesIndex` | unported controller types |
+| `Contributions/ContributionsIndex`, `Forum/ForumIndex` | `UniGrid`, `GridHelpers` |
+| `PlanetwarsAdmin/PlanetwarsAdminIndex`, `PostHistory/PostHistoryIndex` | `UniGrid`, `GridHelpers` |
+
+### The next cluster is the grid
+
+`Zero-K.info/AppCode/UniGrid/` is 447 lines using `MvcHtmlString`, and
+`Zero-K.info/App_Code/GridHelpers.cshtml` is 124 lines with **seven more `@helper` blocks**.
+Between them they block **14 views**.
+
+`GridHelpers` is the harder half and is not the same problem as the ones just solved: it is an
+`App_Code` helper *page*, a WebPages feature with no ASP.NET Core equivalent at all. A view's
+`@helper` becomes a local delegate; a helper page has to become a class or a component, and
+`HelperPage.cs` exists only to give it access to `Html`.
+

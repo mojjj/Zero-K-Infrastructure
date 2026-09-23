@@ -9,16 +9,20 @@
     grid.AddCol("Platforms", x => string.Join(", ", x.Platforms));
     grid.AddCol("Default", DefEngine).SetSort(x => x.IsDefault);
 }
-@helper DefEngine(EnginesController.EngineItem item)
-{
-    if (item.IsDefault)
-    {
-        <b style="color: red">*DEFAULT*</b>  @Html.ActionLink("rebuild steam", "MakeDefault", new { engine = item.Name });
-    }
-    else
-    {
-        @Html.ActionLink("make default", "MakeDefault", new {engine=item.Name});
-    }
+@{
+    // Templated Razor delegates, in place of @helper blocks. @helper does not exist in ASP.NET
+    // Core; this form parses in BOTH Razor v3 and the .NET 9 generator, which
+    // tools/razor-v3-check/check.sh establishes rather than assumes. A templated delegate's
+    // parameter is always called `item`.
+    Func<EnginesController.EngineItem, object> DefEngine =
+        @<text>@if (item.IsDefault)
+        {
+            <b style="color: red">*DEFAULT*</b>  @Html.ActionLink("rebuild steam", "MakeDefault", new { engine = item.Name });
+        }
+        else
+        {
+            @Html.ActionLink("make default", "MakeDefault", new { engine = item.Name });
+        }</text>;
 }
 
 <div id="grid">
