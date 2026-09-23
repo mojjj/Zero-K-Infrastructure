@@ -232,6 +232,18 @@ namespace ZeroKWeb.Render
             return CheckEqual(actual, expected, what);
         }
 
+        /// <summary>
+        /// Makes the request this harness built the ambient one, the way an ASP.NET Core
+        /// application does through middleware. Global reads it, and so does the
+        /// System.Web.HttpContext.Current shim that UniGrid's constructor goes through.
+        /// </summary>
+        private static void PublishAmbient(IServiceProvider provider, DefaultHttpContext httpContext)
+        {
+            var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+            accessor.HttpContext = httpContext;
+            ZeroKWeb.Global.Configure(accessor);
+        }
+
         /// <summary>Finds a repo-relative file by walking up from the binary.</summary>
         private static string FindUpwards(string relative)
         {
@@ -567,6 +579,7 @@ namespace ZeroKWeb.Render
                 failures += await CheckEventsComponent();
                 failures += await CheckMatchMakerAuthorization();
                 failures += await CheckDivergedGalaxy(galaxyID, names);
+                failures += await CheckForumPostList();
             }
             finally
             {
@@ -770,6 +783,99 @@ namespace ZeroKWeb.Render
         }
 
         /// <summary>
+        /// ForumPostList, the first view component written and the last one to be run.
+        ///
+        /// It was written when PortedViews was introduced, as the reference for the divergence
+        /// mechanism, and could not be exercised: Forum/PostList.cshtml did not compile, because
+        /// it calls GridHelpers. That is what the grid work cleared, so this closes the gap - all
+        /// four written components now run, not three.
+        ///
+        /// It is also the only one whose CALLER is diverged: Shared/CommentList.cshtml is the
+        /// view that invokes it, and PortedViews holds the .NET 9 copy. What is checked here is
+        /// the component; the diverged Galaxy check covers a diverged view invoking components.
+        ///
+        /// The fixture has 22 forum categories and no threads or posts, so a thread and a post
+        /// are written here and removed afterwards - committed rather than in a transaction,
+        /// because the component opens its own ZkDataContext and cannot see another connection's
+        /// uncommitted rows.
+        /// </summary>
+        private static async Task<int> CheckForumPostList()
+        {
+            Console.WriteLine();
+            var marker = "RenderCheckPost-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            var title = "RenderCheckThread-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+            int threadID;
+            using (var db = new ZkDataContext())
+            {
+                var category = db.ForumCategories.OrderBy(c => c.ForumCategoryID).First();
+                var author = db.Accounts.OrderBy(a => a.AccountID).First();
+                var thread = new ForumThread
+                {
+                    Title = title,
+                    Created = DateTime.UtcNow,
+                    LastPost = DateTime.UtcNow,
+                    ForumCategoryID = category.ForumCategoryID,
+                    CreatedAccountID = author.AccountID,
+                    LastPostAccountID = author.AccountID,
+                    PostCount = 1,
+                    ViewCount = 0,
+                    IsLocked = false,
+                    IsPinned = false,
+                };
+                thread.ForumPosts.Add(new ForumPost
+                {
+                    Text = marker,
+                    Created = DateTime.UtcNow,
+                    AuthorAccountID = author.AccountID,
+                    Upvotes = 0,
+                    Downvotes = 0,
+                });
+                db.ForumThreads.Add(thread);
+                db.SaveChanges();
+                threadID = thread.ForumThreadID;
+            }
+
+            var failures = 0;
+            try
+            {
+                var html = await InvokeViewComponent("ForumPostList", new { threadID });
+
+                // One row, for the one seeded post: the query ran and the grid walked it.
+                var rows = System.Text.RegularExpressions.Regex.Matches(html, "<tr class=\"(odd|even)\">").Count;
+                failures += Check(rows == 1, "  the grid rendered one row for the seeded post (" + rows + ")");
+                failures += Check(html.Contains("<div id='gposts'>") || html.Contains("id=\"gposts\""),
+                    "  PostList.cshtml rendered its body");
+                failures += Check(html.Contains("grid_table"),
+                    "  the grid partials rendered inside it");
+                failures += Check(html.Contains("data-ajax=\"true\""),
+                    "  its Ajax form reached the page");
+                failures += Check(!html.Contains("@"), "  no unprocessed Razor markers survived");
+
+                // And what is NOT there, stated rather than left to be discovered. The row's cell
+                // is empty: PostList renders each post with Html.DisplayFor, which looks for
+                // Views/Shared/DisplayTemplates/ForumPost.cshtml - a view that does not compile
+                // yet (CS1061) and is therefore not in this harness's set. ASP.NET Core falls back
+                // to a default display rather than failing, so the page renders and says nothing.
+                //
+                // Asserted as absent on purpose: when that template starts compiling this check
+                // fails, which is the reminder to turn it into an assertion that the text IS there.
+                failures += Check(!html.Contains(marker),
+                    "  the post's TEXT is still missing - DisplayTemplates/ForumPost.cshtml does not compile");
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var thread = db.ForumThreads.FirstOrDefault(t => t.ForumThreadID == threadID);
+                    // ForumPosts cascade on delete, so the post goes with the thread.
+                    if (thread != null) { db.ForumThreads.Remove(thread); db.SaveChanges(); }
+                }
+            }
+            return failures;
+        }
+
+        /// <summary>
         /// Invokes a view component by name through the MVC infrastructure, exactly as
         /// <c>@await Component.InvokeAsync("Name")</c> does from a view.
         /// </summary>
@@ -785,6 +891,7 @@ namespace ZeroKWeb.Render
             // check, only that the view runs and the model reaches the HTML.
             httpContext.SetEndpoint(new Microsoft.AspNetCore.Http.Endpoint(
                 _ => Task.CompletedTask, Microsoft.AspNetCore.Http.EndpointMetadataCollection.Empty, "render-harness"));
+            PublishAmbient(provider, httpContext);
 
             var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
             var viewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary());
@@ -831,6 +938,11 @@ namespace ZeroKWeb.Render
             // factory hands back the router-based UrlHelper, which throws "Could not find an
             // IRouter associated with the ActionContext".
             services.AddRouting();
+            // The ambient request, which Global and the System.Web.HttpContext.Current shim both
+            // read. UniGrid's constructor takes its page number and sort column from it - a grid
+            // is built inside a view and there is nothing to pass it - so without this every
+            // grid-bearing view dies with a NullReferenceException in the constructor.
+            services.AddHttpContextAccessor();
             services.AddMvcCore().AddRazorViewEngine().AddViews()
                 .AddApplicationPart(typeof(Program).Assembly);
             services.AddSingleton<System.Diagnostics.DiagnosticSource>(new System.Diagnostics.DiagnosticListener("zk"));
@@ -855,6 +967,7 @@ namespace ZeroKWeb.Render
             // this was not needed until a second view was rendered.
             httpContext.SetEndpoint(new Microsoft.AspNetCore.Http.Endpoint(
                 _ => Task.CompletedTask, Microsoft.AspNetCore.Http.EndpointMetadataCollection.Empty, "render-harness"));
+            PublishAmbient(provider, httpContext);
 
             var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
             var viewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary())
