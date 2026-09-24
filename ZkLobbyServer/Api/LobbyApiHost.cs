@@ -40,7 +40,8 @@ namespace ZkLobbyServer.Api
         /// <summary>The prefix actually bound, which matters when the port was left to the OS.</summary>
         public string Prefix { get; }
 
-        public LobbyApiHost(ILobbyServerApi api, string secret, string prefix = DefaultPrefix)
+        public LobbyApiHost(ILobbyServerApi api, string secret, string prefix = DefaultPrefix,
+                            bool allowInsecureTransport = false)
         {
             this.api = api ?? throw new ArgumentNullException(nameof(api));
 
@@ -52,6 +53,7 @@ namespace ZkLobbyServer.Api
             this.secret = secret;
 
             Prefix = prefix.EndsWith("/") ? prefix : prefix + "/";
+            LobbyApiProtocol.RequireTrustworthyTransport(Prefix, allowInsecureTransport);
             listener.Prefixes.Add(Prefix);
         }
 

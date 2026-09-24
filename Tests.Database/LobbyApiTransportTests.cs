@@ -146,6 +146,62 @@ namespace Tests.Database
             Assert.AreEqual("http://+:9000/", LobbyApiConfiguration.ListenPrefix("http://+:9000/"));
         }
 
+        [TestMethod]
+        public void Plaintext_off_loopback_is_refused()
+        {
+            // Both the shared secret and the single sign-on token cross this connection.
+            foreach (var endpoint in new[]
+                     {
+                         "http://lobby.internal:8200/",
+                         "http://10.0.0.5:8200/",
+                         "http://+:8200/",          // HttpListener wildcard - every interface
+                         "http://*:8200/",
+                     })
+            {
+                var ex = Assert.ThrowsException<InvalidOperationException>(
+                    () => LobbyApiProtocol.RequireTrustworthyTransport(endpoint, allowInsecure: false),
+                    endpoint + " should be refused");
+                StringAssert.Contains(ex.Message, LobbyApiProtocol.AllowInsecureKey);
+            }
+        }
+
+        [TestMethod]
+        public void Loopback_and_https_are_allowed()
+        {
+            foreach (var endpoint in new[]
+                     {
+                         "http://127.0.0.1:8200/",
+                         "http://localhost:8200/",
+                         "http://[::1]:8200/",
+                         "https://lobby.internal:8200/",
+                         "https://10.0.0.5:8200/",
+                     })
+                LobbyApiProtocol.RequireTrustworthyTransport(endpoint, allowInsecure: false);
+        }
+
+        [TestMethod]
+        public void The_insecure_opt_out_has_to_be_said()
+        {
+            // Reachable, never accidental - the same principle as refusing to listen without a
+            // secret. With the flag set, the refusal stops.
+            LobbyApiProtocol.RequireTrustworthyTransport("http://10.0.0.5:8200/", allowInsecure: true);
+        }
+
+        [TestMethod]
+        public void A_session_token_is_unpredictable_and_url_safe()
+        {
+            var tokens = Enumerable.Range(0, 200).Select(_ => LobbyApiProtocol.NewSessionToken()).ToList();
+
+            Assert.AreEqual(tokens.Count, tokens.Distinct().Count(), "tokens repeated");
+            foreach (var token in tokens)
+            {
+                // 256 bits base64url, so 43 characters with the padding stripped.
+                Assert.AreEqual(43, token.Length, token);
+                Assert.IsTrue(token.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'),
+                    "must survive a query string and a cookie unescaped: " + token);
+            }
+        }
+
         // ---- helpers ------------------------------------------------------------------------
 
         private static List<MethodInfo> MembersOf() => LobbyApiProtocol.Members.Values

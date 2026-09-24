@@ -3921,3 +3921,42 @@ The first wiring passed `null` for the server and used `server?.GhostSay(...)`, 
 announcement would have been dropped while the events still appeared on the site - the only
 symptom being a clan never hearing about its own planet. It now throws if the server was never
 attached.
+
+## Phase 1: the single sign-on token
+
+`RedeemSessionToken` was the last item, recorded as "a bearer credential exchange - whatever
+carries it has to be as trusted as the token table is". Now that there IS a wire, that is a
+concrete requirement rather than a note.
+
+**The transport refuses plaintext off loopback.** Both the shared secret, in every request's
+Authorization header, and the sign-on token cross this connection. On loopback nothing leaves the
+machine; anywhere else, plaintext hands both to whoever is on the path. `https` or loopback, or it
+does not start - host and client both check, so a misconfiguration is caught at whichever end is
+wrong.
+
+HttpListener's wildcards are handled explicitly: `http://+:8200/` and `http://*:8200/` look
+hostless and bind every interface the machine has, so they are not loopback.
+
+**The opt-out exists and has to be said.** `LobbyApiAllowInsecureTransport` covers the real case -
+a private segment where a certificate is not available - on the same principle as the host
+refusing to listen without a secret: the unsafe configuration is reachable, never accidental.
+
+**The token comes from a cryptographic generator now**, 256 bits base64url, replacing
+`Guid.NewGuid().ToString()`. A version-4 GUID does come from a strong generator on .NET, so this
+is not a break - but `Guid` is a *uniqueness* primitive and nothing in its contract promises
+unpredictability, which is the property a bearer credential needs. Being right by accident is not
+a thing to leave in an authentication path, and the replacement costs nothing. Clients treat the
+token as opaque, so the change in shape reaches nothing that reads it.
+
+### Two things deliberately not changed
+
+**No expiry.** A token lives until it is redeemed - which removes it, so it is single use - or
+until the account logs out. A token captured before its legitimate use is still good.
+
+**It travels in a query string.** `ZeroKLobby/BrowserInterop.cs` puts it in the URL when opening
+the site in the embedded browser, which is where URLs end up in history, referer headers and
+logs.
+
+Both are the lobby protocol and the game client rather than the process split, and changing either
+alters behaviour a shipped client depends on. They are written down here and in HOSTING.md rather
+than changed in a Phase 1 branch.

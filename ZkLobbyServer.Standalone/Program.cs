@@ -34,11 +34,14 @@ namespace ZkLobbyServer.Standalone
             // The connection string comes from GlobalConst, exactly as it does for the website -
             // this process deliberately introduces no second way to configure the database.
             string url, secret, prefix;
+            bool allowInsecure;
             try
             {
                 url = MiscVar.GetValue(LobbyApiConfiguration.UrlKey);
                 secret = MiscVar.GetValue(LobbyApiConfiguration.SecretKey);
                 prefix = LobbyApiConfiguration.ListenPrefix(MiscVar.GetValue(LobbyApiConfiguration.ListenPrefixKey));
+                allowInsecure = LobbyApiConfiguration.AllowInsecureTransport(
+                    MiscVar.GetValue(LobbyApiProtocol.AllowInsecureKey));
             }
             catch (Exception ex)
             {
@@ -80,7 +83,7 @@ namespace ZkLobbyServer.Standalone
             eventCreator.Attach(runner.ZkLobbyServer);
             runner.Run();
 
-            using (var apiHost = new LobbyApiHost(new InProcessLobbyServerApi(runner.ZkLobbyServer), secret, prefix))
+            using (var apiHost = new LobbyApiHost(new InProcessLobbyServerApi(runner.ZkLobbyServer), secret, prefix, allowInsecure))
             {
                 apiHost.Start();
                 Console.WriteLine("lobby server running; API on " + apiHost.Prefix);

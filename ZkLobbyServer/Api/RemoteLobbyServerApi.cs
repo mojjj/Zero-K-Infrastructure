@@ -35,7 +35,8 @@ namespace ZkLobbyServer.Api
         private readonly HttpClient client;
         private readonly string baseUrl;
 
-        public RemoteLobbyServerApi(string baseUrl, string secret, HttpMessageHandler handler = null)
+        public RemoteLobbyServerApi(string baseUrl, string secret, HttpMessageHandler handler = null,
+                                    bool allowInsecureTransport = false)
         {
             if (string.IsNullOrWhiteSpace(baseUrl))
                 throw new ArgumentException("the lobby API needs somewhere to call", nameof(baseUrl));
@@ -43,6 +44,7 @@ namespace ZkLobbyServer.Api
             if (string.IsNullOrWhiteSpace(secret))
                 throw new ArgumentException("the lobby API client needs the shared secret", nameof(secret));
 
+            LobbyApiProtocol.RequireTrustworthyTransport(baseUrl, allowInsecureTransport);
             this.baseUrl = baseUrl.TrimEnd('/');
             client = handler == null ? new HttpClient() : new HttpClient(handler);
             client.DefaultRequestHeaders.Authorization =

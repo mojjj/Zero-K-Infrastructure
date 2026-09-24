@@ -206,8 +206,18 @@ What this does **not** mean is that the server can move out today. Still in the 
   It walks each member's types transitively, so a DTO holding an entity two levels down is
   caught too - which reading signatures does not do, and which is how the list came to say
   six when an earlier hand-written version of this section said two.
-- **`RedeemSessionToken`** is a bearer credential exchange. Whatever carries it has to be
-  as trusted as the token table is.
+- ~~`RedeemSessionToken` is a bearer credential exchange.~~ **Handled, on the wire.** The
+  transport refuses plaintext off loopback - the shared secret and the sign-on token both
+  cross it - so it needs `https` unless both ends are on the machine. A private segment
+  without a certificate is still deployable by setting the
+  `LobbyApiAllowInsecureTransport` MiscVar, which has to be said rather than fallen into.
+  The token itself now comes from a cryptographic generator rather than `Guid.NewGuid()`.
+
+  **Two properties of the token are unchanged and are not the transport's business.** It has
+  no expiry - it lives until redeemed, which is single-use, or until the account logs out -
+  and the game client passes it to the website in a **query string**
+  (`ZeroKLobby/BrowserInterop.cs`), which is where URLs end up in history, referers and
+  logs. Both are the lobby protocol rather than Phase 1, and both are worth deciding on.
 - **Shared statics the seam never modelled.** `Ratings.RatingSystems` and
   `Ratings.MapRatings` are filled only by `ZkLobbyServer.ZkLobbyServer`, and eight website
   files read them; `Global.AutoRegistrator`, `Global.SteamDepotGenerator` and
