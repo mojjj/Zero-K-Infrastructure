@@ -34,6 +34,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZkData", "ZkData\ZkData.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZkLobbyServer", "ZkLobbyServer\ZkLobbyServer.csproj", "{1A6022DF-9AF2-4BA3-A61C-87BE507A6F4A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZkLobbyServer.Standalone", "ZkLobbyServer.Standalone\ZkLobbyServer.Standalone.csproj", "{7F3D1C2A-6B4E-4F58-9A21-0C5D8E7B4A13}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AutoRegistrator", "AutoRegistrator\AutoRegistrator.csproj", "{01FAEBBC-02E0-42FE-972C-F17045BA3807}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DotNetWikiBot", "DotNetWikiBot\DotNetWikiBot.csproj", "{016C2B52-AFD5-4A3A-A960-E9FB51C014BB}"
@@ -126,6 +128,10 @@ Global
 		{1A6022DF-9AF2-4BA3-A61C-87BE507A6F4A}.Release|x64.Build.0 = Release|x64
 		{1A6022DF-9AF2-4BA3-A61C-87BE507A6F4A}.Debug|x64.ActiveCfg = Debug|x64
 		{1A6022DF-9AF2-4BA3-A61C-87BE507A6F4A}.Debug|x64.Build.0 = Debug|x64
+		{7F3D1C2A-6B4E-4F58-9A21-0C5D8E7B4A13}.Release|x64.ActiveCfg = Release|x64
+		{7F3D1C2A-6B4E-4F58-9A21-0C5D8E7B4A13}.Release|x64.Build.0 = Release|x64
+		{7F3D1C2A-6B4E-4F58-9A21-0C5D8E7B4A13}.Debug|x64.ActiveCfg = Debug|x64
+		{7F3D1C2A-6B4E-4F58-9A21-0C5D8E7B4A13}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

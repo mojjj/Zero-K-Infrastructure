@@ -18,6 +18,7 @@ using LobbyClient;
 using PlasmaShared;
 using ZkData;
 using ZkLobbyServer;
+using ZkLobbyServer.Api;
 using Ratings;
 
 namespace ZeroKWeb
@@ -159,13 +160,35 @@ namespace ZeroKWeb
             AwardCalculator.RecomputeNow();
 
             var sitePath = mvcApplication.Server.MapPath("~");
-            ZkServerRunner = new ServerRunner(sitePath, new PlanetwarsEventCreator());
-            Server = ZkServerRunner.ZkLobbyServer;
-            LobbyApi = new ZkLobbyServer.InProcessLobbyServerApi(Server);
 
-            Trace.TraceInformation("Starting lobby server");
-            ZkServerRunner.Run();
-            listener.ZkLobbyServer = Server;
+            // Phase 1: the lobby server runs here, or somewhere else.
+            //
+            // Setting the LobbyApiUrl MiscVar is the entire switch. Unset - which is every
+            // deployment that has not been changed on purpose - means this process starts the
+            // server as it always has, and nothing below behaves differently.
+            //
+            // Set, and this process starts NO lobby server. That is the point: two servers
+            // against one database would both accept logins and both run PlanetWars turns.
+            // Server and ZkServerRunner stay null, and the things that use them directly -
+            // the trace listener and the tourney console - are the remaining in-process
+            // dependencies, which is why ILobbyServerApiInProcess still exists.
+            var lobbyApiUrl = MiscVar.GetValue(LobbyApiConfiguration.UrlKey);
+            if (LobbyApiConfiguration.IsRemote(lobbyApiUrl))
+            {
+                Trace.TraceInformation("Using a lobby server at {0}", lobbyApiUrl);
+                LobbyApi = LobbyApiConfiguration.CreateClient(
+                    lobbyApiUrl, MiscVar.GetValue(LobbyApiConfiguration.SecretKey));
+            }
+            else
+            {
+                ZkServerRunner = new ServerRunner(sitePath, new PlanetwarsEventCreator());
+                Server = ZkServerRunner.ZkLobbyServer;
+                LobbyApi = new ZkLobbyServer.InProcessLobbyServerApi(Server);
+
+                Trace.TraceInformation("Starting lobby server");
+                ZkServerRunner.Run();
+                listener.ZkLobbyServer = Server;
+            }
 
             ForumPostIndexer = new ForumPostIndexer();
 

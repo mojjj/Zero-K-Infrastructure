@@ -104,6 +104,48 @@ namespace Tests.Database
                 Assert.IsFalse(LobbyApiProtocol.Members.ContainsKey(name), name + " is addressable");
         }
 
+        [TestMethod]
+        public void Unset_configuration_means_the_website_runs_its_own_lobby_server()
+        {
+            // The default has to be the behaviour every existing deployment already has, or
+            // upgrading changes where the lobby server runs without anyone asking for it.
+            foreach (var url in new[] { null, "", "   " })
+                Assert.IsFalse(LobbyApiConfiguration.IsRemote(url), "url=" + (url ?? "(null)"));
+
+            Assert.IsTrue(LobbyApiConfiguration.IsRemote("http://lobby.internal:8200/"));
+        }
+
+        [TestMethod]
+        public void A_url_without_a_secret_refuses_rather_than_falling_back()
+        {
+            // Falling back to in-process would start a SECOND lobby server beside the one already
+            // running - two of them accepting logins against one database. Refusing is the safer
+            // failure, and the message has to say which MiscVar is missing.
+            foreach (var secret in new[] { null, "", "   " })
+            {
+                var ex = Assert.ThrowsException<InvalidOperationException>(
+                    () => LobbyApiConfiguration.CreateClient("http://lobby.internal:8200/", secret));
+                StringAssert.Contains(ex.Message, LobbyApiConfiguration.SecretKey);
+            }
+        }
+
+        [TestMethod]
+        public void Asking_for_a_client_with_no_url_is_a_programming_error()
+        {
+            var ex = Assert.ThrowsException<InvalidOperationException>(
+                () => LobbyApiConfiguration.CreateClient(null, "secret"));
+            StringAssert.Contains(ex.Message, LobbyApiConfiguration.UrlKey);
+        }
+
+        [TestMethod]
+        public void A_standalone_server_listens_on_loopback_unless_told_otherwise()
+        {
+            Assert.AreEqual(LobbyApiHost.DefaultPrefix, LobbyApiConfiguration.ListenPrefix(null));
+            StringAssert.Contains(LobbyApiConfiguration.ListenPrefix(null), "127.0.0.1",
+                "a privileged API that reaches the world by default is a default nobody chose");
+            Assert.AreEqual("http://+:9000/", LobbyApiConfiguration.ListenPrefix("http://+:9000/"));
+        }
+
         // ---- helpers ------------------------------------------------------------------------
 
         private static List<MethodInfo> MembersOf() => LobbyApiProtocol.Members.Values
