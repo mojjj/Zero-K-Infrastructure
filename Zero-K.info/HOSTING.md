@@ -165,13 +165,29 @@ What this does **not** mean is that the server can move out today. Still in the 
 - **No transport.** Every member is satisfied by a method call in this process. Someone
   has to choose one and write the remote implementation; the interface only guarantees
   that each member *could* be served by one.
-- **`ReportUser(ZkDataContext db, ...)`** takes the caller's live DbContext, so it needs
-  the caller's transaction. It is crossable only in the sense that the remote version is
-  a different method - "report user X", with the server opening its own context.
-- **`AddPlanetWarsAttackOption(Planet, int)`** passes an EF entity. That works because
-  `ZkData` is shared, not because passing entities between processes is a good idea.
+- **Six members pass EF entities**, which works because `ZkData` is shared and the two
+  halves are one process - not because passing entities between processes is a good idea.
+  They are listed in `ZkLobbyServer/seam-inventory.txt`, which is **generated**:
+
+      dotnet run --project ZkData.Core -- seam --update
+
+  and checked on every pull request. The earlier version of this section named two of the
+  six, `ReportUser` and `AddPlanetWarsAttackOption`, and missed `PublishAccountUpdate`,
+  `PublishUserProfileUpdate`, `AddClanChannel` and `CanJoinChannel`. That is why the list
+  is derived now: the check walks each member's types transitively, so a DTO holding an
+  entity two levels down is caught too, which reading signatures does not do.
+- **`ReportUser`** additionally takes the caller's live `ZkDataContext`, so it needs the
+  caller's transaction. It is crossable only in the sense that the remote version is a
+  different method - "report user X", with the server opening its own context.
 - **`RedeemSessionToken`** is a bearer credential exchange. Whatever carries it has to be
   as trusted as the token table is.
+- **Shared statics the seam never modelled.** `Ratings.RatingSystems` and
+  `Ratings.MapRatings` are filled only by `ZkLobbyServer.ZkLobbyServer`, and eight website
+  files read them; `Global.AutoRegistrator`, `Global.SteamDepotGenerator` and
+  `PlasmaShared.ContentService` are the same shape. None are API calls, so no count of
+  `ILobbyServerApi` members finds them - they were found by requesting the pages on the
+  .NET 9 port and getting 500s. The login rate limiter (`VerifyIp`/`LogIpFailure`) IS on
+  the interface, but its state is the server's memory, so the port has none today.
 
 The remaining `ILobbyServerApiInProcess` members are still implemented and still used -
 by the lobby server itself, and by the `Fixer` tool through `Global.Server`. What changed

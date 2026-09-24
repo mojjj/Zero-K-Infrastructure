@@ -48,6 +48,13 @@ jobs:
       - name: Check the Razor view port inventory
         run: ./tools/view-port-report.sh --check
 
+      # Phase 1's gate. ILobbyServerApi is already compiled by projects with no reference to
+      # ZkLobbyServer, which catches a member naming a SERVER type; this catches the other half,
+      # a member passing an EF ENTITY, which compiles on both sides and only works because the
+      # two halves share a process. It walks the types transitively and needs no database.
+      - name: Check the lobby-server seam
+        run: dotnet run --project ZkData.Core -- seam --check
+
       - name: Test report
         # run even if the tests failed, but not for a PR from a fork
         if: (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request') && (success() || failure())

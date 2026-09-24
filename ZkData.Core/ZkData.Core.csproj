@@ -104,6 +104,9 @@
     <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\ModMissionSlot.cs" Link="Linked\UnitSyncLib\ModMissionSlot.cs" />
     <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\VfsMode.cs" Link="Linked\UnitSyncLib\VfsMode.cs" />
     <Compile Include="..\ZkData\PayPal\PayPalInterface.cs" Link="Linked\PayPalInterface.cs" />
+    <Compile Include="..\ZkLobbyServer\PlanetWarsApi.cs" Link="Linked\PlanetWarsApi.cs" />
+    <Compile Include="..\ZkLobbyServer\TourneyApi.cs" Link="Linked\TourneyApi.cs" />
+    <Compile Include="..\ZkLobbyServer\ILobbyServerApi.cs" Link="Linked\ILobbyServerApi.cs" />
     <Compile Include="..\ZkData\SpringFilesUnitsyncAttempt.cs" Link="Linked\SpringFilesUnitsyncAttempt.cs" />
     <Compile Include="..\ZkData\SteamWebApi.cs" Link="Linked\SteamWebApi.cs" />
     <Compile Include="..\ZkData\Secrets.cs" Link="Linked\Secrets.cs" />

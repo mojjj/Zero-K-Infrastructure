@@ -54,7 +54,14 @@ namespace ZkData.Core
         public static int Main(string[] args)
         {
             var command = args.FirstOrDefault() ?? "summary";
-            if (string.IsNullOrEmpty(ZkDataContext.ConnectionString))
+
+            // `seam` reads db.Model, which EF Core builds from the entity classes without ever
+            // opening a connection - so it runs on a bare machine, and runs in the fast CI job
+            // rather than behind a SQL Server container. Giving it a connection string it does
+            // not use would have been the easy way to skip writing this comment.
+            if (command == "seam") ZkDataContext.ConnectionString = ZkDataContext.ConnectionString
+                ?? "Server=(seam-check-has-no-database);Database=none;Trusted_Connection=false";
+            else if (string.IsNullOrEmpty(ZkDataContext.ConnectionString))
             {
                 Console.Error.WriteLine("Set ZK_CONNECTION_STRING first - see db/README.md.");
                 return 2;
@@ -78,6 +85,12 @@ namespace ZkData.Core
 
                         case "write":
                             return WriteVerification.Run(db);
+
+                        // Phase 1's gate. Needs no database, but lives here because this is where
+                        // the EF Core model is - the entity set it refuses is read off that model
+                        // rather than listed by hand.
+                        case "seam":
+                            return SeamVerification.Run(db, args.Skip(1).FirstOrDefault() ?? "--check");
 
                         case "rate":
                             return RatingRun.Run(db, args.Skip(1).FirstOrDefault());
