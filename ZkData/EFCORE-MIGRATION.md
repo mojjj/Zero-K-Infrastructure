@@ -2949,3 +2949,48 @@ HTML.
 
 That is the whole forum rendering path, end to end, from rows.
 
+## The last razor-language view, and two empty buckets
+
+```
+razor-language   1 -> 0
+child-action     0
+```
+
+`Forum/Thread.cshtml` had `RZ1031`: *the tag helper 'option' must not have C# in the element's
+attribute declaration area.*
+
+```cshtml
+<option value="@c.ForumCategoryID" @(c.ForumCategoryID == ... ? "selected='selected'" : "")>
+```
+
+`<option>` is a tag-helper target in ASP.NET Core, and the parser refuses bare C# in the
+attribute area of one - whether or not a tag helper would actually apply, which here it would
+not, because the enclosing `<select>` has no `asp-for`.
+
+Rewritten as a **conditional attribute**:
+
+```cshtml
+<option value="@c.ForumCategoryID" selected="@(cond ? "selected" : null)">
+```
+
+Both Razor versions omit an attribute whose value is null, so this is single-source and needs no
+divergence for the syntax. `tools/razor-v3-check` confirms MVC 5 accepts it, which is the whole
+reason that tool exists.
+
+One cosmetic difference: MVC 5 rendered `selected='selected'` with single quotes and left a
+trailing space where the expression produced `""`. It now renders `selected="selected"` or omits
+the attribute. Semantically identical HTML; worth stating rather than discovering.
+
+The view also carried a child action, so it is diverged like the other eight - `ForumPostList`
+already existed.
+
+### Where that leaves the buckets
+
+`razor-language` and `child-action` are both **empty**. Of the two, `razor-language` is the one
+that was described as *"needs rewriting regardless"* when the inventory was built - it was the
+category that could not be shimmed, deferred or worked around, and it is gone.
+
+What remains is 18 views waiting on six controllers that each need a real decision
+(`HttpPostedFileBase`, `SharpCompress`, an MVC 5 download package, `DbCloner`, `AwardCalculator`,
+`DotNetOpenAuth`), and 14 in `other`.
+
