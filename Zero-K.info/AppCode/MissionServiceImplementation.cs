@@ -30,7 +30,7 @@ namespace ZeroKWeb
         private static readonly CommandJsonSerializer serializer = new CommandJsonSerializer(
             Utils.GetAllTypesWithAttribute<ApiMessageAttribute>().Concat(MissionServiceApi.MessageTypes));
 
-        private readonly MissionService service = new MissionService();
+        private readonly MissionServiceLogic service = new MissionServiceLogic();
 
         public async Task<string> Process(string request)
         {

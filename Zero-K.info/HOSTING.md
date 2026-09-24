@@ -141,9 +141,36 @@ risk a typo in each one; it is cosmetic debt and is left alone deliberately.
   one-hour timeout the WCF binding had, because a mission upload is a whole game archive and
   HttpClient defaults to 100 seconds.
 
-  The `.svc` is still hosted, for editors already installed. **It can be removed once
-  enough of them have updated** - which, unlike ContentService.svc, is a decision about a
-  client this repository ships rather than one it cannot see.
+  The `.svc` is still hosted, for editors already installed - ClickOnce updates them when a
+  user next launches the editor, not when the site deploys, so removing it earlier breaks
+  publishing for anyone who has not opened it since.
+
+  **It now says who is still calling it.** Every WCF operation writes a line to `LogEntries`
+  (14 days, visible at `Admin/TraceLogs`), and `SendMission` includes the caller's editor
+  version:
+
+      MissionService.svc (deprecated WCF endpoint): SendMission by someone, mission editor 1.2.3.4
+
+  So the question "has everyone updated?" is answerable from the site's own data:
+
+  ```sql
+  -- anyone still on the WCF endpoint in the last fortnight?
+  SELECT Message FROM LogEntries
+   WHERE Message LIKE 'MissionService.svc (deprecated%' ORDER BY Time DESC;
+
+  -- which editor versions have published at all, either way
+  SELECT MissionEditorVersion, COUNT(*), MAX(ModifiedTime)
+    FROM Missions GROUP BY MissionEditorVersion ORDER BY 3 DESC;
+  ```
+
+  When the first query comes back empty for a while, `MissionService.svc`,
+  `MissionService.svc.cs`'s `MissionService` class and `IMissionService`'s WCF attributes can
+  go in one commit - the operations live in `MissionServiceLogic`, which the JSON endpoint
+  uses and which stays.
+
+  This is the difference between this endpoint and `ContentService.svc`: that one serves
+  clients the repository cannot see, so it needs production access logs; this one reports
+  itself.
 - `ContentService.svc` - obsolete, uncalled from this repository, and **cannot be retired
   from the evidence available here**: it exists for clients deployed before the JSON
   endpoint, so the decision needs production access logs.
