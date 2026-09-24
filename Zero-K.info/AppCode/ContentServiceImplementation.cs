@@ -192,7 +192,7 @@ namespace ZeroKWeb
                     {
                         acc.CanPlayMultiplayer = true;
                         db.SaveChanges();
-                        Global.LobbyApi.PublishAccountUpdate(acc);
+                        Global.LobbyApi.PublishAccountUpdate(acc.AccountID);
                         Global.LobbyApi.GhostPm(acc.Name, "Congratulations! You are now authorized to play MultiPlayer games!");
                     }
                 }

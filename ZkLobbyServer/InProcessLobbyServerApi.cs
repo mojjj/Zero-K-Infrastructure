@@ -53,12 +53,40 @@ namespace ZkLobbyServer
 
         public Task OnServerMapsChanged() => server.OnServerMapsChanged();
 
-        public Task PublishAccountUpdate(Account acc) => server.PublishAccountUpdate(acc);
+        /// <summary>
+        /// Loads the account here rather than taking the caller's. Every call site saves before
+        /// publishing - that was checked, on all nine - so a fresh read sees exactly what was
+        /// committed, and the server stops receiving an entity attached to somebody else's
+        /// context whose navigations lazy-load against it.
+        /// </summary>
+        public async Task PublishAccountUpdate(int accountID)
+        {
+            using (var db = new ZkDataContext())
+            {
+                var acc = db.Accounts.Find(accountID);
+                if (acc != null) await server.PublishAccountUpdate(acc);
+            }
+        }
 
-        public Task PublishUserProfileUpdate(Account acc) => server.PublishUserProfileUpdate(acc);
+        public async Task PublishUserProfileUpdate(int accountID)
+        {
+            using (var db = new ZkDataContext())
+            {
+                var acc = db.Accounts.Find(accountID);
+                if (acc != null) await server.PublishUserProfileUpdate(acc);
+            }
+        }
 
-        public Task ReportUser(ZkDataContext db, Account reporter, Account reported, string report) =>
-            server.ReportUser(db, reporter, reported, report);
+        public async Task ReportUser(int reporterAccountID, int reportedAccountID, string report)
+        {
+            using (var db = new ZkDataContext())
+            {
+                var reporter = db.Accounts.Find(reporterAccountID);
+                var reported = db.Accounts.Find(reportedAccountID);
+                if (reporter == null || reported == null) return;
+                await server.ReportUser(db, reporter, reported, report);
+            }
+        }
 
         public bool IsLobbyConnected(string user) => server.IsLobbyConnected(user);
 
@@ -178,9 +206,29 @@ namespace ZkLobbyServer
 
         public void OnNewsChanged() => server.NewsListManager.OnNewsChanged();
 
-        public void AddClanChannel(Clan clan) => server.ChannelManager.AddClanChannel(clan);
+        public void AddClanChannel(int clanID)
+        {
+            using (var db = new ZkDataContext())
+            {
+                var clan = db.Clans.Find(clanID);
+                if (clan != null) server.ChannelManager.AddClanChannel(clan);
+            }
+        }
 
-        public bool CanJoinChannel(Account acc, string channel) => server.ChannelManager.CanJoin(acc, channel);
+        /// <summary>
+        /// One primary-key read per call, which the old signature did not pay because the website
+        /// handed over an account it had already loaded. That is the honest cost of the seam: a
+        /// remote server would have to read it too, and an authorization check that trusts the
+        /// caller's copy of AdminLevel is not one.
+        /// </summary>
+        public bool CanJoinChannel(int accountID, string channel)
+        {
+            using (var db = new ZkDataContext())
+            {
+                var acc = db.Accounts.Find(accountID);
+                return acc != null && server.ChannelManager.CanJoin(acc, channel);
+            }
+        }
 
         public bool VerifyIp(string ip) => server.LoginChecker.VerifyIp(ip);
 
@@ -190,8 +238,19 @@ namespace ZkLobbyServer
 
         public PwPhase? PlanetWarsPhase => server.PlanetWarsMatchMaker?.Phase;
 
-        public void AddPlanetWarsAttackOption(Planet planet, int attackerFactionId) =>
-            server.PlanetWarsMatchMaker?.AddAttackOption(planet, attackerFactionId);
+        /// <summary>
+        /// Safe to load and hand over: AddAttackOption copies scalars out of the planet into an
+        /// AttackOption and keeps no reference, so nothing outlives this context.
+        /// </summary>
+        public void AddPlanetWarsAttackOption(int planetID, int attackerFactionId)
+        {
+            if (server.PlanetWarsMatchMaker == null) return;
+            using (var db = new ZkDataContext())
+            {
+                var planet = db.Planets.Find(planetID);
+                if (planet != null) server.PlanetWarsMatchMaker.AddAttackOption(planet, attackerFactionId);
+            }
+        }
 
         public PwMatchCommand GeneratePlanetWarsLobbyCommand(string playerName, string playerFaction) =>
             server.PlanetWarsMatchMaker?.GenerateLobbyCommand(playerName, playerFaction);

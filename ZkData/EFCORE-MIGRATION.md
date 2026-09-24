@@ -3623,3 +3623,56 @@ parameters. The upload downloads a URL of the caller's choosing and runs `7za.ex
 deliberate decision with its own review rather than a line inside a port branch. The fix is to
 make it a real action - public, `[HttpPost]`, with the attributes on something MVC will honour -
 and have `Index` route to it rather than call it.
+
+## Phase 1: the seam carries no entities
+
+All six blocked members now take ids. `ILobbyServerApi` is **40 members, 40 crossable, 0
+blocked** - every parameter and return type is a primitive or a protocol DTO, checked
+transitively on every pull request.
+
+| was | is | the server now |
+|---|---|---|
+| `PublishAccountUpdate(Account)` | `(int accountID)` | loads the account |
+| `PublishUserProfileUpdate(Account)` | `(int accountID)` | loads the account |
+| `AddClanChannel(Clan)` | `(int clanID)` | loads the clan |
+| `CanJoinChannel(Account, string)` | `(int accountID, string)` | loads the account |
+| `AddPlanetWarsAttackOption(Planet, int)` | `(int planetID, int)` | loads the planet |
+| `ReportUser(ZkDataContext, Account, Account, string)` | `(int, int, string)` | opens its own context |
+
+### Each one was checked before it was changed, not after
+
+**The publishes are safe to reload** because every one of the **nine** call sites calls
+`SaveChanges()` first. That was verified site by site rather than assumed - if one had published
+before saving, a fresh read would have pushed stale data to every connected client, and nothing
+would have failed loudly. It is also strictly better than before: the server stops receiving an
+entity attached to a context it does not own, whose navigations lazy-load against it.
+
+**`ReportUser`'s shared transaction was not shared.** It took the caller's `ZkDataContext`, which
+reads like a transaction boundary. The one call site opens a context purely to validate an account
+id and has nothing else pending, so the only thing that `SaveChanges()` ever committed was the
+`AbuseReport` the server had just inserted. Moving it into the server's own context changes
+nothing.
+
+**`AddPlanetWarsAttackOption` is safe to load and hand over** because `AddAttackOption` copies
+scalars out of the planet into an `AttackOption` and keeps no reference - nothing outlives the
+context the API opens.
+
+### One behaviour change, deliberate
+
+`CanJoinChannel` is an **authorization** question, and it used to be answered from the account the
+website handed over - so the caller supplied the `AdminLevel` and `DevLevel` that the answer turns
+on. The server now reads its own copy. That costs one primary-key read per call, which the old
+signature avoided only because the website had already loaded the account; a remote server would
+have to read it anyway, and an authorization check that trusts the caller's copy is not one.
+
+A side effect: an anonymous caller used to reach `acc.Name` on a null and throw. `Global.AccountID`
+is 0 for anonymous, `Find(0)` returns null, and the answer is now **false** - refusing, rather than
+500ing.
+
+### What is still in the way
+
+Nothing about the *shape* of the interface. What remains for Phase 1 is a **transport** - every
+member is still satisfied by a method call in this process - plus `RedeemSessionToken` being a
+bearer credential, and the shared statics the seam never modelled (`RatingSystems`, `MapRatings`,
+`Global.AutoRegistrator`, `Global.SteamDepotGenerator`, `ContentService`), which are recorded in
+`Zero-K.info/HOSTING.md`.

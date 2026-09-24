@@ -715,7 +715,7 @@ namespace ZeroKWeb.Controllers
             var account = db.CurrentAccount();
             if (Global.IsAccountAuthorized && Global.Account.CanPlayerPlanetWars() && account?.FactionID != null && planet.CanMatchMakerPlay(account.Faction))
             {
-                Global.LobbyApi.AddPlanetWarsAttackOption(planet, account.FactionID.Value);
+                Global.LobbyApi.AddPlanetWarsAttackOption(planet.PlanetID, account.FactionID.Value);
                 Global.LobbyApi.RequestJoinPlanet(Global.Account.Name, planet.PlanetID, account.Faction.Shortcut);
             }
             return RedirectToAction("Planet", new { id = planetID });

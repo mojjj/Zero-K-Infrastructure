@@ -31,8 +31,8 @@ namespace ZeroKWeb.Controllers
             if (faction.IsDeleted && !(Global.Account.Clan != null && Global.Account.Clan.FactionID == id)) throw new ApplicationException("Cannot join deleted faction");
             db.Events.InsertOnSubmit(PlanetwarsEventCreator.CreateEvent("{0} joins {1}", acc, faction));
             db.SaveChanges();
-            Global.LobbyApi.PublishAccountUpdate(acc);
-            Global.LobbyApi.PublishUserProfileUpdate(acc);
+            Global.LobbyApi.PublishAccountUpdate(acc.AccountID);
+            Global.LobbyApi.PublishUserProfileUpdate(acc.AccountID);
             return RedirectToAction("Index", "Factions");
         }
 
@@ -68,8 +68,8 @@ namespace ZeroKWeb.Controllers
                 acc2.FactionID = null;
                 db2.SaveChanges();
 
-                Global.LobbyApi.PublishAccountUpdate(acc2);
-                Global.LobbyApi.PublishUserProfileUpdate(acc2);
+                Global.LobbyApi.PublishAccountUpdate(acc2.AccountID);
+                Global.LobbyApi.PublishUserProfileUpdate(acc2.AccountID);
                 PlanetWarsTurnHandler.SetPlanetOwners(new PlanetwarsEventCreator(), db2);
             }
             return faction;

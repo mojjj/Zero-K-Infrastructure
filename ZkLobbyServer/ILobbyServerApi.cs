@@ -44,16 +44,17 @@ namespace ZkLobbyServer
         Task OnServerMapsChanged();
 
         /// <summary>Pushes an account's changed data to connected clients.</summary>
-        Task PublishAccountUpdate(Account acc);
+        Task PublishAccountUpdate(int accountID);
 
         /// <summary>Pushes an account's changed profile to connected clients.</summary>
-        Task PublishUserProfileUpdate(Account acc);
+        Task PublishUserProfileUpdate(int accountID);
 
         /// <summary>
-        /// Takes a live <see cref="ZkDataContext"/>, so it needs the caller's transaction. Across a
-        /// process boundary this becomes "report user X" and the server opens its own context.
+        /// The server writes the AbuseReport in its own context. It used to take the caller's,
+        /// which read as sharing a transaction - but the one call site opens a context purely to
+        /// validate the account id and has nothing else pending, so nothing was ever shared.
         /// </summary>
-        Task ReportUser(ZkDataContext db, Account reporter, Account reported, string report);
+        Task ReportUser(int reporterAccountID, int reportedAccountID, string report);
 
         // ---- queries --------------------------------------------------------------------
 
@@ -75,8 +76,14 @@ namespace ZkLobbyServer
 
         // ---- channels -------------------------------------------------------------------
 
-        void AddClanChannel(Clan clan);
-        bool CanJoinChannel(Account acc, string channel);
+        void AddClanChannel(int clanID);
+
+        /// <summary>
+        /// An authorization question, so the server answers it from its OWN copy of the account.
+        /// It used to take the caller's entity, which meant the website supplying the AdminLevel
+        /// and DevLevel that the answer turns on.
+        /// </summary>
+        bool CanJoinChannel(int accountID, string channel);
 
         // ---- login throttling -----------------------------------------------------------
         // Shared between the lobby and the website so a brute force cannot dodge one by using
@@ -91,7 +98,7 @@ namespace ZkLobbyServer
         bool IsPlanetWarsMatchMakerRunning { get; }
 
 
-        void AddPlanetWarsAttackOption(Planet planet, int attackerFactionId);
+        void AddPlanetWarsAttackOption(int planetID, int attackerFactionId);
 
         /// <summary>
         /// Which half of the turn the matchmaker is in; null when PlanetWars is offline.
