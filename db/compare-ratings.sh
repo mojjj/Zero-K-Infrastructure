@@ -28,7 +28,13 @@ echo "== .NET 9 over EF Core"
 # Checked before anything is built or run: without it a stopped container surfaces as a
 # forty-frame SqlClient stack trace in the middle of the output. Skipped when
 # ZK_CONNECTION_STRING points somewhere else, since then the database is not ours to check.
-if [ -z "${ZK_CONNECTION_STRING:-}" ]; then DB_NAME="${DB_NAME:-zk_test}" ./db/require-db.sh; fi
+# Run whenever the connection string points at the container this repository starts, however it
+# got set. The first version skipped the check whenever ZK_CONNECTION_STRING was present, which
+# meant the one invocation everybody actually uses - exporting it once per shell - was the one
+# with no guard, and a stopped container still produced a forty-frame stack trace.
+case "${ZK_CONNECTION_STRING:-}" in
+    ""|*"127.0.0.1,14330"*|*"localhost,14330"*) DB_NAME="${DB_NAME:-zk_test}" ./db/require-db.sh ;;
+esac
 
 ZK_CONNECTION_STRING="${ZK_CONNECTION_STRING:-$(DB_NAME="${DB_NAME:-zk_test}" ./db/connection-string.sh)}" \
     ./tools/dotnet.sh run --project ZkData.Core -- rate "/repo/$MINE/efcore.tsv"

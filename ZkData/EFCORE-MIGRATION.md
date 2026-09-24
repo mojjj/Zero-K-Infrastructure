@@ -2859,3 +2859,58 @@ like `DbCompat` and `HtmlCompat`, not a move.
 | `EnumCheckboxesFor` | 2 | the same. |
 | `GetFileName` | 2 | not a helper at all: `Path.GetFileName`, where ASP.NET Core's `RazorPage.Path` property shadows `System.IO.Path`. A view edit. |
 
+## The child-action thread closes
+
+```
+child-action   5 -> 0
+diverged       3 -> 8
+```
+
+All seven actions `ChildActionCompat` has enumerated since it was written now have a view
+component, and every view that called one is diverged. The shims stay: they are what keeps the
+MVC 5 copies compiling in the port's build, and `ZeroKWeb.Render` still asserts all eight
+overloads throw.
+
+### The last two components
+
+`MyCommanderProfile` is the **third and last `[Auth]`** one. It does **not** reproduce its
+action: `MyController.CommanderProfile` is a POST handler that deletes commanders, changes
+chassis and saves modules inside a `TransactionScope`, and what the view calls it for is the read
+that follows. So `BuildCommanderProfileModel` was **extracted** from `GetCommanderProfileView` and
+both call it - twenty lines of unlock filtering that would otherwise have been transcribed, in a
+port that has already put two defects into ten lines of helper that way.
+
+The mutating half stays in the controller, where a POST reaches it. A view component rendering
+inside a GET is the wrong place to delete a commander.
+
+`PollView` is the seventh. Its body *is* transcribed, because the action is two lines - the
+judgement is about size, not principle. `return null` meant "render nothing" for a missing poll;
+a component returns empty content, because returning null from `Invoke` throws.
+
+It also has the one call site that this whole approach cannot serve:
+`ForumParser/Tags/PollTag.cs` is linked **C#**, not a view, and a BBCode tag cannot invoke a view
+component. That one still needs a different answer.
+
+### Five views diverged, one line each
+
+`Clans/Detail`, `Factions/Detail`, `Forum/NewPost`, `Planetwars/Planet` and `My/Commanders`. Each
+diff against its MVC 5 original is exactly the child-action call and nothing else, which is the
+rule `PortedViews/README.md` sets.
+
+`My/Commanders.cshtml` has **no byte-order mark**, and the copy was written with one. Caught by
+diffing the two and seeing a change on line 1 that had nothing to do with the edit. The BOM is
+now preserved from the original rather than assumed.
+
+### The database guard skipped the case everybody uses
+
+`tools/render-view.sh` and `tools/run-host.sh` dumped forty-frame SqlClient traces again, from a
+stopped container, despite the guard written to prevent exactly that. The guard ran only when
+`ZK_CONNECTION_STRING` was **unset** - and the normal way to work here is to export it once per
+shell, so the common invocation was the one with no guard.
+
+It now runs whenever the connection string points at the container this repository starts,
+however it got set. Verified by stopping `zk-db` with the variable exported.
+
+A check that is skipped in the usual case is worth about as much as no check, and this one had
+been that way since it was written.
+
