@@ -4086,3 +4086,37 @@ Writing the tests against a stubbed endpoint turned up both:
 updated. That is a decision about a client this repository ships. `ContentService.svc` is not:
 it is uncalled from here but serves clients deployed before the JSON endpoint existed, so
 retiring it needs production access logs.
+
+## Phase 2: MissionService.svc says who is still calling it
+
+Removing the WCF endpoint was the ask; staging it was the answer, because **no editor was using
+the JSON one yet**. The editor is ClickOnce-deployed and updates when a user next launches it,
+not when the site deploys - so deleting the `.svc` would have broken publishing for everyone who
+had not opened the editor since, and a broken editor cannot update itself either.
+
+So it stays, and it reports itself. Every WCF operation writes to `LogEntries`, and `SendMission`
+includes the caller's editor version - the number that decides when this can go:
+
+    MissionService.svc (deprecated WCF endpoint): SendMission by someone, mission editor 1.2.3.4
+
+That plus the `MissionEditorVersion` column, written on every publish through either endpoint,
+answers "has everyone updated?" from the site's own data. `HOSTING.md` carries the two queries.
+
+**This is what separates it from `ContentService.svc`.** That one serves clients this repository
+cannot see, so retiring it needs production access logs. This one tells you.
+
+The operations moved into `MissionServiceLogic`, which the JSON endpoint uses; the deprecated
+`MissionService` class is now a thin logging wrapper. That is what makes the eventual removal one
+commit - delete the `.svc`, the wrapper and `IMissionService`'s WCF attributes, and nothing else
+moves. It also means a JSON call is not logged as a legacy one, which it would have been had both
+routes shared a class.
+
+### The editor is not compile-checked anywhere
+
+Worth recording rather than discovering later. `MissionEditor` is WPF: the mono check cannot build
+it - `PresentationCore` and friends are not there - and the Windows job that can,
+`Build and test Zero-K`, has been **queued and never running** for every pull request in this
+stretch; its self-hosted runner is not picking work up.
+
+That is why `MissionServiceJsonClient` lives in `ZkData` and the editor holds one line. The line
+itself is unverified by any automated check, and the ~1500 lines it could have been are not.
