@@ -805,7 +805,29 @@ namespace ZeroKWeb.Render
             var marker = "RenderCheckPost-" + Guid.NewGuid().ToString("N").Substring(0, 8);
             var title = "RenderCheckThread-" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
+            // The post carries a [poll] tag, which is the one child-action call site that was
+            // linked C# rather than a view: ForumParser/Tags/PollTag.cs. A BBCode tag cannot
+            // invoke a view component, so it now loads the poll and renders PollView directly -
+            // and this is what proves that path, through the forum parser, in a real render.
+            var question = "RenderCheckPoll-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+
             int threadID;
+            int pollID;
+            using (var db = new ZkDataContext())
+            {
+                var poll = new Poll
+                {
+                    QuestionText = question,
+                    IsAnonymous = false,
+                    IsHeadline = false,
+                    IsVisible = true,
+                    RoleIsRemoval = false,
+                };
+                db.Polls.Add(poll);
+                db.SaveChanges();
+                pollID = poll.PollID;
+            }
+
             using (var db = new ZkDataContext())
             {
                 var category = db.ForumCategories.OrderBy(c => c.ForumCategoryID).First();
@@ -825,7 +847,7 @@ namespace ZeroKWeb.Render
                 };
                 thread.ForumPosts.Add(new ForumPost
                 {
-                    Text = marker,
+                    Text = marker + " [poll]" + pollID + "[/poll]",
                     Created = DateTime.UtcNow,
                     AuthorAccountID = author.AccountID,
                     Upvotes = 0,
@@ -864,6 +886,8 @@ namespace ZeroKWeb.Render
                 // so that it would fail when the gap closed and force this line to be written.
                 // It did, and this is that line.
                 failures += Check(html.Contains(marker), "  the post's TEXT rendered, through its display template");
+                failures += Check(html.Contains(question),
+                    "  the [poll] tag rendered PollView, without a child action");
             }
             finally
             {
@@ -872,6 +896,8 @@ namespace ZeroKWeb.Render
                     var thread = db.ForumThreads.FirstOrDefault(t => t.ForumThreadID == threadID);
                     // ForumPosts cascade on delete, so the post goes with the thread.
                     if (thread != null) { db.ForumThreads.Remove(thread); db.SaveChanges(); }
+                    var poll = db.Polls.FirstOrDefault(x => x.PollID == pollID);
+                    if (poll != null) { db.Polls.Remove(poll); db.SaveChanges(); }
                 }
             }
             return failures;

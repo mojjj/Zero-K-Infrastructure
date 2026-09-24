@@ -2914,3 +2914,38 @@ however it got set. Verified by stopping `zk-db` with the variable exported.
 A check that is skipped in the usual case is worth about as much as no check, and this one had
 been that way since it was written.
 
+## PollTag: the call site a view component could not serve
+
+`ForumParser/Tags/PollTag.cs` was the fourteenth child-action call site and the only one that is
+linked **C#** rather than a view. A BBCode tag cannot invoke a view component - there is no view
+to invoke one from - so `PollViewComponent`, written for the other caller, was no use here.
+
+It does what `PollController.Index` does instead: load the poll and render its partial.
+
+```csharp
+var poll = new ZkDataContext().Polls.FirstOrDefault(x => x.PollID == pollID);
+if (poll != null) context.Append(context.Html.PartialString("~/Views/Poll/PollView.cshtml", poll));
+```
+
+Single-source, no divergence, and no child action anywhere in linked C# any more.
+
+### PartialString, and the trap that made it exist
+
+`TranslateContext.Append` is `Append(object)` onto a `StringBuilder`, so whatever it is given is
+`ToString()`d. That is exactly the trap the grid cells hit: on MVC 5 `Html.Partial` returns an
+`MvcHtmlString` whose `ToString` **is** the html, and on ASP.NET Core an `IHtmlContent` whose
+`ToString` is the type name.
+
+`HtmlCompat.PartialString`, built for `UniGrid`, is the same answer here. Confirmed by swapping it
+for plain `Html.Partial` and watching the check fail - the tag rendered, produced no error, and
+put nothing in the post.
+
+### Verified through the parser, in a real render
+
+The forum post the render harness seeds now carries a `[poll]` tag, so `CheckForumPostList`
+exercises component → view → grid partials → display template → **BBCode parser** → `PollView`,
+and asserts the poll's question text - written to the database moments earlier - appears in the
+HTML.
+
+That is the whole forum rendering path, end to end, from rows.
+
