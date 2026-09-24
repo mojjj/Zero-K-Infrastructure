@@ -1,4 +1,4 @@
-name: Test pull request
+﻿name: Test pull request
 
 on:
   pull_request:
@@ -21,9 +21,18 @@ jobs:
     # compiled MissionEditor, CMissionLib, ZeroKLobby or run Tests.dll.
     #
     # Nothing in the steps below is machine-specific: setup-msbuild, setup-nuget and Setup-VSTest
-    # all provision a GitHub-hosted Windows image, and there is no database, game install or
-    # absolute path involved except one publish profile that writes to c:\temp\mb, which a
-    # FileSystem publish creates.
+    # all provision a GitHub-hosted Windows image, and there is no database or game install.
+    # The publish profile this passes is Zero-K.info/Properties/PublishProfiles/Profile1.pubxml,
+    # a FileSystem publish to the relative path `Deploy`. (An earlier version of this comment
+    # named ModelBase's profile and its c:\temp\mb - that project is not in Zero-K.sln, so the
+    # solution build never reached it. It has since been deleted as a dead end.)
+    #
+    # WHAT THIS JOB ACTUALLY PROVES: that the whole Windows solution compiles - which is the
+    # valuable half, and which nothing else here does. The VSTest step is thinner than its name
+    # suggests: /TestCaseFilter:TestCategory=Basic and only TestRsa carries that category, so
+    # exactly ONE test runs. The other three in Tests/ reach the network (whois, an engine
+    # download, PayPal), so excluding them is right - but read a green tick here as "it builds",
+    # not "it is tested". The tests that mean something run in test_portable.yml.
     #
     # NOTE FOR UPSTREAM: this line is a fork-local change. Upstream has the runner and should keep
     # `runs-on: zk`.
