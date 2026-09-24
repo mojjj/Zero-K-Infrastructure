@@ -51,6 +51,7 @@
     <Compile Include="..\ZkLobbyServer\ILobbyServerApi.cs" Link="Linked\ILobbyServerApi.cs" />
     <Compile Include="..\ZkLobbyServer\PlanetWarsApi.cs" Link="Linked\PlanetWarsApi.cs" />
     <Compile Include="..\ZkLobbyServer\TourneyApi.cs" Link="Linked\TourneyApi.cs" />
+    <Compile Include="..\ZkLobbyServer\RatingApi.cs" Link="Linked\RatingApi.cs" />
     <Compile Include="..\ZkLobbyServer\Api\LobbyApiProtocol.cs" Link="Linked\LobbyApiProtocol.cs" />
     <Compile Include="..\ZkLobbyServer\Api\LobbyApiHost.cs" Link="Linked\LobbyApiHost.cs" />
     <Compile Include="..\ZkLobbyServer\Api\RemoteLobbyServerApi.cs" Link="Linked\RemoteLobbyServerApi.cs" />

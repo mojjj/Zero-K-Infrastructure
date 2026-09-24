@@ -235,7 +235,7 @@ namespace ZeroKWeb.Controllers
                     LadderElo = WholeHistoryRating.DefaultRating.LadderElo,
                 });
             }
-            (RatingSystems.GetRatingSystem(RatingCategory.Planetwars) as WholeHistoryRating).ResetAll();
+            Global.LobbyApi?.ResetPlanetwarsRatings();
 
             return RedirectToAction("Index");
         }

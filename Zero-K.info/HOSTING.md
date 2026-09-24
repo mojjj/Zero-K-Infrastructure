@@ -179,11 +179,12 @@ What this does **not** mean is that the server can move out today. Still in the 
   `GetPlayerRating`, `GetTopPlayers` and the PlanetWars faction stats - the website reads
   ratings with no lobby server, and `ZeroKWeb.Host` runs that way so it stays true.
 
-  Three reads have no database behind them and come back **empty**, which is worse than
-  throwing: `GetPlayerRatingHistory` (the rating graph), `GetInternalRating` (WhrController)
-  and `MapRatings.GetMapRanking` (`/Ladders/Maps`). Plus two commands, `ForceRatingsUpdate`
-  and `ResetAll`. Those five want `ILobbyServerApi` members - the interface and the
-  transport are ready for them.
+  The five that have no database behind them are now `ILobbyServerApi` members:
+  `GetPlayerRatingHistory`, `GetInternalRating` and `GetMapRanking` as queries,
+  `ForceRatingsUpdate` and `ResetPlanetwarsRatings` as commands. **The website no longer
+  names `RatingSystems` or `MapRatings` for anything the database cannot answer.**
+
+  The interface is 45 members, 45 crossable, and the transport test drives all of them.
 - ~~Six members pass EF entities.~~ **Done.** All 40 members now take primitives and
   protocol DTOs only; the six that took `Account`, `Clan`, `Planet` or the caller's
   `ZkDataContext` take ids, and the server loads what it needs from its own context.

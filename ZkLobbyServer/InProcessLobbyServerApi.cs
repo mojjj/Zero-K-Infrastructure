@@ -4,6 +4,8 @@ using LobbyClient;
 using System.Linq;
 using PlasmaShared;
 using ZeroKWeb;
+using System;
+using Ratings;
 using ZkData;
 
 namespace ZkLobbyServer
@@ -233,6 +235,44 @@ namespace ZkLobbyServer
         public bool VerifyIp(string ip) => server.LoginChecker.VerifyIp(ip);
 
         public void LogIpFailure(string ip) => server.LoginChecker.LogIpFailure(ip);
+
+        // ---- ratings ---------------------------------------------------------------------
+        // These reach the statics directly rather than through the server object, because that
+        // is where they live: Ratings.RatingSystems is in ZkData and shared by both halves. The
+        // coupling was never the call, it was that only this process ever ran the pass that
+        // fills them - which is why the website now creates its systems and reads the database,
+        // and asks here only for what no table holds.
+
+        public void ForceRatingsUpdate()
+        {
+            foreach (var system in RatingSystems.GetRatingSystems())
+                (system as WholeHistoryRating)?.ForceRatingsUpdate();
+        }
+
+        public void ResetPlanetwarsRatings() =>
+            (RatingSystems.GetRatingSystem(RatingCategory.Planetwars) as WholeHistoryRating)?.ResetAll();
+
+        public Dictionary<DateTime, float> GetPlayerRatingHistory(RatingCategory category, int accountID) =>
+            (RatingSystems.GetRatingSystem(category) as WholeHistoryRating)?.GetPlayerRatingHistory(accountID)
+            ?? new Dictionary<DateTime, float>();
+
+        public InternalRatingInfo GetInternalRating(RatingCategory category, int accountID, DateTime time)
+        {
+            var day = (RatingSystems.GetRatingSystem(category) as WholeHistoryRating)?.GetInternalRating(accountID, time);
+            // Null means "no rating that day", which the caller renders as no number. Not an
+            // error, and not a zero either.
+            return day == null ? null : new InternalRatingInfo { Elo = day.GetElo(), EloStdev = day.GetEloStdev() };
+        }
+
+        public List<MapRatingInfo> GetMapRanking(MapRatings.Category category) =>
+            MapRatings.GetMapRanking(category).Select(x => new MapRatingInfo
+            {
+                ResourceID = x.Map?.ResourceID ?? 0,
+                Elo = x.Elo,
+                EloStdev = x.EloStdev,
+                Percentile = x.Percentile,
+                Rank = x.Rank,
+            }).ToList();
 
         public bool IsPlanetWarsMatchMakerRunning => server.PlanetWarsMatchMaker != null;
 

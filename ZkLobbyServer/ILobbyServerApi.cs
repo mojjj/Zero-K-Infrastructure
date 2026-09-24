@@ -1,7 +1,10 @@
+using System;
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using LobbyClient;
 using ZeroKWeb;
+using PlasmaShared;
+using Ratings;
 using ZkData;
 
 namespace ZkLobbyServer
@@ -91,6 +94,33 @@ namespace ZkLobbyServer
 
         bool VerifyIp(string ip);
         void LogIpFailure(string ip);
+
+        // ---- ratings ---------------------------------------------------------------------
+        // Almost everything the site asks about ratings is answered from the AccountRatings
+        // table without asking the server at all - see RatingSystems.CreateRatingSystems. What
+        // is here is the part that is not in any table: the WHR pass's own working state, and
+        // two commands that tell the process running that pass to do something.
+
+        /// <summary>Recompute every rating system now. The admin button.</summary>
+        void ForceRatingsUpdate();
+
+        /// <summary>Throw away the PlanetWars ratings and start them again.</summary>
+        void ResetPlanetwarsRatings();
+
+        /// <summary>Day by day rating for one player, for the chart. Empty when nothing computed it.</summary>
+        Dictionary<DateTime, float> GetPlayerRatingHistory(RatingCategory category, int accountID);
+
+        /// <summary>
+        /// The WHR internals for one player at one moment, which WhrController publishes.
+        /// A DTO rather than the PlayerDay itself: that holds the player's whole game graph,
+        /// and the caller reads two floats off it.
+        /// </summary>
+        InternalRatingInfo GetInternalRating(RatingCategory category, int accountID, DateTime time);
+
+        /// <summary>
+        /// The map ranking, as ids and numbers. The website joins them to its own Resources.
+        /// </summary>
+        List<MapRatingInfo> GetMapRanking(MapRatings.Category category);
 
         // ---- planetwars matchmaker ------------------------------------------------------
 

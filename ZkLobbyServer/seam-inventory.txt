@@ -7,8 +7,8 @@
 # BLOCKED is not a defect. It is a member whose remote form has not been designed
 # yet, and the design is the Phase 1 work.
 
-members   40
-crossable 40
+members   45
+crossable 45
 blocked   0
 
 crossable   ConnectedUserCount { get; }
@@ -21,14 +21,18 @@ crossable   ConnectPlayerToBattle(String userName, Int32 battleID)
 crossable   CreateTourneyBattle(TourneyPrototypeInfo prototype)
 crossable   ForceJoinBattle(String playerName, String battleHost)
 crossable   ForceJoinTourneyBattle(String player, Int32 battleID)
+crossable   ForceRatingsUpdate()
 crossable   GeneratePlanetWarsLobbyCommand(String playerName, String playerFaction)
 crossable   GetBattleStats()
 crossable   GetCurrentForumList(Int32 accountID)
 crossable   GetCurrentLadderList()
 crossable   GetCurrentNewsList()
 crossable   GetDiscordUserCount()
+crossable   GetInternalRating(RatingCategory category, Int32 accountID, DateTime time)
+crossable   GetMapRanking(Category category)
 crossable   GetPlanetBattles(String mapName)
 crossable   GetPlanetWarsBattles()
+crossable   GetPlayerRatingHistory(RatingCategory category, Int32 accountID)
 crossable   GetTourneyBattle(Int32 battleID)
 crossable   GetTourneyBattles()
 crossable   GhostChanSay(String channelName, String text, Boolean isEmote, Boolean isRing)
@@ -46,6 +50,7 @@ crossable   RedeemSessionToken(String token)
 crossable   RemoveTourneyBattle(Int32 battleID)
 crossable   ReportUser(Int32 reporterAccountID, Int32 reportedAccountID, String report)
 crossable   RequestJoinPlanet(String name, Int32 planetId, String attackerFaction)
+crossable   ResetPlanetwarsRatings()
 crossable   SendSiteToLobbyCommand(String user, SiteToLobbyCommand command)
 crossable   SetEngine(String engine)
 crossable   SetGame(String game)

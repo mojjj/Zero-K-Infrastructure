@@ -154,6 +154,12 @@
     <Compile Include="ILobbyServerApi.cs" />
     <Compile Include="TourneyApi.cs" />
     <Compile Include="PlanetWarsApi.cs" />
+    <Compile Include="RatingApi.cs" />
+    <!-- The remote transport. This project does not glob, so a file added here and nowhere
+         else compiles in whatever links it and is silently absent from the server itself. -->
+    <Compile Include="Api\LobbyApiProtocol.cs" />
+    <Compile Include="Api\LobbyApiHost.cs" />
+    <Compile Include="Api\RemoteLobbyServerApi.cs" />
     <Compile Include="ILobbyServerApiInProcess.cs" />
     <Compile Include="InProcessLobbyServerApi.cs" />
     <Compile Include="ServerTextCommands.cs" />

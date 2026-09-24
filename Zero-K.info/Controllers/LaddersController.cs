@@ -7,6 +7,7 @@ using System.Web.Mvc;
 using PlasmaShared;
 using Ratings;
 using ZkData;
+using ZkLobbyServer;
 
 namespace ZeroKWeb.Controllers
 {
@@ -75,7 +76,18 @@ namespace ZeroKWeb.Controllers
         {
             model = model ?? new LaddersMapsModel();
 
-            var ret = MapRatings.GetMapRanking(model.Category).AsQueryable();
+            // The map ranking is the WHR map pass's own state, so it comes from the server as
+            // ids and numbers. The Resource rows it names are in this database already, so they
+            // are joined here rather than travelling - and the filters and the view below, which
+            // are all about the map rather than the rating, do not change at all.
+            var ranking = Global.LobbyApi?.GetMapRanking(model.Category) ?? new List<MapRatingInfo>();
+            var rankedIds = ranking.Select(x => x.ResourceID).ToList();
+            var maps = new ZkDataContext().Resources.Where(x => rankedIds.Contains(x.ResourceID))
+                                          .ToDictionary(x => x.ResourceID);
+            var ret = ranking
+                .Where(x => maps.ContainsKey(x.ResourceID))
+                .Select(x => new MapRatings.Rating(x.Elo, x.EloStdev, maps[x.ResourceID], x.Rank, x.Percentile))
+                .AsQueryable();
 
             if (!string.IsNullOrEmpty(model.Name))
             {

@@ -3790,3 +3790,39 @@ Plus two commands: `ForceRatingsUpdate` and `ResetAll`. Those five want `ILobbyS
 and both the interface and the transport are ready for them - `PlayerRating`, `RankBracket` and
 `Dictionary<DateTime, float>` are already crossable, and `PlayerDay` needs a two-float DTO because
 WhrController only reads `GetElo()` and `GetEloStdev()` off it.
+
+## Phase 1: the last five rating reads
+
+The five that no table could answer are now `ILobbyServerApi` members - three queries
+(`GetPlayerRatingHistory`, `GetInternalRating`, `GetMapRanking`) and two commands
+(`ForceRatingsUpdate`, `ResetPlanetwarsRatings`). The interface is **45 members, 45 crossable**,
+and the transport test drives all of them because it enumerates the interface rather than a list.
+
+Two of them took a shape rather than a relocation:
+
+**`GetInternalRating` returns a two-float DTO**, not the `PlayerDay`. That type holds the player's
+whole game graph and `WhrController` reads `GetElo()` and `GetEloStdev()` off it. Rewiring it also
+fixed a call that was free in-process and would not have been over a wire: the original called
+`GetInternalRating` **twice per player**, once for each field.
+
+**`GetMapRanking` returns ids and numbers**, and `LaddersController` joins them to its own
+`Resources`. `MapRatings.Rating` carries a `Resource` - an EF entity, the one thing this interface
+refuses - but the rows it names are in a database the website already has. The controller
+reconstructs `MapRatings.Rating` from the DTO plus the entity, so the filters and the view below
+are untouched.
+
+### A file the lobby server was not compiling
+
+Adding these surfaced something from the transport change: **`ZkLobbyServer.csproj` does not glob.**
+It lists 102 `<Compile Include=`, and `Api/LobbyApiProtocol.cs`, `Api/LobbyApiHost.cs` and
+`Api/RemoteLobbyServerApi.cs` were in none of them. The transport shipped in a state where the
+lobby server did not contain it.
+
+Nothing failed, which is the point: the tests passed because `Tests.Database` LINKS those files,
+so they were compiled there and only there. An absent file produces no diagnostic. The moment they
+were added to the project, the compiler immediately reported five interface members the client was
+missing - the check that had been unavailable the whole time.
+
+Three project files now have to agree about these sources - the server, the port's
+`port-sources.props`, and the test - which is the same drift `port-sources.props` exists to
+manage, one layer further out.

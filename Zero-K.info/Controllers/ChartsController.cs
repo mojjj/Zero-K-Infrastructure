@@ -306,7 +306,11 @@ namespace ZeroKWeb.Controllers
 
         public IList<GraphPoint> GetDailyValues(DateTime fromTime, DateTime toTime)
         {
-            Dictionary<DateTime, float> ratings = RatingSystems.GetRatingSystem(Category).GetPlayerRatingHistory(AccountID);
+            // The rating graph is the WHR pass's own working state, which no table holds - so unlike
+            // every other rating the site shows, this one has to be asked for. Empty without a
+            // lobby server, which is the honest answer rather than a fabricated line.
+            var ratings = Global.LobbyApi?.GetPlayerRatingHistory(Category, AccountID)
+                          ?? new Dictionary<DateTime, float>();
             return ratings.Where(x => x.Key >= fromTime && x.Key <= toTime).Select(x => new GraphPoint() { Day = x.Key, Value = x.Value, }).ToList();
         }
 
