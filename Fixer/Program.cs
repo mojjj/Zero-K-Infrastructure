@@ -21,7 +21,6 @@ using System.Xml.Serialization;
 using AutoRegistrator;
 using EntityFramework.Extensions;
 //using LobbyClient;
-//using NightWatch;
 using LobbyClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;

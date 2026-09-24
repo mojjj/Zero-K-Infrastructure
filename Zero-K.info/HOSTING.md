@@ -115,6 +115,31 @@ in neither `Zero-K.sln` nor referenced by any tracked file outside themselves. 4
 live site were two `using System.Web.UI` lines that use nothing, already marked as dead
 usings by the .NET 9 port.
 
+**Five more trees were dead the same way, and are gone too (2026-09-24).** `PlanetWars.old`
+was found by reading the plan's own list; these were found by asking which projects in the
+repository no solution contains, and then which of those anything actually uses. 256 files,
+about 31,600 lines:
+
+| tree | files | last real change | what referenced it |
+|---|---|---|---|
+| `ModelBase` (with `ModToXml`, `UnitImporter`) | 108 | 2015 | one `.gitignore` line |
+| `LuaAdmin` (with `LuaSharp`, `LuaWrap`, `LuaManagerLib`) | 102 | 2012 | nothing |
+| `ModStats` | 27 | 2012 | nothing |
+| `NightWatch` | 14 | 2016 | a commented-out `using` in `Fixer`, and a 2012 publish manifest |
+| `SpringAccountReader` | 3 | 2011 | nothing |
+
+Two strays went with them: `MissionEditor2.csproj`, a second project file sitting beside the
+`MissionEditor.csproj` the solution actually builds and referenced by nothing, and
+`Zero-K.info/asp.net.Publish.xml`, a Visual Studio 2010 FTP publish history listing files as
+they stood in 2012. That last one carried a production FTP URL and user name - no password,
+`savePWD` was false - and nothing reads it.
+
+**The test was "what uses it", not "how old is it".** Ages here are misleading on their own:
+every one of these trees has a 2022 or 2023 commit from a repository-wide change, which is why
+they look alive in a log. `NightWatch` is the one worth naming, because it had the most signs of
+former life and none of them were uses - a `using` behind a `//`, and a filename in a manifest
+nothing reads.
+
 **The LINQ-to-SQL remnant is vocabulary, not a dependency.** `InsertOnSubmit`,
 `DeleteOnSubmit` and friends appear 185 times across 44 files - and they are extension
 methods over EF6, defined in `ZkData/DbExtensions.cs`, with a twin in `ZkData.Core` for
