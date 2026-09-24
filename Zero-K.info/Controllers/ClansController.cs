@@ -251,11 +251,11 @@ namespace ZeroKWeb.Controllers
                 }
 
                 orgClan = db.Clans.Single(x => x.ClanID == clan.ClanID);
-                string orgImageUrl = Server.MapPath(orgClan.GetImageUrl());
-                string orgBGImageUrl = Server.MapPath(orgClan.GetBGImageUrl());
+                string orgImageUrl = this.MapPath(orgClan.GetImageUrl());
+                string orgBGImageUrl = this.MapPath(orgClan.GetBGImageUrl());
                 string orgShortcut = orgClan.Shortcut;
-                string newImageUrl = Server.MapPath(clan.GetImageUrl());
-                string newBGImageUrl = Server.MapPath(clan.GetBGImageUrl());
+                string newImageUrl = this.MapPath(clan.GetImageUrl());
+                string newBGImageUrl = this.MapPath(clan.GetBGImageUrl());
 
                 if (Global.IsModerator && (!Global.Account.HasClanRight(x => x.RightEditTexts) || clan.ClanID != Global.Account.ClanID))
                 {
@@ -373,12 +373,12 @@ namespace ZeroKWeb.Controllers
                 {
                     var uploaded = Images.ReadAll(image.InputStream);
                     if (Images.Processor.Measure(uploaded) != new Size(64, 64))
-                        Images.Processor.SaveResized(uploaded, new Size(64, 64), Server.MapPath(clan.GetImageUrl()));
-                    else Images.Processor.Save(uploaded, Server.MapPath(clan.GetImageUrl()));
+                        Images.Processor.SaveResized(uploaded, new Size(64, 64), this.MapPath(clan.GetImageUrl()));
+                    else Images.Processor.Save(uploaded, this.MapPath(clan.GetImageUrl()));
                 }
                 if (bgimage != null && bgimage.ContentLength > 0)
                 {
-                    Images.Processor.Save(Images.ReadAll(bgimage.InputStream), Server.MapPath(clan.GetBGImageUrl()));
+                    Images.Processor.Save(Images.ReadAll(bgimage.InputStream), this.MapPath(clan.GetBGImageUrl()));
                 }
 
                 db.Events.InsertOnSubmit(PlanetwarsEventCreator.CreateEvent("New clan {0} formed by {1}", clan, acc));

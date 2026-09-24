@@ -45,7 +45,11 @@ namespace ZeroKWeb.Host
             });
             builder.Logging.SetMinimumLevel(LogLevel.Warning);
             builder.WebHost.UseUrls(Url);
-            builder.Services.AddControllersWithViews();
+            // The HttpPostedFileBase binder. Without it an upload action compiles and always
+            // receives null - see ZeroKWeb.Core/Mvc5Compat/HttpPostedFileCompat.cs. Inserted at 0
+            // so it is consulted before the built-in providers, none of which know the type.
+            builder.Services.AddControllersWithViews(options =>
+                options.ModelBinderProviders.Insert(0, new System.Web.HttpPostedFileBinderProvider()));
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddZkAuthentication();
 
@@ -88,6 +92,60 @@ namespace ZeroKWeb.Host
             }
         }
 
+
+        /// <summary>
+        /// An upload actually arrives.
+        ///
+        /// This is the check the HttpPostedFileBase decision rests on. A wrapper type alone
+        /// compiles and ASP.NET Core has nothing that produces it, so every upload action would
+        /// receive null and silently do nothing - which is exactly why the type was left
+        /// unshimmed for most of this port. So: POST a real multipart form and read back what the
+        /// action saw.
+        ///
+        /// It asserts the name, the length and THE BYTES. Name and length alone would pass for a
+        /// binder that produced a wrapper around an empty stream, which is the failure closest to
+        /// the one being guarded against.
+        /// </summary>
+        private static async Task<int> CheckUploadBinding()
+        {
+            Console.WriteLine();
+            Console.WriteLine("uploads:");
+
+            var failures = 0;
+            var bytes = new byte[] { 0x5A, 0x4B, 0x00, 0xFF, 0x10, 0x20 };
+
+            using (var client = new HttpClient())
+            {
+                using (var form = new MultipartFormDataContent())
+                {
+                    var file = new ByteArrayContent(bytes);
+                    file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+                    form.Add(file, "upload", "probe.bin");
+
+                    var response = await client.PostAsync(Url + "/Harness/Upload", form);
+                    var body = await response.Content.ReadAsStringAsync();
+
+                    failures += Check(response.StatusCode == System.Net.HttpStatusCode.OK,
+                        "  the upload action was reached (" + (int)response.StatusCode + ")");
+                    failures += Check(body.Contains("name=probe.bin"),
+                        "  the file name was bound");
+                    failures += Check(body.Contains("length=" + bytes.Length),
+                        "  ContentLength is the real length");
+                    failures += Check(body.Contains("bytes=5A4B00FF1020"),
+                        "  InputStream carried the actual bytes");
+                }
+
+                // No file at all: MVC 5 handed the action null, and two call sites test for it.
+                using (var empty = new MultipartFormDataContent())
+                {
+                    empty.Add(new StringContent("x"), "somethingelse");
+                    var body = await (await client.PostAsync(Url + "/Harness/Upload", empty)).Content.ReadAsStringAsync();
+                    failures += Check(body.Contains("null"),
+                        "  an absent file binds to null, as MVC 5 did");
+                }
+            }
+            return failures;
+        }
 
         /// <summary>
         /// Signing in, end to end: the real password check, a real cookie, and [Auth] telling the
@@ -297,6 +355,7 @@ namespace ZeroKWeb.Host
 
                 failures += await CheckItServesAPage(client);
                 failures += await CheckSignIn();
+                failures += await CheckUploadBinding();
 
                 Console.WriteLine();
                 if (failures == 0)
