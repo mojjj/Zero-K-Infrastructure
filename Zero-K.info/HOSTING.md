@@ -213,11 +213,16 @@ What this does **not** mean is that the server can move out today. Still in the 
   `LobbyApiAllowInsecureTransport` MiscVar, which has to be said rather than fallen into.
   The token itself now comes from a cryptographic generator rather than `Guid.NewGuid()`.
 
-  **Two properties of the token are unchanged and are not the transport's business.** It has
-  no expiry - it lives until redeemed, which is single-use, or until the account logs out -
-  and the game client passes it to the website in a **query string**
-  (`ZeroKLobby/BrowserInterop.cs`), which is where URLs end up in history, referers and
-  logs. Both are the lobby protocol rather than Phase 1, and both are worth deciding on.
+  **It expires**, 24 hours after issue by default, configurable with the
+  `LobbySessionTokenLifetimeHours` MiscVar. The client is handed its token once, at login,
+  and nothing refreshes it - so a client connected for longer than that finds the website no
+  longer signs it in automatically. The user sees a login page, reconnecting to the lobby
+  fixes it, and nothing is lost. That is the cost of bounding the credential.
+
+  **One property is unchanged**: the game client passes the token to the website in a
+  **query string** (`ZeroKLobby/BrowserInterop.cs`), which is where URLs end up in history,
+  referer headers and proxy logs. Expiry bounds how long a leaked one is worth having;
+  moving it out of the URL is a change to a shipped client and is still worth deciding on.
 - **Shared statics the seam never modelled.** `Ratings.RatingSystems` and
   `Ratings.MapRatings` are filled only by `ZkLobbyServer.ZkLobbyServer`, and eight website
   files read them; `Global.AutoRegistrator`, `Global.SteamDepotGenerator` and

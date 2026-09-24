@@ -105,9 +105,7 @@ namespace ZkLobbyServer
         {
             // ConcurrentDictionary.TryRemove throws on a null key, and the token arrives from a
             // query string.
-            if (string.IsNullOrEmpty(token)) return null;
-            int accountID;
-            return server.SessionTokens.TryRemove(token, out accountID) ? (int?)accountID : null;
+            return server.SessionTokens.Redeem(token);
         }
 
         public List<PlanetBattleInfo> GetPlanetWarsBattles() =>
