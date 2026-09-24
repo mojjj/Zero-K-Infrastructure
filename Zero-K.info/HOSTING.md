@@ -162,9 +162,20 @@ in `Global.asax.cs`, which the narrowed type found immediately.
 
 What this does **not** mean is that the server can move out today. Still in the way:
 
-- **No transport.** Every member is satisfied by a method call in this process. Someone
-  has to choose one and write the remote implementation; the interface only guarantees
-  that each member *could* be served by one.
+- ~~No transport.~~ **Written.** `ZkLobbyServer/Api/` holds an HTTP+JSON host
+  (`LobbyApiHost`) and client (`RemoteLobbyServerApi`); `Tests.Database` drives all 40
+  members over real loopback HTTP and checks the arguments and results arrive intact.
+  HTTP because both halves are .NET Framework 4.8 today, which rules out grpc-dotnet, and
+  because HttpListener and HttpClient are unchanged on .NET 9 - the transport does not have
+  to be rewritten by the port going on around it.
+
+  **It is not wired up.** Nothing constructs a `RemoteLobbyServerApi`; `Global.LobbyApi` is
+  still the in-process one. Choosing between them is deployment configuration, and it is
+  not worth adding before the item below is answered.
+- **The shared statics still block the split, transport or not.** `Ratings.RatingSystems`
+  and `Ratings.MapRatings` are filled only by the lobby server and read by eight website
+  files, so moving the server out breaks `/Ladders`, `/Charts` and every rating on the site
+  whatever the website uses to talk to it. This is the next thing, not the transport.
 - ~~Six members pass EF entities.~~ **Done.** All 40 members now take primitives and
   protocol DTOs only; the six that took `Account`, `Clan`, `Planet` or the caller's
   `ZkDataContext` take ids, and the server loads what it needs from its own context.
