@@ -83,6 +83,14 @@ namespace PlasmaShared
             }
         }
 
+        /// <summary>Moved here from Utils.cs for the same reason as Decompress: that file
+        /// is 900 lines of GDI+ and cannot compile on .NET 9. SpotlightHandler needs this.</summary>
+        public static string[] Lines(this string source)
+        {
+            if (source == null) return new string[] { };
+            else return source.Replace("\r\n", "\n").Split('\n');
+        }
+
         public static string EscapePath(this string path)
         {
             if (String.IsNullOrEmpty(path)) return path;

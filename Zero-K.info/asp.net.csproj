@@ -149,6 +149,9 @@
     <Compile Include="AppCode\HtmlCompat.cs" />
     <Compile Include="AppCode\ControllerCompat.cs" />
     <Compile Include="AppCode\ViewContextCompat.cs" />
+    <Compile Include="AppCode\SteamOpenId.cs" />
+    <Compile Include="AppCode\AuthCookieCompat.cs" />
+    <Compile Include="AppCode\SteamOpenIdResult.cs" />
     <Compile Include="AppCode\HtmlHelperExtensions.Portable.cs" />
     <Compile Include="AppCode\JsonRequest.cs" />
     <Compile Include="AppCode\NoCache.cs" />

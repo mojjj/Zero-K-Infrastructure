@@ -20,6 +20,13 @@ namespace System.Web.Mvc
         public static MvcHtmlString Create(string value) => value == null ? null : new MvcHtmlString(value);
 
         public bool IsEmpty => string.IsNullOrEmpty(Value);
+
+        /// <summary>
+        /// MVC 5's IHtmlString.ToHtmlString. ASP.NET Core's IHtmlContent writes itself to a
+        /// writer instead, and HtmlString.Value is already the raw markup - these are strings
+        /// that were built as html, so there is nothing to encode on the way out.
+        /// </summary>
+        public string ToHtmlString() => Value;
     }
 }
 

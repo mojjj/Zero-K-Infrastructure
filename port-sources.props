@@ -56,6 +56,10 @@
     <Compile Include="..\Zero-K.info\Controllers\LaddersController.cs" Link="Linked\Controllers\LaddersController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\MissionsController.cs" Link="Linked\Controllers\MissionsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\MapsController.cs" Link="Linked\Controllers\MapsController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\HomeController.cs" Link="Linked\Controllers\HomeController.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\SteamOpenIdResult.cs" Link="Linked\SteamOpenIdResult.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\SpotlightHandler.cs" Link="Linked\SpotlightHandler.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\MediaWikiRecentChanges.cs" Link="Linked\MediaWikiRecentChanges.cs" />
     <Compile Include="..\Zero-K.info\AppCode\PlasmaServer.Portable.cs" Link="Linked\PlasmaServer.Portable.cs" />
     <Compile Include="..\Zero-K.info\AppCode\ResourceLinkProvider.cs" Link="Linked\ResourceLinkProvider.cs" />
     <Compile Include="..\Zero-K.info\AppCode\LadderCalculator.cs" Link="Linked\LadderCalculator.cs" />

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 namespace ZkData
 {
     /// <summary>
@@ -25,6 +26,11 @@ namespace ZkData
         /// <summary>Used by PayPalInterface, which Contributions/ContributionsIndex.cshtml
         /// reaches for GetItemCode. Moved here rather than copied: both stacks compile
         /// PlasmaShared, so one partial class still has one definition of each.</summary>
+        /// <summary>Read by Home/HomeIndex.cshtml, three times. Pure, so they belong here.</summary>
+        public static DateTime SteamRelease = new DateTime(2018, 4, 27, 8, 0, 0, DateTimeKind.Utc);
+        public static bool IsLongAfterSteam => DateTime.UtcNow.Subtract(SteamRelease).TotalDays > 14;
+        public static bool IsAfterSteam => DateTime.UtcNow.Subtract(SteamRelease).TotalMilliseconds > 0;
+
         /// <summary>Used by ResourceLinkProvider, which MapsController.Detail calls.</summary>
         public const string SpringfilesBaseUrl = "https://springfiles.springrts.com/";
 

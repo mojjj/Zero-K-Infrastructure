@@ -182,6 +182,14 @@ namespace System.Web.Mvc
         }
 
 
+        /// <summary>Verbatim from HtmlHelperExtensions.cs; Home/HomeIndex.cshtml is the only caller.</summary>
+        public static MvcHtmlString PrintMediaWikiEdit(this IHtmlHelper helper, MediaWikiRecentChanges.MediaWikiEdit edit)
+        {
+            return new MvcHtmlString(string.Format("<a href=\"//zero-k.info/mediawiki/index.php?title={0}\">{0}</a> by {1} <small>{2}</small>",
+                    edit.Title, edit.Username, edit.AgoString
+                    ));
+        }
+
         public static MvcHtmlString PrintMap(this IHtmlHelper helper, string name)
             => new MvcHtmlString(string.Format("<a href='{0}' title='$map${1}'>{1}</a>",
                 Url(helper).Action("DetailName", "Maps", new { name }), name));

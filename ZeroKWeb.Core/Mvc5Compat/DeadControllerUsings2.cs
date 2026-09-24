@@ -28,3 +28,7 @@ namespace System.Web.UI { internal static class DeadUsingMarker { } }
 // JavaScriptSerializer, no ScriptIgnore, nothing else from it. The controller serialises with
 // XmlSerializer and Newtonsoft, both of which it names elsewhere.
 namespace System.Web.Script.Serialization { internal static class DeadUsingMarker { } }
+
+// Dead in SpotlightHandler, checked by what the file uses rather than by counting the name: the
+// one cached thing goes through the site's own MemCache, not System.Web's Cache.
+namespace System.Web.Caching { internal static class DeadUsingMarker { } }

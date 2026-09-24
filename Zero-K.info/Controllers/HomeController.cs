@@ -8,11 +8,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
 using System.Web.Mvc;
-using System.Web.Security;
-using DotNetOpenAuth.Messaging;
-using DotNetOpenAuth.OpenId;
-using DotNetOpenAuth.OpenId.Extensions.SimpleRegistration;
-using DotNetOpenAuth.OpenId.RelyingParty;
 using LobbyClient;
 using PlasmaShared;
 using Ratings;
@@ -225,19 +220,26 @@ namespace ZeroKWeb.Controllers
 			return View();
 		}
 
-        [AcceptVerbs(HttpVerbs.Post | HttpVerbs.Get)]
+        [AcceptVerbs("GET", "POST")]
         public ActionResult Logon(string login, string password, string referer, string zklogin)
 		{
-		    if (!Global.LobbyApi.VerifyIp(Request.UserHostAddress)) return Content("Too many login failures, access blocked");
+		    // PHASE 1: the login rate limiter counts failures in the LOBBY SERVER's memory, so
+		    // this line is sign-in depending on the two processes being one. The null-conditional
+		    // changes nothing where a server is attached - `null == false` is false, so a running
+		    // server still blocks exactly as before - and lets the .NET 9 port, which has no server
+		    // yet, serve the page. It does mean the port has NO login rate limiting; see
+		    // ZkData/EFCORE-MIGRATION.md, which lists it as a blocker rather than a detail.
+		    if (Global.LobbyApi?.VerifyIp(Request.UserHostAddressCompat()) == false) return Content("Too many login failures, access blocked");
 
-		    var openid = new OpenIdRelyingParty();
-            IAuthenticationResponse response = openid.GetResponse();
+		    // Steam sign-in goes through a twin pair - DotNetOpenAuth here, the protocol
+		    // written out on .NET 9, which has no DotNetOpenAuth. See AppCode/SteamOpenId.cs.
+		    var steam = SteamOpenId.TryCompleteLogin(this);
 
-		    if (response != null) // return from steam openid 
-		        return ProcessSteamOpenIDResponse(response);
+		    if (steam != null) // return from steam openid 
+		        return ProcessSteamOpenIDResponse(steam);
 
 		    if (string.IsNullOrEmpty(zklogin)) // steam login request
-		        return RedirectToSteamOpenID(login, referer, openid);
+		        return RedirectToSteamOpenID(login, referer);
 
 
 		    // standard login
@@ -250,63 +252,45 @@ namespace ZeroKWeb.Controllers
 			acc = AuthServiceClient.VerifyAccountHashed(acc.Name, hashed);
 		    if (acc != null)
 		    {
-		        FormsAuthentication.SetAuthCookie(acc.Name, true);
+		        this.SignInCompat(acc);
 		        if (string.IsNullOrEmpty(referer)) referer = Url.Action("Index");
 		        return Redirect(referer);
 		    }
 		    else
 		    {
 		        Trace.TraceWarning("Invalid login attempt for {0}", login);
-		        Global.LobbyApi.LogIpFailure(Request.UserHostAddress);
+		        Global.LobbyApi?.LogIpFailure(Request.UserHostAddressCompat());
 		        return Content("Invalid password");
 		    }
 		}
 
-	    private ActionResult RedirectToSteamOpenID(string login, string referer, OpenIdRelyingParty openid)
+	    private ActionResult RedirectToSteamOpenID(string login, string referer)
 	    {
-            IAuthenticationRequest request=null;
-	        int tries = 3;
-            while (request == null && tries > 0)
-                try
-                {
-                    tries--;
-                    request = openid.CreateRequest(Identifier.Parse("https://steamcommunity.com/openid/"));
-                }
-                catch (Exception ex)
-                {
-                    Trace.TraceWarning("Steam openid CreateRequest has failed: {0}", ex);
-                }
-	        if (request == null) return Content("Steam OpenID service is offline, cannot authorize, please try again later.");
-	        if (!string.IsNullOrEmpty(referer)) request.SetCallbackArgument("referer", referer);
-	        return request.RedirectingResponse.AsActionResultMvc5();
+	        return SteamOpenId.BeginLogin(this, referer)
+	               ?? Content("Steam OpenID service is offline, cannot authorize, please try again later.");
 	    }
 
-	    private ActionResult ProcessSteamOpenIDResponse(IAuthenticationResponse response)
+	    private ActionResult ProcessSteamOpenIDResponse(SteamOpenIdResult steam)
 	    {
-	        switch (response.Status)
+	        switch (steam.Status)
 	        {
-	            case AuthenticationStatus.Authenticated:
-	                var steamIDStr = response.FriendlyIdentifierForDisplay.Split('/').LastOrDefault();
-	                ulong steamID;
-	                if (ulong.TryParse(steamIDStr, out steamID))
+	            case SteamOpenIdStatus.Authenticated:
+	                var referer = steam.Referer;
+	                using (var db = new ZkDataContext())
 	                {
-                        var referer = response.GetCallbackArgument("referer");
-	                    using (var db = new ZkDataContext())
+	                    var acc = db.Accounts.FirstOrDefault(x => x.SteamID == steam.SteamID);
+	                    if (acc != null)
 	                    {
-	                        var acc = db.Accounts.FirstOrDefault(x => x.SteamID == steamID);
-	                        if (acc != null)
-	                        {
-	                            FormsAuthentication.SetAuthCookie(acc.Name, true);
-	                            if (string.IsNullOrEmpty(referer)) referer = Url.Action("Index");
-	                            return Redirect(referer);
-	                        }
-	                        else return Content("Please download the game and create an account in-game first");
+	                        this.SignInCompat(acc);
+	                        if (string.IsNullOrEmpty(referer)) referer = Url.Action("Index");
+	                        return Redirect(referer);
 	                    }
+	                    else return Content("Please download the game and create an account in-game first");
 	                }
-	                break;
-	            case AuthenticationStatus.Canceled:
+	            case SteamOpenIdStatus.Canceled:
 	                return Content("Login was cancelled at the provider");
-	            case AuthenticationStatus.Failed:
+	            case SteamOpenIdStatus.Failed:
+	                Trace.TraceWarning("Steam sign-in failed: {0}", steam.FailureReason);
 	                return Content("Login failed");
 	        }
 	        return View("HomeIndex");
@@ -316,7 +300,7 @@ namespace ZeroKWeb.Controllers
 		{
 			if (Global.IsAccountAuthorized)
 			{
-                FormsAuthentication.SignOut();
+                this.SignOutCompat();
 			}
             if (string.IsNullOrEmpty(referer)) referer = Url.Action("Index");
 			return Redirect(referer);

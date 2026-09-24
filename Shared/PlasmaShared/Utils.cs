@@ -411,11 +411,6 @@ namespace PlasmaShared
             return Glue(args, 0);
         }
 
-        public static string[] Lines(this string source)
-        {
-            if (source == null) return new string[] { };
-            else return source.Replace("\r\n", "\n").Split('\n');
-        }
 
         public static IEnumerable<string> SplitEvery(this string s, int length)
         {
