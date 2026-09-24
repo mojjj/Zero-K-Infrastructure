@@ -135,8 +135,15 @@ risk a typo in each one; it is cosmetic debt and is left alone deliberately.
   `ApplicationException` into a fault the channel rethrew, and there is no such machinery
   here, so the message comes back in an `Error` field.
 
-  **`MissionEditor` still uses the `.svc`.** Pointing it at the JSON endpoint is the next
-  step and is what actually lets the WCF one go.
+  **`MissionEditor` now uses `/MissionService`.** `MissionServiceJsonClient` implements the
+  same `IMissionService` the WCF channel did, so nothing calling it changed; it converts the
+  `Error` field back into the exception those callers are written around, and keeps the
+  one-hour timeout the WCF binding had, because a mission upload is a whole game archive and
+  HttpClient defaults to 100 seconds.
+
+  The `.svc` is still hosted, for editors already installed. **It can be removed once
+  enough of them have updated** - which, unlike ContentService.svc, is a decision about a
+  client this repository ships rather than one it cannot see.
 - `ContentService.svc` - obsolete, uncalled from this repository, and **cannot be retired
   from the evidence available here**: it exists for clients deployed before the JSON
   endpoint, so the decision needs production access logs.

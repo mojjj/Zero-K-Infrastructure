@@ -4047,3 +4047,42 @@ is worth knowing that the rule does not do what the existing code makes it look 
 at `/MissionService` is the next step and is what actually lets the WCF endpoint go.
 `ContentService.svc` is a different problem: it is uncalled from this repository but exists for
 clients deployed before the JSON endpoint, so retiring it needs production access logs.
+
+## Phase 2: the mission editor stops needing WCF
+
+`MissionServiceJsonClient` implements the same `IMissionService` the `ChannelFactory` handed out,
+so the editor's callers did not change at all - `MissionServiceClientFactory.MakeClient()` returns
+this instead of a channel and that is the whole edit in the editor.
+
+**It lives in ZkData, not in the editor.** The editor is WPF and is built only by the Windows CI
+job; ZkData is built by the mono check and is reachable from Tests.Database. Putting the logic
+there is the difference between it being compile-checked and tested on every pull request and
+being neither.
+
+**Failures are exceptions again.** The endpoint reports them in an `Error` field because HTTP has
+no fault machinery, but the editor's callers are written around a channel that threw and show
+`e.Message` in a message box. Converting it back here keeps that true; doing it in the callers
+would have meant editing each one and getting it wrong in the one nobody tested.
+
+**The timeout is an hour, matching the WCF binding.** HttpClient defaults to 100 seconds, which
+would have turned a large mission into a timeout where the channel it replaces succeeded - and the
+editor would have reported it as a failed upload with no clue why.
+
+### Two things the tests found
+
+Writing the tests against a stubbed endpoint turned up both:
+
+- **A malformed body escaped as serializer jargon.** `DeserializeLine` throws its own exception
+  for a body it cannot place, before the client's own check - so the message the editor would put
+  in front of someone trying to publish a mission was about json types. Both failures now report
+  the same way: the endpoint did not answer what was asked for, and here is what it said.
+- **The client checks it got the response the operation asked for.** That was already true and the
+  first version of the test did not know it - a stub answering one canned type for every request
+  failed, correctly.
+
+### What is left of WCF
+
+`MissionService.svc` is still hosted, for editors already installed, and can go once enough have
+updated. That is a decision about a client this repository ships. `ContentService.svc` is not:
+it is uncalled from here but serves clients deployed before the JSON endpoint existed, so
+retiring it needs production access logs.

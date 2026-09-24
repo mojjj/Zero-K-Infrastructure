@@ -103,6 +103,112 @@ namespace Tests.Database
         }
 
         [TestMethod]
+        public void The_client_turns_an_error_field_back_into_an_exception()
+        {
+            // The editor's callers are written around a channel that threw and show e.Message in a
+            // message box. The JSON endpoint reports failure in a field, so the client has to put
+            // it back - otherwise a refused delete looks exactly like a successful one.
+            var stub = new StubEndpoint(new DeleteMissionResponse { Error = "You cannot delete a mission from an other user" });
+            var client = new MissionServiceJsonClient("http://localhost/MissionService", stub);
+
+            var ex = Assert.ThrowsException<ApplicationException>(() => client.DeleteMission(1, "a", "b"));
+            Assert.AreEqual("You cannot delete a mission from an other user", ex.Message);
+        }
+
+        [TestMethod]
+        public void Success_is_silent_and_carries_the_payload()
+        {
+            var stub = new StubEndpoint(new DeleteMissionResponse());
+            new MissionServiceJsonClient("http://localhost/MissionService", stub).DeleteMission(1, "a", "b");
+
+            var missions = new MissionServiceJsonClient("http://localhost/MissionService",
+                new StubEndpoint(new ListMissionInfosResponse
+                {
+                    Missions = new List<Mission> { new Mission { MissionID = 3, Name = "m" } },
+                })).ListMissionInfos().ToList();
+
+            Assert.AreEqual(1, missions.Count);
+            Assert.AreEqual("m", missions[0].Name);
+        }
+
+        [TestMethod]
+        public void The_client_sends_what_the_operation_means()
+        {
+            // DeleteMission and UndeleteMission are the same message with a flag, so the flag is
+            // the whole difference between removing a mission and restoring one.
+            // Answering per request type, because the client checks that the response it got is
+            // the one the operation asked for - which the previous version of this test tripped.
+            var stub = new StubEndpoint(request =>
+                request is GetMissionRequest ? (ApiResponse)new GetMissionResponse() : new DeleteMissionResponse());
+            var client = new MissionServiceJsonClient("http://localhost/MissionService", stub);
+
+            client.DeleteMission(7, "author", "pw");
+            var deleted = (DeleteMissionRequest)Serializer.DeserializeLine(stub.LastBody);
+            Assert.IsTrue(deleted.Delete);
+            Assert.AreEqual(7, deleted.MissionID);
+            Assert.AreEqual("author", deleted.Author);
+
+            client.UndeleteMission(7, "author", "pw");
+            Assert.IsFalse(((DeleteMissionRequest)Serializer.DeserializeLine(stub.LastBody)).Delete);
+
+            client.GetMissionByID(5);
+            Assert.AreEqual(5, ((GetMissionRequest)Serializer.DeserializeLine(stub.LastBody)).MissionID);
+
+            client.GetMission("by name");
+            var byName = (GetMissionRequest)Serializer.DeserializeLine(stub.LastBody);
+            Assert.AreEqual("by name", byName.MissionName);
+            Assert.IsNull(byName.MissionID, "or the server does the wrong lookup");
+        }
+
+        [TestMethod]
+        public void A_failing_endpoint_does_not_look_like_success()
+        {
+            var http500 = new StubEndpoint((ApiResponse)null, System.Net.HttpStatusCode.InternalServerError);
+            Assert.ThrowsException<ApplicationException>(
+                () => new MissionServiceJsonClient("http://localhost/MissionService", http500).DeleteMission(1, "a", "b"));
+
+            // The controller answers plain text when it gets an empty POST; that is not a response.
+            var chatty = new StubEndpoint("Please send request in POST body in command line format:...");
+            Assert.ThrowsException<ApplicationException>(
+                () => new MissionServiceJsonClient("http://localhost/MissionService", chatty).ListMissionInfos());
+        }
+
+        /// <summary>The endpoint, as far as these tests are concerned. Records what it was sent.</summary>
+        private sealed class StubEndpoint : System.Net.Http.HttpMessageHandler
+        {
+            private readonly string body;
+            private readonly System.Net.HttpStatusCode status;
+
+            private readonly Func<object, ApiResponse> answer;
+
+            public StubEndpoint(ApiResponse response, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK)
+                : this(response == null ? "" : Serializer.SerializeToLine(response), status) { }
+
+            public StubEndpoint(Func<object, ApiResponse> answer) : this("") { this.answer = answer; }
+
+            public StubEndpoint(string body, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK)
+            {
+                this.body = body;
+                this.status = status;
+            }
+
+            public string LastBody { get; private set; }
+
+            protected override async System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
+                System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
+            {
+                LastBody = await request.Content.ReadAsStringAsync();
+                var text = answer == null
+                    ? body
+                    : Serializer.SerializeToLine(answer(Serializer.DeserializeLine(LastBody)));
+                return new System.Net.Http.HttpResponseMessage(status)
+                {
+                    Content = new System.Net.Http.StringContent(text),
+                };
+            }
+        }
+
+        [TestMethod]
         public void A_response_with_no_error_is_how_success_looks()
         {
             // The WCF operations returned void and threw on failure; these return a response whose

@@ -610,6 +610,7 @@
     <Compile Include="ZkDataContext.cs" />
     <Compile Include="MissionService\IMissionService.cs" />
     <Compile Include="MissionService\MissionServiceApi.cs" />
+    <Compile Include="MissionService\MissionServiceJsonClient.cs" />
     <Compile Include="Migrations\201412312111372_Init.cs" />
     <Compile Include="Migrations\201412312111372_Init.Designer.cs">
       <DependentUpon>201412312111372_Init.cs</DependentUpon>
