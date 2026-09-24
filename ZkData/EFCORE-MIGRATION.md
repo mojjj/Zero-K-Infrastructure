@@ -3826,3 +3826,45 @@ missing - the check that had been unavailable the whole time.
 Three project files now have to agree about these sources - the server, the port's
 `port-sources.props`, and the test - which is the same drift `port-sources.props` exists to
 manage, one layer further out.
+
+## Phase 1: deployment
+
+**One MiscVar is the whole switch.** `LobbyApiUrl` unset - which is every deployment nobody has
+changed - and the website starts the lobby server in its own process exactly as before. Set, and
+it starts none and talks to that URL with `LobbyApiSecret`.
+
+Settings live in `MiscVars` because that is where this system already keeps secrets
+(`ZkData/Secrets.cs`), both halves hold the database, and a second config file is a second thing
+to get out of step. It also adds no exposure: anyone who can read `MiscVars` could already read
+everything.
+
+**A URL without a secret refuses to start.** Not a fallback to in-process - that would start a
+second lobby server beside the one already running, and two servers against one database both
+accept logins and both run PlanetWars turns. Refusing is the safer failure, and the message names
+the missing MiscVar.
+
+`ZkLobbyServer.Standalone` is the other end: `ZkLobbyServer` was a Library with **no entry point**,
+which is why the only way to run it was inside the IIS worker, which is why an app-pool recycle
+disconnected every player. It is in the solution and built by CI, because a project nothing builds
+rots quietly.
+
+### The reverse dependency, which is what is actually left
+
+Everything in Phase 1 so far was the website reaching into the lobby server. The last thing is the
+other direction: **`IPlanetwarsEventCreator` is implemented once, in the website**, and it formats
+the event feed's HTML - `Global.UrlHelper()`, `HtmlHelperExtensions.PrintAccount`, `PrintClan`,
+`PrintPlanet`. The server calls it from 19 places.
+
+The standalone host throws there rather than stubbing it. A stub returning plain text would
+compile, run, and quietly fill the site's event feed with unlinked events that nobody would notice
+until they went looking for a link - which is the failure mode this port has spent its whole
+length avoiding. So a standalone server runs with PlanetWars offline and not otherwise, and the
+decision is named: move the formatting somewhere both halves can use - much of what it needs is
+already in `HtmlHelperExtensions.Portable.cs` - or make events something the server asks the
+website to write.
+
+### What is checked
+
+The configuration decision is a function, so it is tested rather than deployed and hoped for: the
+default is in-process, a URL without a secret throws naming the MiscVar, asking for a client with
+no URL is a programming error, and a standalone server listens on loopback unless told otherwise.

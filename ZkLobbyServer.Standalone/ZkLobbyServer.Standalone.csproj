@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The lobby server as its own process - the thing Phase 1 exists to make possible.
+
+    net48 because that is what ZkLobbyServer is; this project adds an entry point and nothing
+    else. It is compile-checked by tools/build-website.sh, which takes a project as its argument:
+
+        ./tools/build-website.sh ZkLobbyServer.Standalone/ZkLobbyServer.Standalone.csproj
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <Platforms>x64</Platforms>
+    <AssemblyName>ZkLobbyServer.Standalone</AssemblyName>
+    <RootNamespace>ZkLobbyServer.Standalone</RootNamespace>
+    <LangVersion>7.3</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ZkLobbyServer\ZkLobbyServer.csproj" />
+  </ItemGroup>
+
+  <!--
+    ZkLobbyServer pins these below what MaxMind.GeoIP2 asks for transitively. Its own build never
+    notices; a new consumer gets NU1605 downgrade errors. Naming the higher versions here is what
+    NuGet asks for, and is what Tests.Database would have needed had it referenced the project
+    rather than linking the files.
+  -->
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="6.0.1" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="6.0.0" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
+  </ItemGroup>
+
+</Project>
