@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using ZeroKWeb.Compat;
@@ -86,6 +87,27 @@ namespace ZeroKWeb.Host.Controllers
         {
             await ZkAuth.SignOut(HttpContext);
             return Redirect("/");
+        }
+
+        /// <summary>
+        /// Takes an upload through the MVC 5 type, so the binder can be checked end to end.
+        ///
+        /// Deliberately reports what the ACTION saw rather than what the request contained: the
+        /// failure being guarded against is a binder that produces null or an empty wrapper, and
+        /// only the action's own view of the parameter can show that.
+        /// </summary>
+        [HttpPost]
+        public IActionResult Upload(System.Web.HttpPostedFileBase upload)
+        {
+            if (upload == null) return Content("null");
+
+            using (var stream = upload.InputStream)
+            using (var memory = new System.IO.MemoryStream())
+            {
+                stream.CopyTo(memory);
+                var hex = string.Concat(Array.ConvertAll(memory.ToArray(), b => b.ToString("X2")));
+                return Content("name=" + upload.FileName + " length=" + upload.ContentLength + " bytes=" + hex);
+            }
         }
 
         /// <summary>What the site thinks of you, for checking a sign-in worked.</summary>

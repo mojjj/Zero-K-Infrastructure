@@ -103,11 +103,11 @@ namespace ZeroKWeb.Controllers
 
 				if (uploadedImage != null)
 				{
-					Images.Processor.Save(uploadedImage, Server.MapPath(news.ImageRelativeUrl));
+					Images.Processor.Save(uploadedImage, this.MapPath(news.ImageRelativeUrl));
 					var uploadedSize = Images.Processor.Measure(uploadedImage);
 					Images.Processor.SaveResized(uploadedImage,
 					    new Size(120, ImageSizing.ProportionalHeight(uploadedSize.Width, uploadedSize.Height, 120)),
-					    Server.MapPath(news.ThumbRelativeUrl));
+					    this.MapPath(news.ThumbRelativeUrl));
 				}
 				scope.Complete();
 			}

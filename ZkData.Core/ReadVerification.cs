@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using ZkData;
+using System.Data.Entity.SqlServer;
 
 namespace ZkData.Core
 {
@@ -122,6 +123,26 @@ namespace ZkData.Core
                     .Select(a => new { a.AccountID, Battles = a.SpringBattlePlayers.Count() })
                     .FirstOrDefault();
                 return top == null ? "no accounts" : "busiest account " + top.AccountID + " with " + top.Battles + " battles";
+            });
+
+            // EF6's SqlFunctions.PatIndex, which ClansController uses four times to reject a
+            // clan whose name or shortcut collides with an existing one. The mapping is
+            // asserted on the SQL, not just on the result: a shim that silently returned
+            // null would still "pass" a row count here, because no clan collides in the
+            // fixture, and every clan name would then be accepted in production.
+            Check("SqlFunctions.PatIndex translates to the built-in PATINDEX", failures, () =>
+            {
+                var shortcut = "ZK";
+                var query = db.Clans.AsNoTracking()
+                    .Where(x => SqlFunctions.PatIndex(shortcut, x.Shortcut) > 0);
+                var sql = query.ToQueryString();
+                if (!sql.Contains("PATINDEX("))
+                    throw new Exception("no PATINDEX in the generated SQL: " + sql);
+                // IsBuiltIn(); without it EF Core emits [dbo].[PATINDEX], which SQL Server
+                // rejects, and EF6 never did.
+                if (sql.Contains("[PATINDEX]"))
+                    throw new Exception("PATINDEX emitted as a user function: " + sql);
+                return query.Count() + " clan(s) match, from SQL that SQL Server accepted";
             });
 
             // The five many-to-many joins are the part of the model written by hand, so they

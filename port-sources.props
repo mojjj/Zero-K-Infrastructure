@@ -37,18 +37,21 @@
     <Compile Include="..\Zero-K.info\Controllers\PlanetwarsController.cs" Link="Linked\Controllers\PlanetwarsController.cs" />
     <!--
       Not here, and why:
-        Clans   - HttpPostedFileBase. Deliberately unshimmed: it compiles as a shim and ASP.NET
-                  Core's model binder ignores it, so every upload would silently do nothing.
         Engines  - SharpCompress, a package the port does not reference, used for engine archives.
         Missions - VikingErik.Mvc.ResumingActionResults, an MVC 5 package for resumable downloads.
         Ladders  - Global.AwardCalculator, whose class is AppCode/LadderCalculator.cs and needs
                    both ZkLobbyServer and EntityFramework.Extensions.
         Home    - DotNetOpenAuth.
-        Maps    - HttpPostedFileBase and unitsync interop.
+        Maps    - unitsync interop (ZkData.UnitSyncLib), AutoRegistrator and System.Web.Script.
+                  HttpPostedFileBase is no longer among its blockers.
       The rest of the 24 have not been tried.
     -->
     <Compile Include="..\Zero-K.info\Controllers\UsersController.cs" Link="Linked\Controllers\UsersController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\BattlesController.cs" Link="Linked\Controllers\BattlesController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\ClansController.cs" Link="Linked\Controllers\ClansController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\FactionsController.cs" Link="Linked\Controllers\FactionsController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\NewsController.cs" Link="Linked\Controllers\NewsController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\LobbyNewsController.cs" Link="Linked\Controllers\LobbyNewsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\AdminController.cs" Link="Linked\Controllers\AdminController.cs" />
 
     <!--

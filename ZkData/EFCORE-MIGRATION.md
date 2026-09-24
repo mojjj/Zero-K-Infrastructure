@@ -3052,3 +3052,69 @@ It is now a separate check: each comparison records the labels it consumed, and 
 compared to the file. A shape captured and never compared still fails - which is the property
 that was worth keeping - but it no longer belongs to one of the two checks.
 
+
+## File uploads: `HttpPostedFileBase`
+
+Three choices, and only one of them fails loudly when it is wrong.
+
+A **bare shim** - a type with the right members and nothing behind it - compiles the eleven
+upload actions and then binds `null` for every request. The site would accept an avatar, a map,
+a mission, and store nothing. **Editing production to `IFormFile`** works on .NET 9 and breaks
+MVC 5, which is the stack still serving the site.
+
+So: a **wrapper over `IFormFile`, bound by a real `IModelBinder`**. `ContentLength`,
+`InputStream`, `FileName`, `ContentType` and `SaveAs` map onto the real uploaded file, and
+`HttpPostedFileBinderProvider` claims the type before MVC's own providers see it.
+
+The wrapper deliberately has **no parameterless constructor**. That is not tidiness: it is what
+turns a missing binder registration from silent `null` into
+
+    Could not create an instance of type 'System.Web.HttpPostedFileBase'
+
+Verified by removing the registration from `Program.cs` and watching the harness fail. The check
+asserts the **bytes**, not just the name and the length - `bytes=5A4B00FF1020` - because a
+wrapper that returned an empty stream would pass a name-and-length check and still lose the
+file. It also asserts that an *absent* file binds to `null`, which is what MVC 5 did and what
+every one of those actions tests for.
+
+## `Server.MapPath`, and why it is a method call now
+
+`Clans`, `News` and `LobbyNews` needed one more thing before they could be linked: ten
+`Server.MapPath` calls and one `Response.ClearContent`.
+
+`Server` is a *property* on MVC 5's `Controller`, and **C# has no extension properties** - the
+same wall `Request.Params` and `Request.Url` hit earlier in this port. So the same answer: a
+compat twin pair, `ControllerCompat.MapPath(this Controller, string)`, one copy per stack, and
+ten production call sites changed from `Server.MapPath(x)` to `this.MapPath(x)`. Both stacks
+compile it; the MVC 5 half just forwards to `Server`.
+
+`Response.ClearContent` could be an extension method, because `Response` is reached through
+`HttpContext`. On .NET 9 there is nothing to clear - the response has not started - so it is a
+no-op that **throws if the response *has* started**, rather than pretending to have worked.
+
+## `SqlFunctions.PatIndex`, and a stub that would have been a bug
+
+`ClansController` calls `SqlFunctions.PatIndex` four times, to reject a clan whose name or
+shortcut collides with an existing one. The namespace `System.Data.Entity.SqlServer` already had
+a dead-using marker in this port - added for `UsersController`, which names the namespace and
+then uses nothing from it.
+
+Extending that stub to satisfy `ClansController` would have compiled and been wrong in the worst
+available direction: `PatIndex` returning `null` makes `> 0` false, which makes *every* clan name
+look free. This is the `EntityFramework.Extensions` trap recorded above, and it is why that one
+was left alone rather than shimmed.
+
+Instead the method is mapped to the same T-SQL EF6 emitted, through EF Core's
+`HasDbFunction(...).HasName("PATINDEX").IsBuiltIn()`. Identical SQL is the entire claim: collation,
+wildcard handling and NULL behaviour are then the database's, and therefore unchanged.
+
+`IsBuiltIn()` is load-bearing. Without it EF Core emits `[dbo].[PATINDEX]`, which SQL Server
+rejects and EF6 never produced. The read verification asserts on the **generated SQL** - that it
+contains `PATINDEX(` and does not contain `[PATINDEX]` - and not on the row count, because the
+fixture has no colliding clans and a shim returning `null` would have scored a clean zero.
+Positive control: dropping `IsBuiltIn()` fails the check.
+
+`ClansIndex.cshtml` then surfaced `CS0841` one more time. Its templated Razor delegates were
+declared in a `@{ }` block *below* the block that builds the grid from them. An `@helper` was a
+method and could be called before its declaration; a delegate is a local and cannot. The two
+blocks are simply swapped.

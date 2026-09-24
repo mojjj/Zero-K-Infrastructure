@@ -88,7 +88,7 @@ namespace ZeroKWeb.Controllers
 
                 if (uploadedImage != null)
                 {
-                    var targetPath = Server.MapPath(news.ImageRelativeUrl);
+                    var targetPath = this.MapPath(news.ImageRelativeUrl);
                     var folder = Path.GetDirectoryName(targetPath);
                     if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
                     var uploadedSize = Images.Processor.Measure(uploadedImage);

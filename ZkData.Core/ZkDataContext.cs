@@ -106,6 +106,10 @@ namespace ZkData
             // ZkDataContext.ColumnFacets.cs and the generator beside it.
             ConfigureColumnFacets(modelBuilder);
 
+            // EF6's SqlFunctions.PatIndex, which ClansController uses to find name
+            // collisions - see Ef6Compat/SqlFunctionsShim.cs.
+            System.Data.Entity.SqlServer.SqlFunctions.Register(modelBuilder);
+
         }
 
         /// <summary>Generated in ZkDataContext.Relationships.cs.</summary>
