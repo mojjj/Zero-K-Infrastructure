@@ -64,6 +64,7 @@
     <Compile Include="AppCode\Auth.cs" />
     <Compile Include="AppCode\AuthServiceClient.cs" />
     <Compile Include="AppCode\ContentServiceImplementation.cs" />
+    <Compile Include="AppCode\MissionServiceImplementation.cs" />
     <Compile Include="AppCode\DosProtector.cs" />
     <Compile Include="AppCode\ForumPostCache.cs" />
     <Compile Include="AppCode\ForumPostIndexer.cs" />
@@ -87,6 +88,7 @@
     <Compile Include="Controllers\AdminController.cs" />
     <Compile Include="Controllers\AutocompleteController.cs" />
     <Compile Include="Controllers\ContentServiceController.cs" />
+    <Compile Include="Controllers\MissionServiceController.cs" />
     <Compile Include="Controllers\DownloadController.cs" />
     <Compile Include="Controllers\ChartsController.cs" />
     <Compile Include="Controllers\ClansController.cs" />

@@ -123,11 +123,20 @@ risk a typo in each one; it is cosmetic debt and is left alone deliberately.
 
 **WCF is the real item**, and it splits in two:
 
-- `MissionService.svc` - both ends are **in this repository**. Six operations, one
-  implementation here and one client in `MissionEditor`. Re-exposing it as JSON, the way
-  `/ContentService` already is, and pointing the editor at it would remove the hard
-  constraint below without waiting on anyone. Note that `SendMission` passes EF entities,
-  which is the same question Phase 1 spent its length on.
+- `MissionService.svc` - **there is now a JSON endpoint beside it**, `/MissionService`,
+  built the same way `/ContentService` is: request and response classes dispatched by name
+  through `CommandJsonSerializer`. It does not reimplement anything - `MissionService.svc.cs`
+  stays the one implementation and the JSON layer is an envelope over it, because two copies
+  of an operation that deletes other people's missions is not a thing to have while both
+  endpoints are live.
+
+  The contract is unchanged: `Mission` is `[DataContract]` and Json.NET honours that, so the
+  same fields cross as under WCF. One deliberate difference - WCF turned an
+  `ApplicationException` into a fault the channel rethrew, and there is no such machinery
+  here, so the message comes back in an `Error` field.
+
+  **`MissionEditor` still uses the `.svc`.** Pointing it at the JSON endpoint is the next
+  step and is what actually lets the WCF one go.
 - `ContentService.svc` - obsolete, uncalled from this repository, and **cannot be retired
   from the evidence available here**: it exists for clients deployed before the JSON
   endpoint, so the decision needs production access logs.

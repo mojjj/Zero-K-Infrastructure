@@ -3999,3 +3999,51 @@ Positive control: removing the expiry check fails exactly the two expiry tests a
 The game client passes the token in a **query string**, which is where URLs end up in history,
 referer headers and proxy logs. Expiry bounds how long a leaked one is worth having; moving it out
 of the URL changes a shipped client and remains a decision rather than a port task.
+
+## Phase 2: /MissionService, in JSON
+
+Server-side WCF has no in-box successor on .NET 9, which is why the plan's "remove WCF" step
+could not be carried out as written. `MissionService.svc` is now the half that can move: both its
+implementation and its only client are in this repository, so nothing waits on a deployment
+nobody controls.
+
+`/MissionService` is built exactly like `/ContentService` - request and response classes
+dispatched by name through `CommandJsonSerializer`. A second convention for the same job would
+have been worse than either.
+
+**It reimplements nothing.** `MissionService.svc.cs` stays the one implementation - authorisation,
+uniqueness checks, script rewriting - and the JSON layer is an envelope over it. Two copies of an
+operation that deletes other people's missions is not a thing to have while both endpoints are
+live.
+
+**The contract did not change, only the envelope.** `Mission` is `[DataContract]` with explicit
+`[DataMember]` fields and Json.NET honours that, so the same fields cross as under WCF - the
+entity's navigations were not among them then and are not now. `MissionSlot` is `[Serializable]`
+with public fields only, which both serialisers treat alike.
+
+That is asserted rather than assumed, field by field for the slot: a dropped one is a slot that
+loses its team or its AI, and that gets noticed weeks later by whoever opens the mission again.
+
+**One deliberate difference.** WCF turned an `ApplicationException` into a fault the channel
+rethrew on the client; there is no such machinery here, so the message comes back in an `Error`
+field. The responses carry it rather than relying on a status code, so a caller that forgets to
+look gets a null mission rather than a silent success.
+
+### A discovery rule that does not reach here
+
+The messages are **listed**, not discovered. `Utils.GetAllTypesWithAttribute` scans the
+attribute's own assembly plus the entry, executing and calling ones - which is why
+`/ContentService`'s messages work without being listed: they live in PlasmaShared, where the
+attribute is. These cannot live there, because they carry `Mission` and PlasmaShared is built
+before ZkData.
+
+The first version put them in ZkData and relied on the scan, and every message failed with
+`Invalid json type`. That is a good failure - loud, immediate, and nothing moved at all - but it
+is worth knowing that the rule does not do what the existing code makes it look like it does.
+
+### What is left
+
+`MissionEditor` still builds a `ChannelFactory<IMissionService>` against the `.svc`. Pointing it
+at `/MissionService` is the next step and is what actually lets the WCF endpoint go.
+`ContentService.svc` is a different problem: it is uncalled from this repository but exists for
+clients deployed before the JSON endpoint, so retiring it needs production access logs.
