@@ -379,6 +379,8 @@ namespace ZeroKWeb.Host
                 failures += await CheckSignIn();
                 failures += await CheckUploadBinding();
                 failures += await CheckLadders(client);
+                failures += await CheckResumableDownload(client);
+                failures += await CheckSelectHelpers(client);
 
                 Console.WriteLine();
                 if (failures == 0)
@@ -391,6 +393,80 @@ namespace ZeroKWeb.Host
             }
         }
 
+
+        /// <summary>
+        /// MultiSelectFor and EnumDropDownListFor on a real page, through the real IHtmlHelper.
+        ///
+        /// The markup in SelectHelpersCompat is copied verbatim from HtmlHelperExtensions.cs and
+        /// can be diffed against it. What cannot be diffed is the substitution underneath -
+        /// NameFor in place of ExpressionHelper.GetExpressionText, and a compiled expression in
+        /// place of ModelMetadata.FromLambdaExpression(...).Model. The capture says those agree
+        /// on the name and the value; this says they agree when MVC, not the capture harness,
+        /// builds the helper.
+        /// </summary>
+        private static async Task<int> CheckSelectHelpers(HttpClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine("the site's own select helpers:");
+            var failures = 0;
+
+            var battles = await client.GetAsync(Url + "/Battles");
+            var html = await battles.Content.ReadAsStringAsync();
+            failures += Check(battles.IsSuccessStatusCode, "/Battles was served (" + (int)battles.StatusCode + ")");
+            // The id is the expression text, which is the half of MVC 5's API this replaces.
+            failures += Check(html.Contains("data-autocomplete-action='add' id='UserId' name=''"),
+                "MultiSelectFor named the field from the lambda, as ExpressionHelper did");
+            failures += Check(html.Contains("<div id='UserIdplayers'></div>"),
+                "and the div the site's javascript looks for is there");
+            // Seven EnumDropDownListFor calls on this page, through the real helper.
+            failures += Check(html.Contains("<select id=\"Bots\" name=\"Bots\">"),
+                "EnumDropDownListFor rendered on a real page");
+            failures += Check(!html.Contains("@"), "no unprocessed Razor markers survived");
+
+            return failures;
+        }
+
+        /// <summary>
+        /// Byte ranges, which is the entire port of MVC.ResumingActionResults - a .NET Framework
+        /// package from 2014 that MissionsController uses once, to let a mission mutator
+        /// download resume.
+        ///
+        /// ASP.NET Core implements ranges itself, but only when EnableRangeProcessing is set,
+        /// and the default is false. A ResumingFileContentResult that simply derived from
+        /// FileContentResult would compile, serve the file, and quietly stop resuming - a
+        /// property nothing about a downloaded file looks wrong without. So it is asserted:
+        /// a Range request has to come back 206 with the right bytes, and the no-range request
+        /// has to still be a whole 200.
+        /// </summary>
+        private static async Task<int> CheckResumableDownload(HttpClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine("resumable downloads:");
+            var failures = 0;
+
+            var whole = await client.GetAsync(Url + "/Harness/Resumable");
+            var wholeBytes = await whole.Content.ReadAsByteArrayAsync();
+            failures += Check((int)whole.StatusCode == 200 && wholeBytes.Length == 10,
+                "a plain request is still a whole 200 (" + (int)whole.StatusCode + ", " + wholeBytes.Length + " bytes)");
+            failures += Check(whole.Headers.AcceptRanges.Contains("bytes"),
+                "it advertises Accept-Ranges: bytes");
+
+            var request = new HttpRequestMessage(HttpMethod.Get, Url + "/Harness/Resumable");
+            request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(2, 4);
+            var partial = await client.SendAsync(request);
+            var partialBytes = await partial.Content.ReadAsByteArrayAsync();
+
+            failures += Check((int)partial.StatusCode == 206,
+                "a Range request is answered 206 Partial Content (" + (int)partial.StatusCode + ")");
+            failures += Check(partialBytes.Length == 3 && partialBytes[0] == 2 && partialBytes[2] == 4,
+                "the bytes are the ones asked for, not the whole file ("
+                + string.Join(",", partialBytes) + ")");
+            failures += Check(partial.Content.Headers.ContentRange?.ToString() == "bytes 2-4/10",
+                "Content-Range names the slice and the total ("
+                + partial.Content.Headers.ContentRange + ")");
+
+            return failures;
+        }
 
         /// <summary>
         /// The Ladders pages, which are the first to exercise three things that until now only

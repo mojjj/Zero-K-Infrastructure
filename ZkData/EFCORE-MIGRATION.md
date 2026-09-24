@@ -3214,3 +3214,77 @@ here: this is a display query inside the rating code, and the ratings themselves
 Four other sites use the same `DefaultIfEmpty` shape and are left alone deliberately - they run
 over in-memory collections, where LINQ to Objects handles it, and `PlanetwarsLadder` is exercised
 in the render harness to prove it.
+
+## Two more controllers, and a recorded blocker that was wrong again
+
+`MissionsController` was listed as blocked by `VikingErik.Mvc.ResumingActionResults`, and
+`EnginesController` by `SharpCompress`. Both entries were written from the using list. Applying
+the test this document keeps insisting on - what a file *uses* - one was nearly free and the
+other was blocked by something else entirely.
+
+### Missions: a 2014 package replaced by one property
+
+`MVC.ResumingActionResults` is used once, `new ResumingFileContentResult(m.Mutator, ...)`. It
+existed because MVC 5 had no HTTP byte-range support. **ASP.NET Core has it built in**, so the
+port of that dependency is:
+
+```csharp
+public class ResumingFileContentResult : FileContentResult
+{
+    public ResumingFileContentResult(byte[] fileContents, string contentType)
+        : base(fileContents, contentType) { EnableRangeProcessing = true; }
+}
+```
+
+The one line is the whole thing, and the default is `false` - so a class that merely derived from
+`FileContentResult` would compile, serve the file, and silently stop resuming, which is the only
+property the original package provided and the one thing a downloaded mutator does not look wrong
+without. Asserted over HTTP: `Range: bytes=2-4` has to come back **206** with bytes `2,3,4` and
+`Content-Range: bytes 2-4/10`. Positive control: removing `EnableRangeProcessing` turns all four
+assertions red and the response into a plain 200 with the whole file.
+
+`System.Web.UI` is a dead using in that file and is now a marker namespace.
+
+### Engines: SharpCompress was never the problem
+
+One call, `ArchiveFactory.Create(ArchiveType.Zip)`, and the package has supported netstandard for
+years - the MVC 5 build already restores 0.31.0 in three projects. Referencing it took one line.
+
+The real blockers are in `MakeDefault`: `PlasmaShared.ContentService`, a WCF `[ServiceContract]`
+whose server half does not exist on .NET 9, and `Global.SteamDepotGenerator`, which lives in
+`AutoRegistrator` and drags in unitsync. Shimming either gives an admin action that reports
+success and changes nothing - the same trap as `EntityFramework.Extensions`. Not linked, and the
+note in `port-sources.props` now says why for real.
+
+## `Select`, `MultiSelectFor`, `EnumCheckboxesFor`
+
+Three of the site's own helpers, blocking five views between them. They cannot be linked: they
+take `HtmlHelper<TModel>` and call `ModelMetadata.FromLambdaExpression` and
+`ExpressionHelper.GetExpressionText`, none of which ASP.NET Core has in that shape.
+
+Unlike `PostLink` and `EnumDropDownListFor`, **the markup here did not need capturing**. It is
+built from format strings that are plain to read in `HtmlHelperExtensions.cs`, so they are copied
+character for character and a diff of the two files is the check. There is no `TagBuilder` hiding
+attribute ordering or encoding rules, which is exactly what made the other two need ground truth.
+
+What did need capturing is the substitution underneath, because neither substitute is obviously
+equal:
+
+| MVC 5 | the port | captured answer |
+|---|---|---|
+| `ExpressionHelper.GetExpressionText(x => x.UserId)` | `NameFor(x => x.UserId)` | `name=UserId` |
+| `ModelMetadata.FromLambdaExpression(...).Model` | `expression.Compile()(Model)` | `model=[4,11]` |
+
+`NameFor` is the expression text with the field prefix in front, and the prefix is empty *only*
+because all five call sites are at the top level of their model. That is a condition, not an
+identity, and it is written down rather than assumed.
+
+`ZeroKWeb.Render` now builds a real `IHtmlHelper<T>` out of DI - the same way it already built a
+real `IViewComponentHelper` - and compares both answers to the capture. The coverage assertion
+caught this before it was written: adding two shapes to `expected.txt` and comparing neither
+failed with *missing ExpressionHelper.GetExpressionText(...)*, which is the property that
+assertion exists for and the second time it has paid for itself.
+
+Encoding is `WebUtility`, not `IHtmlHelper.Encode`: MVC 5 used HttpUtility's rules, which spell an
+apostrophe `&#39;`, and ASP.NET Core's `HtmlEncoder` spells it `&#x27;`. Same choice and same
+reason as `PostLinkCompat`.

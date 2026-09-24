@@ -37,18 +37,24 @@
     <Compile Include="..\Zero-K.info\Controllers\PlanetwarsController.cs" Link="Linked\Controllers\PlanetwarsController.cs" />
     <!--
       Not here, and why:
-        Engines  - SharpCompress, a package the port does not reference, used for engine archives.
-        Missions - VikingErik.Mvc.ResumingActionResults, an MVC 5 package for resumable downloads.
-        Ladders  - Global.AwardCalculator, whose class is AppCode/LadderCalculator.cs and needs
-                   both ZkLobbyServer and EntityFramework.Extensions.
-        Home    - DotNetOpenAuth.
-        Maps    - unitsync interop (ZkData.UnitSyncLib), AutoRegistrator and System.Web.Script.
-                  HttpPostedFileBase is no longer among its blockers.
-      The rest of the 24 have not been tried.
+        Engines - NOT SharpCompress, which was the recorded reason and was wrong: it is one call,
+                  and the package has supported netstandard for years. The real blocker is
+                  MakeDefault, which needs PlasmaShared.ContentService - a WCF [ServiceContract]
+                  whose server half does not exist on .NET 9 - and Global.SteamDepotGenerator,
+                  which lives in AutoRegistrator and drags in unitsync. Shimming either would
+                  give an admin action that reports success and changes nothing.
+        Home    - DotNetOpenAuth, for Steam OpenID sign-in. Four namespaces, really used.
+        Maps    - unitsync interop (ZkData.UnitSyncLib) and Global.AutoRegistrator. The
+                  System.Web.Script using turns out to be dead, and HttpPostedFileBase is no
+                  longer among its blockers, but the unitsync chain is real.
+      The rest have not been tried. Ladders and Missions moved out of this list, and in both
+      cases the recorded blocker was a using that nothing in the file used - the test is what a
+      file USES, never what it names.
     -->
     <Compile Include="..\Zero-K.info\Controllers\UsersController.cs" Link="Linked\Controllers\UsersController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\BattlesController.cs" Link="Linked\Controllers\BattlesController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\LaddersController.cs" Link="Linked\Controllers\LaddersController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\MissionsController.cs" Link="Linked\Controllers\MissionsController.cs" />
     <Compile Include="..\Zero-K.info\AppCode\LadderCalculator.cs" Link="Linked\LadderCalculator.cs" />
     <Compile Include="..\Zero-K.info\Controllers\ClansController.cs" Link="Linked\Controllers\ClansController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\FactionsController.cs" Link="Linked\Controllers\FactionsController.cs" />

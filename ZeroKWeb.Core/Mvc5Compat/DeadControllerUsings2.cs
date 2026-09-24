@@ -18,3 +18,8 @@ namespace System.Data.Entity.Infrastructure { internal static class DeadUsingMar
 // second.
 namespace System.Data.Entity.SqlServer { internal static class DeadUsingMarker { } }
 namespace System.Web.Routing { internal static class DeadUsingMarker { } }
+
+// Dead in MissionsController, checked by what the file uses rather than by counting the name:
+// no HtmlTextWriter, no Page, nothing else from WebForms. It names the namespace once and then
+// never touches it.
+namespace System.Web.UI { internal static class DeadUsingMarker { } }
