@@ -384,6 +384,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckDivergedViews(client);
                 failures += await CheckMaps(client);
                 failures += await CheckSteamAndRealLogon();
+                failures += await CheckEngines();
 
                 Console.WriteLine();
                 if (failures == 0)
@@ -547,6 +548,36 @@ namespace ZeroKWeb.Host
             });
 
             return failures;
+        }
+
+        /// <summary>
+        /// The Engines list, which is the last controller to link and the one whose recorded
+        /// blocker - SharpCompress - turned out not to be the blocker at all.
+        ///
+        /// Moderator-gated at the controller, so it goes through AsModerator. Index reads the
+        /// engine directory off disk through this.MapPath, which is the compat pair, and the
+        /// view builds a UniGrid with a templated delegate that had to be moved above its use.
+        ///
+        /// MakeDefault is NOT exercised and cannot be: it needs the content service, the Steam
+        /// depot builder and a lobby server. All three throw, by design.
+        /// </summary>
+        private static async Task<int> CheckEngines()
+        {
+            Console.WriteLine();
+            Console.WriteLine("engines:");
+
+            return await AsModerator(async client =>
+            {
+                var response = await client.GetAsync(Url + "/Engines");
+                var html = await response.Content.ReadAsStringAsync();
+                var failures = 0;
+                failures += Check(response.IsSuccessStatusCode, "/Engines was served (" + (int)response.StatusCode + ")");
+                failures += Check(html.Contains("Engine list"), "Page.Title reached the layout");
+                failures += Check(html.Contains("Upload a new engine"), "the view's own content is there");
+                failures += Check(!System.Text.RegularExpressions.Regex.IsMatch(html, @"@(Html\.|Url\.|Model\b|\(|\{|if\b|foreach\b)"),
+                    "no unprocessed Razor markers survived");
+                return failures;
+            });
         }
 
         /// <summary>

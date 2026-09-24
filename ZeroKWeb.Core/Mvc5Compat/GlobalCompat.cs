@@ -148,6 +148,10 @@ namespace ZeroKWeb
         public static global::AutoRegistrator.AutoRegistrator AutoRegistrator
             => new global::AutoRegistrator.AutoRegistrator();
 
+        /// <summary>The Steam depot builder - see Mvc5Compat/AutoRegistratorCompat.cs.</summary>
+        public static global::AutoRegistrator.SteamDepotGenerator SteamDepotGenerator
+            => new global::AutoRegistrator.SteamDepotGenerator();
+
         private static readonly object awardCalculatorLock = new object();
         private static AwardCalculator awardCalculator;
 

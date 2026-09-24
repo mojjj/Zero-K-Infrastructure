@@ -107,7 +107,14 @@ build "" "$WORK/pass1.txt" && rc=0 || rc=$?
 # A build that failed for a reason this report cannot see - no SDK, a restore failure, a
 # broken csproj - yields zero view diagnostics, and zero diagnostics reads as a clean bill
 # of health. Refuse to report one.
-if [ "${rc:-0}" -ne 0 ] && ! grep -qE 'Zero-K\.info/Views/[^(]+\([0-9]+,[0-9]+\): error ' "$WORK/pass1.txt"; then
+#
+# CS5001 is excluded here for the same reason it is excluded above, and the exclusion became
+# necessary rather than tidy: once EVERY view compiled, a full build produced no view
+# diagnostics AND a non-zero exit, which is precisely the shape this guard was written to
+# catch. It was reporting success as an unclassifiable failure.
+if [ "${rc:-0}" -ne 0 ] \
+   && ! grep -qE 'Zero-K\.info/Views/[^(]+\([0-9]+,[0-9]+\): error ' "$WORK/pass1.txt" \
+   && grep -E 'error CS' "$WORK/pass1.txt" | grep -qv 'CS5001'; then
     echo "the build failed for a reason this report cannot classify:" >&2
     tail -20 "$WORK/pass1.txt" >&2
     exit 2

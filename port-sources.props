@@ -15,6 +15,19 @@
     ZeroKWeb.Core owns Mvc5Compat natively, so that glob stays in the Host and Render projects
     rather than here.
   -->
+  <!--
+    Packages the LINKED sources need. They belong here for the same reason the sources do:
+    ZeroKWeb.Core, ZeroKWeb.Host and ZeroKWeb.Render compile the same files, so a package
+    listed in only one of them builds there and fails in the other two. That already happened
+    once with the source list itself, which is why this file exists.
+  -->
+  <ItemGroup>
+    <!-- EnginesController repacks an uploaded engine: ArchiveFactory.Create(ArchiveType.Zip),
+         once. The version is the one the MVC 5 build already restores in three projects, so
+         the linked source builds the same zip on both stacks. -->
+    <PackageReference Include="SharpCompress" Version="0.31.0" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Include="..\Zero-K.info\AppCode\HtmlHelperExtensions.Portable.cs" Link="Linked\HtmlHelperExtensions.Portable.cs" />
     <Compile Include="..\Zero-K.info\AppCode\GalaxyMapGeometry.cs" Link="Linked\GalaxyMapGeometry.cs" />
@@ -57,6 +70,7 @@
     <Compile Include="..\Zero-K.info\Controllers\MissionsController.cs" Link="Linked\Controllers\MissionsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\MapsController.cs" Link="Linked\Controllers\MapsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\HomeController.cs" Link="Linked\Controllers\HomeController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\EnginesController.cs" Link="Linked\Controllers\EnginesController.cs" />
     <Compile Include="..\Zero-K.info\AppCode\SteamOpenIdResult.cs" Link="Linked\SteamOpenIdResult.cs" />
     <Compile Include="..\Zero-K.info\AppCode\SpotlightHandler.cs" Link="Linked\SpotlightHandler.cs" />
     <Compile Include="..\Zero-K.info\AppCode\MediaWikiRecentChanges.cs" Link="Linked\MediaWikiRecentChanges.cs" />

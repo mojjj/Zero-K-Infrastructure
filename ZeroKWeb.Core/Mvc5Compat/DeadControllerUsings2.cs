@@ -32,3 +32,7 @@ namespace System.Web.Script.Serialization { internal static class DeadUsingMarke
 // Dead in SpotlightHandler, checked by what the file uses rather than by counting the name: the
 // one cached thing goes through the site's own MemCache, not System.Web's Cache.
 namespace System.Web.Caching { internal static class DeadUsingMarker { } }
+
+// Dead in EnginesController, checked by what the file uses rather than by counting the name:
+// no SortDirection, no Unit, nothing else from WebForms' control library.
+namespace System.Web.UI.WebControls { internal static class DeadUsingMarker { } }
