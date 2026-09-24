@@ -87,5 +87,13 @@
   -->
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Blobs" Version="12.15.0" />
+    <!--
+      DiffPlex, at the version Zero-K.info/asp.net.csproj pins. Three views name its types in
+      their @model or @using - PostHistory/PostHistoryIndex and the two Diff display templates -
+      so without it they carry a declaration error, and a declaration error in a batch suppresses
+      method-body binding for every view compiled alongside it. It was hiding the real state of
+      eleven others.
+    -->
+    <PackageReference Include="DiffPlex" Version="1.2.1" />
   </ItemGroup>
 </Project>

@@ -2994,3 +2994,61 @@ What remains is 18 views waiting on six controllers that each need a real decisi
 (`HttpPostedFileBase`, `SharpCompress`, an MVC 5 download package, `DbCloner`, `AwardCalculator`,
 `DotNetOpenAuth`), and 14 in `other`.
 
+## PostLink, captured; and DiffPlex, which was hiding everything
+
+```
+compiles   82 -> 91
+other      14 -> 5
+```
+
+### DiffPlex was masking eleven views
+
+`other` looked like fourteen separate problems. Compiling only those fourteen produced **one**
+distinct error, fourteen times: `DiffPlex` not found. Three views name its types in their
+`@model` or `@using`, that is a declaration error, and a declaration error in a batch suppresses
+method-body binding for every view compiled beside it.
+
+Adding the package - the same version `asp.net.csproj` pins - cleared those three and revealed
+what the other eleven actually wanted. Almost all of it was one helper.
+
+### PostLink is a rewrite, and it is captured
+
+`Html.PostLink` renders the CSRF-safe form the site uses for state-changing actions, and it
+appeared eighteen times across the remaining views. It is **not** a relocation: MVC 5's
+`TagBuilder` and ASP.NET Core's share a name and little else - `InnerHtml` is a string on one and
+an `IHtmlContentBuilder` on the other, `ToString(TagRenderMode)` does not exist here, and
+`UrlHelper` is built from a `RequestContext` there and an `ActionContext` here.
+
+So `tools/ajax-ground-truth` was extended to capture it from MVC 5 under mono, and
+`ZeroKWeb.Render` compares all six shapes byte for byte. Three details the capture settled that
+were not guessable:
+
+- attributes come out in **alphabetical** order, from a sorted dictionary;
+- `AddCssClass` **prepends**, so `js_confirm` lands *before* `postlink-button`;
+- the text is `HttpUtility.HtmlEncode`d, which spells an apostrophe `&#39;` - not ASP.NET Core's
+  `HtmlEncoder`.
+
+### What the capture could not cover, said plainly
+
+**The anti-forgery token.** MVC 5's reads `web.config` through `System.Web.Configuration`, and
+mono outside a hosted application dies in `WebConfigurationHost.InitForConfiguration`. It is also
+random per request, so it could never have been byte-compared.
+
+The capture therefore runs against a copy of `PostLinkExtensions.cs` with that one call replaced
+by `string.Empty`, and the recorded markup has the slot empty. **A port that dropped the token
+entirely would match the capture exactly and turn every one of these links into a CSRF hole**, so
+its presence is asserted separately rather than inferred.
+
+That is the sharpest limit any of these captures has had, and it is worth naming: the capture
+proves the structure and says nothing about the security property the structure exists for.
+
+### And an assertion that outgrew itself
+
+The Ajax check ended with `cases.Length == expected.Count` - *every captured shape is checked*.
+True until the file gained six PostLink shapes the Ajax check does not own, at which point it
+failed and blamed the wrong thing.
+
+It is now a separate check: each comparison records the labels it consumed, and the union is
+compared to the file. A shape captured and never compared still fails - which is the property
+that was worth keeping - but it no longer belongs to one of the two checks.
+

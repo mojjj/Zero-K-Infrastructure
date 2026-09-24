@@ -77,6 +77,28 @@ public static class Capture
         Emit(routes, "BeginForm(action, routeValues, options) with method", (ajax, writer) =>
             ajax.BeginForm("CommanderProfile", new { profileNumber = 1 }, postOptions));
 
+        // PostLink, the CSRF-safe link the site uses for state-changing actions. Same reason as
+        // the Ajax shapes: its ASP.NET Core twin has to emit the same html, and MVC 5's TagBuilder
+        // is not ASP.NET Core's - InnerHtml is a string on one and an IHtmlContentBuilder on the
+        // other, and ToString(TagRenderMode) does not exist there at all.
+        EmitHtml(routes, "PostLink(text, action)", html =>
+            html.PostLink("Delete", "Delete").ToString());
+
+        EmitHtml(routes, "PostLink(text, action, controller, routeValues)", html =>
+            html.PostLink("Select", "SetDefault", "Planetwars", new { galaxyID = 7 }).ToString());
+
+        EmitHtml(routes, "PostLink with cssClass and nicetitle", html =>
+            html.PostLink("Delete", "Delete", null, new { id = 3 }, "js_confirm", "Really?").ToString());
+
+        EmitHtml(routes, "PostLink encodes its text", html =>
+            html.PostLink("a < b & c \" d ' e", "Act").ToString());
+
+        EmitHtml(routes, "PostImageLink(src, height, action)", html =>
+            html.PostImageLink("/img/x.png", 24, "Act", "Ctrl", new { id = 1 }).ToString());
+
+        EmitHtml(routes, "PostImageLink with height 0 omits the attribute", html =>
+            html.PostImageLink("/img/x.png", 0, "Act").ToString());
+
         EmitString(routes, "ActionLink(text, action, routeValues, options)", ajax =>
             ajax.ActionLink("Join", "MatchMakerJoin", new { planetID = 7, attackerFaction = "Dyn" },
                 new AjaxOptions { UpdateTargetId = "matchMaker", InsertionMode = InsertionMode.Replace }).ToString());
@@ -97,6 +119,35 @@ public static class Capture
         var ajax = MakeHelper(routes, writer);
         Console.WriteLine("### " + label);
         Console.WriteLine(call(ajax));
+    }
+
+    static void EmitHtml(RouteCollection routes, string label, Func<HtmlHelper, string> call)
+    {
+        var writer = new StringWriter();
+        var html = MakeHtmlHelper(routes, writer);
+        Console.WriteLine("### " + label);
+
+        // The anti-forgery token's VALUE is random per request, so it can never be compared. Its
+        // presence and its markup can, and that is what matters: a port that dropped the token
+        // would turn every one of these links into a CSRF hole and still look right.
+        Console.WriteLine(System.Text.RegularExpressions.Regex.Replace(
+            call(html), "value=\"[^\"]{40,}\"", "value=\"TOKEN\""));
+    }
+
+    static HtmlHelper MakeHtmlHelper(RouteCollection routes, TextWriter writer)
+    {
+        var httpContext = new HttpContextWrapper(new HttpContext(
+            new HttpRequest("", "http://localhost/", ""), new HttpResponse(TextWriter.Null)));
+        var routeData = new RouteData();
+        routeData.Values["controller"] = "Planetwars";
+        routeData.Values["action"] = "Index";
+        routeData.Route = routes["Default"];
+
+        var controllerContext = new ControllerContext(httpContext, routeData, new StubController());
+        var viewData = new ViewDataDictionary();
+        var viewContext = new ViewContext(controllerContext, new StubView(), viewData,
+            new TempDataDictionary(), writer);
+        return new HtmlHelper(viewContext, new StubDataContainer { ViewData = viewData }, routes);
     }
 
     static AjaxHelper MakeHelper(RouteCollection routes, TextWriter writer)
