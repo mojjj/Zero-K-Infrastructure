@@ -19,8 +19,11 @@ PASS="${MSSQL_SA_PASSWORD:-ZkLocal!Dev2026}"
 CS="${ZK_CONNECTION_STRING:-Data Source=127.0.0.1,14330;Initial Catalog=${DB};User ID=sa;Password=${PASS};MultipleActiveResultSets=true;TrustServerCertificate=true}"
 mkdir -p "$CACHE"
 
+# ZkLobbyServer is watched because Tests.Database LINKS the lobby API transport out of it. It
+# was not, and the omission was silent in the worst way: a positive control that deliberately
+# broke the client still passed, because the stale binary did not contain the break.
 if [ ! -f "$WORK/Tests.Database/bin/x64/Debug/net48/Tests.Database.exe" ] \
-   || [ -n "$(find "$REPO/Tests.Database" "$REPO/ZkData" -newer "$WORK/Tests.Database/bin/x64/Debug/net48/Tests.Database.exe" -name '*.cs' -print -quit 2>/dev/null)" ]; then
+   || [ -n "$(find "$REPO/Tests.Database" "$REPO/ZkData" "$REPO/ZkLobbyServer" -newer "$WORK/Tests.Database/bin/x64/Debug/net48/Tests.Database.exe" -name '*.cs' -print -quit 2>/dev/null)" ]; then
     echo "building Tests.Database..."
     [ -d "$WORK" ] && docker run --rm -v "$(dirname "$WORK")":/w alpine rm -rf "/w/$(basename "$WORK")"
     mkdir -p "$WORK"

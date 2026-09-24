@@ -3676,3 +3676,68 @@ member is still satisfied by a method call in this process - plus `RedeemSession
 bearer credential, and the shared statics the seam never modelled (`RatingSystems`, `MapRatings`,
 `Global.AutoRegistrator`, `Global.SteamDepotGenerator`, `ContentService`), which are recorded in
 `Zero-K.info/HOSTING.md`.
+
+## Phase 1: a transport
+
+`ZkLobbyServer/Api/` now holds an HTTP+JSON host and client for `ILobbyServerApi`, and
+`Tests.Database` drives **all 40 members over real loopback HTTP**.
+
+**HTTP because the alternatives are not available.** Both halves are .NET Framework 4.8 today:
+grpc-dotnet needs .NET Core and `Grpc.Core` is unmaintained. `HttpListener` and `HttpClient` are
+in the BCL on 4.8 and unchanged on .NET 9, so the transport survives the port rather than being
+redone by it, and Newtonsoft is already a dependency of both projects.
+
+**The interface is the allowlist.** A request names a member; the host looks it up on
+`ILobbyServerApi` and nowhere else, and invokes through the interface reference. There is no path
+from a request to a method the interface does not declare - which matters, because this API kicks
+players, posts to the moderator channel and redeems session tokens. `TypeNameHandling` is off:
+letting a payload name the type to construct is a remote code execution primitive, and every type
+here is known from the signature anyway.
+
+**Two refusals are built in rather than left to the deployment.** The host will not start without
+a secret - there is no "unset means open" mode, because that is the configuration a hurried
+deployment ends up with - and the default prefix is loopback, so exposing it has to be written
+down by whoever does it. Secret comparison is over SHA-256 digests, which are fixed length, so the
+loop is genuinely fixed-cost; the first version compared raw bytes correctly but not *obviously*
+so, which is not a property worth having in an authentication check.
+
+**The client's forty members are written out** rather than produced by a `DispatchProxy`. It is
+more typing and it is what a reader of a privileged client wants: every call is greppable and no
+reflection decides at runtime what to send. Forgetting one is not a risk, because C# will not let
+the class exist with a member missing.
+
+Fourteen members are synchronous, and this is HTTP, so something must wait. They go through
+`Task.Run` first: on .NET Framework, waiting on a task that captured an ASP.NET request context
+deadlocks. When the website is on .NET 9 the hop is harmless, and the real fix - making those
+members async - is a change to the interface and its call sites, not to the client.
+
+### The test drives the interface, not a list
+
+It reflects over `ILobbyServerApi`, invokes each member on the client with distinctive arguments,
+and compares what the recording fake received by serialising both sides. A member added to the
+interface is covered the day it is added. The seam check proves every member *could* cross; this
+proves they do.
+
+Positive controls, both of which fire:
+
+- drop an argument in the client → `KickFromServer: the arguments changed in flight`, naming it
+- remove the authentication check → `A_wrong_secret_is_refused` fails
+
+### A staleness check that made the first control pass
+
+The first run of the dropped-argument control **passed**, which is the wrong answer.
+`db/run-db-tests.sh` decides whether to rebuild by looking for `.cs` files newer than the binary
+in `Tests.Database` and `ZkData` - and the transport is in `ZkLobbyServer`, which it did not watch.
+The break was never compiled. It watches `ZkLobbyServer` now.
+
+This is the same shape as everything else this port has caught: not a wrong answer, an absent one,
+read as success. It is worth noting that the thing which exposed it was a *positive control* - the
+test suite was perfectly green before and after.
+
+### What this does not do
+
+Nothing constructs a `RemoteLobbyServerApi`. `Global.LobbyApi` is still in-process, and choosing
+between them is deployment configuration - not worth adding while the **shared statics** still
+block the split regardless: `RatingSystems` and `MapRatings` are filled only by the lobby server
+and read by eight website files, so moving it out breaks `/Ladders`, `/Charts` and every rating on
+the site no matter what the website uses to talk to it. That is the next piece.
