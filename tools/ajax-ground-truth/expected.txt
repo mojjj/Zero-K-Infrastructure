@@ -67,3 +67,7 @@
 <option value="10">First</option>
 <option selected="selected" value="20">Second</option>
 </select>
+### ExpressionHelper.GetExpressionText(x => x.UserId)
+name=UserId model=[4,11]
+### ExpressionHelper.GetExpressionText(x => x.Types)
+name=Types model=[Featured]

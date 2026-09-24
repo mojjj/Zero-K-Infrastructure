@@ -112,6 +112,18 @@ namespace ZeroKWeb.Host.Controllers
 
         /// <summary>What the site thinks of you, for checking a sign-in worked.</summary>
         [HttpGet]
+        /// <summary>
+        /// A ResumingFileContentResult over ten known bytes, so the range behaviour can be
+        /// asserted without the fixture needing a Mission with a mutator in it.
+        ///
+        /// MissionsController's one use of the MVC.ResumingActionResults package is exactly this
+        /// call, and the whole of the port of that package is EnableRangeProcessing - which is
+        /// invisible unless something actually sends a Range header.
+        /// </summary>
+        public IActionResult Resumable()
+            => new VikingErik.Mvc.ResumingActionResults.ResumingFileContentResult(
+                new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }, "application/octet-stream");
+
         public IActionResult Whoami() => Content(
             ZeroKWeb.Global.Account == null
                 ? "not signed in"

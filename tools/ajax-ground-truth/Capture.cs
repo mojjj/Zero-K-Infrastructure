@@ -129,6 +129,16 @@ public static class Capture
         // Declaration order and numeric order agree in every enum above, so none of them can
         // tell which one MVC 5 uses. This one disagrees on purpose.
         EmitEnum(routes, "EnumDropDownListFor(declaration order != numeric order)", model, m => m.Unordered);
+
+        // The site's own Select, MultiSelectFor and EnumCheckboxesFor build their markup from
+        // format strings that are plain to read in HtmlHelperExtensions.cs, so the markup is not
+        // what needs capturing. What does is the pair of MVC 5 APIs they lean on and ASP.NET
+        // Core does not have: what ExpressionHelper.GetExpressionText makes of a lambda, and
+        // what ModelMetadata.FromLambdaExpression gives back as .Model. The port reaches those
+        // through NameFor and a compiled expression, and whether that agrees is not obvious.
+        var listModel = new ListModel { UserId = new List<int> { 4, 11 } };
+        EmitExpression(routes, "ExpressionHelper.GetExpressionText(x => x.UserId)", listModel, m => m.UserId);
+        EmitExpression(routes, "ExpressionHelper.GetExpressionText(x => x.Types)", listModel, m => m.Types);
     }
 
     // Mirrors the SHAPES the site's enums have, not any one of them: a non-zero-based enum
@@ -152,6 +162,12 @@ public static class Capture
     public enum Support { None = 0, Supported = 1, Featured = 2, MatchMaker = 3 }
 
     public enum Unordered { Third = 30, First = 10, Second = 20 }
+
+    public class ListModel
+    {
+        public IList<int> UserId { get; set; } = new List<int>();
+        public IList<Support> Types { get; set; } = new List<Support> { Support.Featured };
+    }
 
     public class EnumModel
     {
@@ -192,6 +208,21 @@ public static class Capture
         // would turn every one of these links into a CSRF hole and still look right.
         Console.WriteLine(System.Text.RegularExpressions.Regex.Replace(
             call(html), "value=\"[^\"]{40,}\"", "value=\"TOKEN\""));
+    }
+
+    // Both halves at once: the name MVC 5 derives from the lambda, and what it hands back as
+    // the model value - printed as its element count and contents so a null and an empty list
+    // are not the same line.
+    static void EmitExpression<T>(RouteCollection routes, string label, ListModel model,
+                                  Expression<Func<ListModel, IList<T>>> expression)
+    {
+        var writer = new StringWriter();
+        var html = MakeHtmlHelper(routes, writer, model);
+        var name = ExpressionHelper.GetExpressionText(expression);
+        var value = (IList<T>)ModelMetadata.FromLambdaExpression(expression, html.ViewData).Model;
+        Console.WriteLine("### " + label);
+        Console.WriteLine("name=" + name + " model="
+            + (value == null ? "(null)" : "[" + string.Join(",", value) + "]"));
     }
 
     static void EmitEnum<TEnum>(RouteCollection routes, string label, EnumModel model,

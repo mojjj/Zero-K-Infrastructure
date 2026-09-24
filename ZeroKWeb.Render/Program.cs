@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -99,6 +100,7 @@ namespace ZeroKWeb.Render
             failures += CheckAjaxMarkup();
             failures += CheckPostLinkMarkup();
             failures += CheckEnumDropDownMarkup();
+            failures += CheckExpressionSubstitutes();
             failures += CheckEveryCapturedShapeIsCovered();
 
             Console.WriteLine();
@@ -316,6 +318,93 @@ namespace ZeroKWeb.Render
                 }
                 CapturedShapesChecked.Add(caseLabel);
                 failures += CheckEqual(build(), want, "  " + caseLabel);
+            }
+            return failures;
+        }
+
+        /// <summary>Mirrors Capture.cs's ListModel; see the note on the enums below.</summary>
+        private class CapturedListModel
+        {
+            public IList<int> UserId { get; set; } = new List<int>();
+            public IList<CapturedSupport> Types { get; set; } = new List<CapturedSupport> { CapturedSupport.Featured };
+        }
+
+        /// <summary>
+        /// The two MVC 5 APIs that MultiSelectFor and EnumCheckboxesFor lean on, against the
+        /// capture of what MVC 5 answers.
+        ///
+        /// Those helpers' markup is copied verbatim from HtmlHelperExtensions.cs and can be
+        /// diffed against it, so it is not what needed capturing. The substitution underneath is:
+        /// the port uses <c>NameFor</c> where MVC 5 used
+        /// <c>ExpressionHelper.GetExpressionText</c>, and a compiled expression where MVC 5 used
+        /// <c>ModelMetadata.FromLambdaExpression(...).Model</c>. Neither substitute is obviously
+        /// equal - NameFor prepends the field prefix, and the prefix is only empty because every
+        /// call site is at the top level.
+        ///
+        /// This builds a real IHtmlHelper&lt;T&gt; out of DI, the same way the view-component
+        /// check builds a real IViewComponentHelper, and compares its answers to the recorded
+        /// ones.
+        /// </summary>
+        private static int CheckExpressionSubstitutes()
+        {
+            Console.WriteLine();
+            Console.WriteLine("expression name and model value, against MVC 5 captured under mono:");
+
+            var path = FindUpwards(Path.Combine("tools", "ajax-ground-truth", "expected.txt"));
+            if (path == null)
+            {
+                Console.WriteLine("   FAIL  the capture is missing - run tools/ajax-ground-truth/capture.sh --update");
+                return 1;
+            }
+
+            var expected = new Dictionary<string, string>();
+            string label = null;
+            foreach (var line in File.ReadAllLines(path))
+            {
+                if (line.StartsWith("### ")) { label = line.Substring(4); continue; }
+                if (label != null && line.Length > 0) { expected[label] = line; label = null; }
+            }
+
+            var provider = BuildServices();
+            var httpContext = new DefaultHttpContext { RequestServices = provider };
+            var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
+            var model = new CapturedListModel { UserId = new List<int> { 4, 11 } };
+            var viewData = new ViewDataDictionary<CapturedListModel>(
+                new EmptyModelMetadataProvider(), new ModelStateDictionary()) { Model = model };
+
+            var failures = 0;
+            using (var writer = new StringWriter())
+            {
+                var viewContext = new ViewContext(actionContext, new FakeView(), viewData,
+                    new TempDataDictionary(httpContext, provider.GetRequiredService<ITempDataProvider>()),
+                    writer, new HtmlHelperOptions());
+                var html = provider.GetRequiredService<IHtmlHelper<CapturedListModel>>();
+                ((IViewContextAware)html).Contextualize(viewContext);
+
+                var cases = new (string Label, Func<string> Build)[]
+                {
+                    ("ExpressionHelper.GetExpressionText(x => x.UserId)",
+                     () => "name=" + html.NameFor(x => x.UserId) + " model=["
+                           + string.Join(",", ((Expression<Func<CapturedListModel, IList<int>>>)(x => x.UserId))
+                               .Compile()(model)) + "]"),
+
+                    ("ExpressionHelper.GetExpressionText(x => x.Types)",
+                     () => "name=" + html.NameFor(x => x.Types) + " model=["
+                           + string.Join(",", ((Expression<Func<CapturedListModel, IList<CapturedSupport>>>)(x => x.Types))
+                               .Compile()(model)) + "]"),
+                };
+
+                foreach (var (caseLabel, build) in cases)
+                {
+                    if (!expected.TryGetValue(caseLabel, out var want))
+                    {
+                        Console.WriteLine("   FAIL    no captured line for " + caseLabel);
+                        failures++;
+                        continue;
+                    }
+                    CapturedShapesChecked.Add(caseLabel);
+                    failures += CheckEqual(build(), want, "  " + caseLabel);
+                }
             }
             return failures;
         }
