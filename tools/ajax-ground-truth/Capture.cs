@@ -14,6 +14,9 @@ using System.Web.Mvc;
 using System.Web.Mvc.Ajax;
 using System.Web.Mvc.Html;
 using System.Web.Routing;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using System.Linq.Expressions;
 
 public static class Capture
 {
@@ -102,6 +105,63 @@ public static class Capture
         EmitString(routes, "ActionLink(text, action, routeValues, options)", ajax =>
             ajax.ActionLink("Join", "MatchMakerJoin", new { planetID = 7, attackerFaction = "Dyn" },
                 new AjaxOptions { UpdateTargetId = "matchMaker", InsertionMode = InsertionMode.Replace }).ToString());
+
+        // EnumDropDownListFor, at fourteen call sites across seven views. ASP.NET Core dropped
+        // it, so the port has to re-emit it, and every question the port would otherwise guess
+        // at is asked here instead: what an option's VALUE is (the name or the number), whether
+        // [Description] counts, whether [Display] counts, what a nullable enum adds, and where
+        // the selected="selected" lands.
+        //
+        // [Description] is the one that matters most for Zero-K: PlanetWarsModes,
+        // TreatyUnableToTradeMode, AutohostMode and Account.Level all carry it, and NONE of them
+        // carry [Display]. If MVC 5 ignores it, the live site has been showing field names all
+        // along and the port must show field names too - a "nicer" port would be a regression.
+        var model = new EnumModel();
+        EmitEnum(routes, "EnumDropDownListFor(plain enum)", model, m => m.Plain);
+        EmitEnum(routes, "EnumDropDownListFor(enum with [Description])", model, m => m.Described);
+        EmitEnum(routes, "EnumDropDownListFor(enum with [Display])", model, m => m.Displayed);
+        EmitEnum(routes, "EnumDropDownListFor(nullable enum, null)", model, m => m.NullableEmpty);
+        EmitEnum(routes, "EnumDropDownListFor(nullable enum, with a value)", model, m => m.NullableSet);
+        EmitEnum(routes, "EnumDropDownListFor(non-default selected)", model, m => m.Selected);
+        EmitEnumAttrs(routes, "EnumDropDownListFor(expression, htmlAttributes)", model, m => m.Plain,
+            new { @class = "width-100" });
+
+        // Declaration order and numeric order agree in every enum above, so none of them can
+        // tell which one MVC 5 uses. This one disagrees on purpose.
+        EmitEnum(routes, "EnumDropDownListFor(declaration order != numeric order)", model, m => m.Unordered);
+    }
+
+    // Mirrors the SHAPES the site's enums have, not any one of them: a non-zero-based enum
+    // like RatingCategory, a [Description]-annotated one like PlanetWarsModes, a nullable one
+    // like LaddersMapsModel.SupportLevel.
+    public enum Plain { Casual = 1, MatchMaking = 2, Planetwars = 4 }
+
+    public enum Described
+    {
+        [Description("offline")] AllOffline = 0,
+        [Description("pre-game")] PreGame = 1,
+        [Description("running")] Running = 2,
+    }
+
+    public enum Displayed
+    {
+        [Display(Name = "shown first")] First = 0,
+        Second = 1,
+    }
+
+    public enum Support { None = 0, Supported = 1, Featured = 2, MatchMaker = 3 }
+
+    public enum Unordered { Third = 30, First = 10, Second = 20 }
+
+    public class EnumModel
+    {
+        public Plain Plain { get; set; } = Plain.Casual;
+        public Described Described { get; set; } = Described.AllOffline;
+        public Displayed Displayed { get; set; } = Displayed.First;
+        public Support? NullableEmpty { get; set; }
+        public Support? NullableSet { get; set; } = Support.Featured;
+        public Plain Selected { get; set; } = Plain.Planetwars;
+        public Unordered Unordered { get; set; } = Unordered.Second;
     }
 
     static void Emit(RouteCollection routes, string label, Func<AjaxHelper, TextWriter, MvcForm> call)
@@ -132,6 +192,39 @@ public static class Capture
         // would turn every one of these links into a CSRF hole and still look right.
         Console.WriteLine(System.Text.RegularExpressions.Regex.Replace(
             call(html), "value=\"[^\"]{40,}\"", "value=\"TOKEN\""));
+    }
+
+    static void EmitEnum<TEnum>(RouteCollection routes, string label, EnumModel model,
+                                Expression<Func<EnumModel, TEnum>> expression)
+    {
+        var writer = new StringWriter();
+        Console.WriteLine("### " + label);
+        Console.WriteLine(MakeHtmlHelper(routes, writer, model).EnumDropDownListFor(expression).ToString());
+    }
+
+    static void EmitEnumAttrs<TEnum>(RouteCollection routes, string label, EnumModel model,
+                                     Expression<Func<EnumModel, TEnum>> expression, object htmlAttributes)
+    {
+        var writer = new StringWriter();
+        Console.WriteLine("### " + label);
+        Console.WriteLine(MakeHtmlHelper(routes, writer, model)
+            .EnumDropDownListFor(expression, htmlAttributes).ToString());
+    }
+
+    static HtmlHelper<TModel> MakeHtmlHelper<TModel>(RouteCollection routes, TextWriter writer, TModel model)
+    {
+        var httpContext = new HttpContextWrapper(new HttpContext(
+            new HttpRequest("", "http://localhost/", ""), new HttpResponse(TextWriter.Null)));
+        var routeData = new RouteData();
+        routeData.Values["controller"] = "Ladders";
+        routeData.Values["action"] = "Full";
+        routeData.Route = routes["Default"];
+
+        var controllerContext = new ControllerContext(httpContext, routeData, new StubController());
+        var viewData = new ViewDataDictionary<TModel>(model);
+        var viewContext = new ViewContext(controllerContext, new StubView(), viewData,
+            new TempDataDictionary(), writer);
+        return new HtmlHelper<TModel>(viewContext, new StubDataContainer { ViewData = viewData }, routes);
     }
 
     static HtmlHelper MakeHtmlHelper(RouteCollection routes, TextWriter writer)

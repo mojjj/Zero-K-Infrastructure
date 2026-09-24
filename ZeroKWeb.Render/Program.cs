@@ -98,6 +98,7 @@ namespace ZeroKWeb.Render
             failures += await CheckViewComponents();
             failures += CheckAjaxMarkup();
             failures += CheckPostLinkMarkup();
+            failures += CheckEnumDropDownMarkup();
             failures += CheckEveryCapturedShapeIsCovered();
 
             Console.WriteLine();
@@ -317,6 +318,127 @@ namespace ZeroKWeb.Render
                 failures += CheckEqual(build(), want, "  " + caseLabel);
             }
             return failures;
+        }
+
+        /// <summary>
+        /// EnumDropDownListFor, against the same capture - and the one shape in it that spans
+        /// several lines, because MVC 5 puts Environment.NewLine after every option.
+        ///
+        /// The enums below MIRROR the ones in tools/ajax-ground-truth/Capture.cs rather than
+        /// sharing them: that file compiles under mono against .NET Framework and this one does
+        /// not, so there is nothing to share. They can drift, and if they do the comparison
+        /// fails loudly rather than quietly comparing something else - a renamed member or a
+        /// changed number shows up as a diff on the very next run.
+        ///
+        /// What this drives is Render(), not the public helper, for the same reason the PostLink
+        /// check drives Tag(): building an IHtmlHelper&lt;T&gt; outside a view needs the whole
+        /// view engine. Everything the capture settled - declaration order, [Display] over
+        /// [Description], numeric values, the nullable empty option, where selected lands - is
+        /// inside Render(). NameFor, IdFor and the ModelState lookup are not, and are not
+        /// claimed here.
+        /// </summary>
+        private enum CapturedPlain { Casual = 1, MatchMaking = 2, Planetwars = 4 }
+
+        private enum CapturedDescribed
+        {
+            [System.ComponentModel.Description("offline")] AllOffline = 0,
+            [System.ComponentModel.Description("pre-game")] PreGame = 1,
+            [System.ComponentModel.Description("running")] Running = 2,
+        }
+
+        private enum CapturedDisplayed
+        {
+            [System.ComponentModel.DataAnnotations.Display(Name = "shown first")] First = 0,
+            Second = 1,
+        }
+
+        private enum CapturedSupport { None = 0, Supported = 1, Featured = 2, MatchMaker = 3 }
+
+        private enum CapturedUnordered { Third = 30, First = 10, Second = 20 }
+
+        private static int CheckEnumDropDownMarkup()
+        {
+            Console.WriteLine();
+            Console.WriteLine("EnumDropDownListFor markup, against MVC 5 captured under mono:");
+
+            var path = FindUpwards(Path.Combine("tools", "ajax-ground-truth", "expected.txt"));
+            if (path == null)
+            {
+                Console.WriteLine("   FAIL  the capture is missing - run tools/ajax-ground-truth/capture.sh --update");
+                return 1;
+            }
+
+            // Multi-line blocks, unlike every other shape in this file: a label owns every line
+            // up to the next label.
+            var expected = new Dictionary<string, string>();
+            string label = null;
+            var block = new List<string>();
+            foreach (var line in File.ReadAllLines(path))
+            {
+                if (line.StartsWith("### "))
+                {
+                    if (label != null) expected[label] = string.Join("\n", block);
+                    label = line.Substring(4);
+                    block.Clear();
+                    continue;
+                }
+                if (label != null) block.Add(line);
+            }
+            if (label != null) expected[label] = string.Join("\n", block);
+
+            var cases = new (string Label, Func<string> Build)[]
+            {
+                ("EnumDropDownListFor(plain enum)",
+                 () => Enum_(typeof(CapturedPlain), false, "Plain", "1", null)),
+
+                ("EnumDropDownListFor(enum with [Description])",
+                 () => Enum_(typeof(CapturedDescribed), false, "Described", "0", null)),
+
+                ("EnumDropDownListFor(enum with [Display])",
+                 () => Enum_(typeof(CapturedDisplayed), false, "Displayed", "0", null)),
+
+                ("EnumDropDownListFor(nullable enum, null)",
+                 () => Enum_(typeof(CapturedSupport), true, "NullableEmpty", null, null)),
+
+                ("EnumDropDownListFor(nullable enum, with a value)",
+                 () => Enum_(typeof(CapturedSupport), true, "NullableSet", "2", null)),
+
+                ("EnumDropDownListFor(non-default selected)",
+                 () => Enum_(typeof(CapturedPlain), false, "Selected", "4", null)),
+
+                ("EnumDropDownListFor(expression, htmlAttributes)",
+                 () => Enum_(typeof(CapturedPlain), false, "Plain", "1", new { @class = "width-100" })),
+
+                ("EnumDropDownListFor(declaration order != numeric order)",
+                 () => Enum_(typeof(CapturedUnordered), false, "Unordered", "20", null)),
+            };
+
+            var failures = 0;
+            foreach (var (caseLabel, build) in cases)
+            {
+                if (!expected.TryGetValue(caseLabel, out var want))
+                {
+                    Console.WriteLine("   FAIL    no captured block for " + caseLabel);
+                    failures++;
+                    continue;
+                }
+                CapturedShapesChecked.Add(caseLabel);
+                failures += CheckEqual(build(), want, "  " + caseLabel);
+            }
+            return failures;
+        }
+
+        /// <summary>
+        /// The capture was written on Linux under mono, so its option separator is LF; so is
+        /// this process's Environment.NewLine. Normalising rather than assuming keeps the
+        /// comparison honest if either side ever runs on Windows - the separator would then be
+        /// CRLF on BOTH, which is the property that matters, and not a diff.
+        /// </summary>
+        private static string Enum_(Type enumType, bool isNullable, string name, string selected, object attributes)
+        {
+            var markup = System.Web.Mvc.EnumDropDownListExtensions.Render(
+                enumType, isNullable, name, name, selected, attributes);
+            return markup.Replace("\r\n", "\n").TrimEnd('\n');
         }
 
         private static SortedDictionary<string, string> Form(string url) =>

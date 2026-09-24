@@ -59,6 +59,28 @@ namespace ZeroKWeb.Host
             // the same as it does for an anonymous request - see Mvc5Compat/GlobalCompat.cs.
             ZeroKWeb.Global.Configure(app.Services.GetRequiredService<IHttpContextAccessor>());
 
+            // **Phase 1 coupling, in a shape the InProcess count does not see.**
+            //
+            // The website reads Ratings.RatingSystems and Ratings.MapRatings as STATICS, in
+            // eight files - ChartsController, HomeController, AdminController,
+            // PlanetwarsAdminController, WhrController, HtmlHelperExtensions.Portable,
+            // Ladders/ladders.cshtml and Factions/FactionBox.cshtml - and nothing in the website
+            // ever fills them. The only caller of either Init() is ZkLobbyServer.ZkLobbyServer,
+            // which the live site starts IN ITS OWN PROCESS. So these pages work today because
+            // the lobby server happens to share their memory.
+            //
+            // That is not an API call, so it never appeared in the count of LobbyApi.InProcess
+            // uses that Phase 1 has been tracking, and moving the lobby server out will break
+            // /Ladders, /Ladders/Maps, /Charts and the rating shown beside every player - with a
+            // KeyNotFoundException, not a default rating, because the "unknown category"
+            // fallback indexes the same empty dictionary.
+            //
+            // Called here for the same reason production ends up calling it: the pages need it.
+            // Both fill their dictionaries synchronously and then do the heavy work in the
+            // background, so this does not block startup on a full WHR pass.
+            Ratings.RatingSystems.Init();
+            Ratings.MapRatings.Init();
+
             // Order matters and is not interchangeable: UseAuthentication populates
             // HttpContext.User from the cookie, UseZkAccount turns that name into an Account and
             // publishes it where Global reads it, and UseAuthorization runs [Auth] against the
@@ -356,6 +378,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckItServesAPage(client);
                 failures += await CheckSignIn();
                 failures += await CheckUploadBinding();
+                failures += await CheckLadders(client);
 
                 Console.WriteLine();
                 if (failures == 0)
@@ -368,6 +391,56 @@ namespace ZeroKWeb.Host
             }
         }
 
+
+        /// <summary>
+        /// The Ladders pages, which are the first to exercise three things that until now only
+        /// compiled.
+        ///
+        /// **Global.AwardCalculator**, which the port builds on FIRST USE rather than at
+        /// application start - MVC 5 has an Application_Start to put it in and this does not.
+        /// Nothing had ever touched it, so "it is there" was a claim about a property, not about
+        /// a query. /Ladders runs the real monthly-awards query against the fixture.
+        ///
+        /// **EnumDropDownListFor**, whose markup is compared byte for byte against MVC 5 in
+        /// ZeroKWeb.Render. That comparison drives Render() directly; this is the only thing
+        /// that drives the public helper, and therefore the only thing that exercises NameFor,
+        /// IdFor and the model-value lookup behind the selection.
+        ///
+        /// **A SelectedValue that is not the first option.** RatingCategory starts at 1 and
+        /// LaddersFull defaults to Casual = 1, so an implementation that always marked the first
+        /// option selected would agree here by accident; the assertion names the value instead.
+        /// </summary>
+        private static async Task<int> CheckLadders(HttpClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine("ladders:");
+            var failures = 0;
+
+            var index = await client.GetAsync(Url + "/Ladders");
+            var indexHtml = await index.Content.ReadAsStringAsync();
+            failures += Check(index.IsSuccessStatusCode,
+                "/Ladders was served (" + (int)index.StatusCode + ") - AwardCalculator ran its query"
+                + " and the lobby server's rating statics were there");
+            failures += Check(!indexHtml.Contains("@"), "no unprocessed Razor markers survived");
+
+            var full = await client.GetAsync(Url + "/Ladders/Full");
+            var fullHtml = await full.Content.ReadAsStringAsync();
+            failures += Check(full.IsSuccessStatusCode, "/Ladders/Full was served (" + (int)full.StatusCode + ")");
+            failures += Check(fullHtml.Contains("<select class=\"width-100\" id=\"RatingCategory\" name=\"RatingCategory\">"),
+                "EnumDropDownListFor emitted the select, with htmlAttributes, through the real helper");
+            failures += Check(fullHtml.Contains("<option selected=\"selected\" value=\"1\">Casual</option>"),
+                "the model's value is the selected option, by value and not by position");
+
+            // MapSupportLevel? - the nullable shape, whose extra empty option only the capture
+            // could have told us about.
+            var maps = await client.GetAsync(Url + "/Ladders/Maps");
+            var mapsHtml = await maps.Content.ReadAsStringAsync();
+            failures += Check(maps.IsSuccessStatusCode, "/Ladders/Maps was served (" + (int)maps.StatusCode + ")");
+            failures += Check(mapsHtml.Contains("<option selected=\"selected\" value=\"\"></option>"),
+                "a nullable enum got its empty option, selected, as MVC 5 emits it");
+
+            return failures;
+        }
 
         /// <summary>
         /// A PAGE, not a view: a ViewResult runs _ViewStart, which picks up
