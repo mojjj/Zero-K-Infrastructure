@@ -168,13 +168,11 @@ What this does **not** mean is that the server can move out today. Still in the 
   `LobbyApiUrl` with `LobbyApiSecret`. A URL without a secret **refuses to start** rather
   than falling back, because falling back means two lobby servers against one database.
   `ZkLobbyServer.Standalone` is the other end.
-- **The reverse dependency is what is left.** `IPlanetwarsEventCreator` is implemented once,
-  in the WEBSITE, and it formats the event feed's HTML with the website's own helpers; the
-  lobby server calls it from 19 places. A standalone server therefore runs only with
-  PlanetWars offline - it throws rather than writing unlinked events nobody would notice.
-  Either that formatting moves somewhere both halves can use (much of it is already in
-  `HtmlHelperExtensions.Portable.cs`), or events become something the server asks the
-  website to write, which is a call in the direction Phase 1 does not have yet.
+- ~~The reverse dependency.~~ **Moved.** The event feed's formatting is now
+  `ZkData/ZkHtmlFormat.cs` and `ZkData/PlanetwarsEventFormatter.cs`, one implementation that
+  both halves call. It used to be two near-verbatim copies - the website's and the port's -
+  with the event creator as a third caller that only the website could satisfy. A standalone
+  server writes PlanetWars events now.
 - ~~No transport.~~ **Written.** `ZkLobbyServer/Api/` holds an HTTP+JSON host
   (`LobbyApiHost`) and client (`RemoteLobbyServerApi`); `Tests.Database` drives all 40
   members over real loopback HTTP and checks the arguments and results arrive intact.

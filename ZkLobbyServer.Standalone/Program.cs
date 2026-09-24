@@ -73,7 +73,11 @@ namespace ZkLobbyServer.Standalone
             Ratings.MapRatings.Init();
 
             Trace.TraceInformation("Starting lobby server");
-            var runner = new ServerRunner(sitePath, new StandalonePlanetwarsEventCreator());
+            // The creator needs the server it will speak through, and the server needs the
+            // creator; the server is handed over once it exists.
+            var eventCreator = new StandalonePlanetwarsEventCreator();
+            var runner = new ServerRunner(sitePath, eventCreator);
+            eventCreator.Attach(runner.ZkLobbyServer);
             runner.Run();
 
             using (var apiHost = new LobbyApiHost(new InProcessLobbyServerApi(runner.ZkLobbyServer), secret, prefix))

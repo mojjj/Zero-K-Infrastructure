@@ -220,6 +220,76 @@ namespace ZeroKWeb.Render
             failures += Same("PrintInfluence(null, 25)", html.PrintInfluence((Faction)null, 25.0),
                 "<span style='color:'>25 (25%)</span>");
             failures += Same("PrintBadges((Account)null)", html.PrintBadges(null), "");
+
+            // The seven entity helpers, pinned before they move to shared code.
+            //
+            // These are ~150 lines duplicated between Zero-K.info/AppCode/HtmlHelperExtensions.cs
+            // and this project's Ported copy, and the event feed's HTML is a third caller. The
+            // expectations below were RECORDED by running the current implementation, not written
+            // from reading it - so they are what the site emits today, and a move that changes a
+            // byte says so.
+            failures += PrintEntityHelpers();
+            return failures;
+        }
+
+        /// <summary>Synthetic entities, distinctive enough that a swapped field shows up.</summary>
+        private static int PrintEntityHelpers()
+        {
+            // A contextualized helper, because these build links: PrintAccount asks the helper for
+            // a UrlHelper to make the clan link, and an uncontextualized one throws. That is the
+            // dependency the whole move is about - the event feed has no view context at all.
+            var provider = BuildServices();
+            var httpContext = new DefaultHttpContext { RequestServices = provider };
+            httpContext.Request.Scheme = "http";
+            httpContext.Request.Host = new HostString("localhost");
+            httpContext.SetEndpoint(new Microsoft.AspNetCore.Http.Endpoint(
+                _ => Task.CompletedTask, Microsoft.AspNetCore.Http.EndpointMetadataCollection.Empty, "record"));
+            PublishAmbient(provider, httpContext);
+            var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
+            var viewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary());
+            var writer0 = new StringWriter();
+            var viewContext = new ViewContext(actionContext, new FakeView(), viewData,
+                new TempDataDictionary(httpContext, provider.GetRequiredService<ITempDataProvider>()),
+                writer0, new HtmlHelperOptions());
+            var html = provider.GetRequiredService<Microsoft.AspNetCore.Mvc.Rendering.IHtmlHelper>();
+            ((IViewContextAware)html).Contextualize(viewContext);
+
+            var faction = new Faction { FactionID = 3, Name = "Dynasty", Shortcut = "Dyn", Color = "#FF8800" };
+            var clan = new Clan { ClanID = 7, ClanName = "Test Clan", Shortcut = "TC", FactionID = 3, Faction = faction };
+            var account = new Account
+            {
+                AccountID = 42, Name = "player42", Country = "CZ", Level = 5,
+                Clan = clan, ClanID = 7, Faction = faction, FactionID = 3,
+            };
+            var planet = new Planet
+            {
+                PlanetID = 11, Name = "Testworld", OwnerFactionID = 3, Faction = faction,
+                Resource = new Resource { ResourceID = 5, MapPlanetWarsIcon = "icon.png" },
+            };
+
+            // RECORDED from the current implementation, not transcribed from reading it.
+            //
+            // What this does NOT pin is the URLs: this harness has no route table, so every
+            // href comes out empty - see the note on InvokeViewComponent. It pins the flags,
+            // ranks, colours, icons and structure around them, which is everything the move to
+            // shared code touches, because the move passes URL generation through rather than
+            // reimplementing it.
+            var failures = 0;
+            foreach (var probe in new (string What, Microsoft.AspNetCore.Html.IHtmlContent Produced, string Expected)[]
+            {
+                ("PrintAccount", html.PrintAccount(account), "<img src='/img/flags/CZ.png' class='flag' height='11' width='16' alt='CZ'/><img src='/img/ranks/1_0.png'  class='icon16' alt='rank' /><a href='' nicetitle='$clan$7'><img src='/img/clans/TC.png' width='16'/></a><a href='/Users/Detail/42' style='color:#FF8800' nicetitle='$user$42'>player42</a>"),
+                ("PrintAccount(no links)", html.PrintAccount(account, makeLinks: false), "<img src='/img/flags/CZ.png' class='flag' height='11' width='16' alt='CZ'/><img src='/img/ranks/1_0.png'  class='icon16' alt='rank' /><img src='/img/clans/TC.png' width='16'/>player42"),
+                ("PrintAccount(null)", html.PrintAccount(null), "Nobody"),
+                ("PrintClan", html.PrintClan(clan), "<a href='' nicetitle='$clan$7'><img src='/img/clans/TC.png' width='16'><span style='color:#FF8800'>TC</span></a>"),
+                ("PrintClan(null)", html.PrintClan(null), "<a href=''>No Clan</a>"),
+                ("PrintFaction", html.PrintFaction(faction), "<a href='' nicetitle='$faction$3'><img src='/img/factions/Dyn.png'/></a>"),
+                ("PrintFaction(null)", html.PrintFaction(null), ""),
+                ("PrintPlanet", html.PrintPlanet(planet), "<a href='' title='$planet$11' style='color:#FF8800'><img src='/img/planets/icon.png' width='8'>Testworld</a>"),
+                ("PrintPlanet(null)", html.PrintPlanet(null), "?"),
+            })
+            {
+                failures += Same("  " + probe.What, probe.Produced, probe.Expected);
+            }
             return failures;
         }
 

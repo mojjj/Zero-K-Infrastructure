@@ -3868,3 +3868,56 @@ website to write.
 The configuration decision is a function, so it is tested rather than deployed and hoped for: the
 default is in-process, a URL without a secret throws naming the MiscVar, asking for a client with
 no URL is a programming error, and a standalone server listens on loopback unless told otherwise.
+
+## Phase 1: the event formatting is shared
+
+The last coupling ran the other way - the lobby server reaching into the **website** - because
+`IPlanetwarsEventCreator` was implemented once, in Zero-K.info, and formatted the event feed's
+HTML there. It is now `ZkData/ZkHtmlFormat.cs` and `ZkData/PlanetwarsEventFormatter.cs`, and a
+standalone server writes events.
+
+### There were two copies, and that was checked before they were merged
+
+`PrintAccount`, `PrintClan`, `PrintFaction`, `PrintPlanet`, `PrintStructureType`,
+`PrintFactionTreaty` and `PrintRoleType` existed twice: in the MVC 5 helpers and in the port's
+rewrite - about 150 lines, near-verbatim. Extracting the string literals from both and comparing
+them showed the format strings identical, which is why one implementation can replace both rather
+than a third joining them.
+
+### Pinned first, then moved
+
+Nine outputs were **recorded by running the current implementation** - not written from reading it
+- as assertions in `ZeroKWeb.Render`. Then the bodies were moved *by extraction*: a script took
+them out of the port's file and made three substitutions (the ambients became context fields, the
+`MvcHtmlString` wrapper came off). Nothing was retyped, which is the failure this port has already
+paid for twice.
+
+After the move all nine still match, byte for byte.
+
+**What the recording does not cover is the URLs.** The render harness has no route table, so every
+`href` comes out empty. That decided the design: the context carries a URL *builder* rather than
+the formatters assembling paths. Hard-coding `/Clans/Detail/{id}` would have been tidier, would
+have changed what every existing caller emits, and the harness could not have told anyone.
+
+### What each caller supplies
+
+| caller | viewer | URLs |
+|---|---|---|
+| website helpers | the request's `Global.FactionID`, `ClanID`, `IsModerator` | MVC 5's `UrlHelper`, unchanged |
+| port helpers | the same, through its own helper | its own `UrlHelper`, unchanged |
+| standalone server | **none** - there is no viewer | absolute, on `GlobalConst.BaseSiteUrl` |
+
+Absolute in the last case because the events are read on the website, and a root-relative link
+written by a process that is not the website is a link to nowhere. No viewer because a server has
+none - and that is what the in-process server already produced, since it had no request either.
+
+One thing deliberately **not** changed: an event's HTML is rendered once and stored, so a colour
+that depends on whoever triggered it is baked in for everyone who reads the feed afterwards. That
+is arguably wrong and it is today's behaviour; it is not this change's business.
+
+### A silent no-op caught on the way
+
+The first wiring passed `null` for the server and used `server?.GhostSay(...)`, so every channel
+announcement would have been dropped while the events still appeared on the site - the only
+symptom being a clan never hearing about its own planet. It now throws if the server was never
+attached.

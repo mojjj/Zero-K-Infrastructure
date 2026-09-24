@@ -536,6 +536,8 @@
     <Compile Include="Enums\UnlockType.cs" />
     <Compile Include="DbExtensions.cs" />
     <Compile Include="DbCompat.cs" />
+    <Compile Include="ZkHtmlFormat.cs" />
+    <Compile Include="PlanetwarsEventFormatter.cs" />
     <Compile Include="Ef\AbuseReport.cs" />
     <Compile Include="Ef\Account.cs" />
     <Compile Include="Ef\AccountBattleAward.cs" />

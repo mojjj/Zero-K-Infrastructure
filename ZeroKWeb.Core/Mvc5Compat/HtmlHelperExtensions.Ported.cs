@@ -75,44 +75,18 @@ namespace System.Web.Mvc
         /// from a hand-written "/Users/Detail/{0}" rather than from routing, which is why it
         /// does not need the UrlHelper the clan link does.
         /// </summary>
-        public static MvcHtmlString PrintAccount(this IHtmlHelper helper, Account account,
-            bool colorize = true, bool ignoreDeleted = false, bool makeLinks = true)
+        /// <summary>Same context, built from this stack's helper rather than MVC 5's ambient.</summary>
+        private static ZkHtmlContext WebContext(IHtmlHelper helper) => new ZkHtmlContext
         {
-            if (account == null) return new MvcHtmlString("Nobody");
-            if (account.IsDeleted && !ignoreDeleted && !Global.IsModerator) return new MvcHtmlString(account.Name);
+            Action = (action, controller, values) => Url(helper).Action(action, controller, values),
+            ViewerFactionID = Global.FactionID,
+            ViewerClanID = Global.ClanID,
+            ViewerIsModerator = Global.IsModerator,
+        };
 
-            var clanStr = "";
-            if (account.Clan != null)
-            {
-                clanStr = string.Format("<img src='{0}' width='16'/>", account.Clan.GetImageUrl());
-                if (makeLinks)
-                    clanStr = string.Format("<a href='{1}' nicetitle='$clan${2}'>{0}</a>",
-                        clanStr, Url(helper).Action("Detail", "Clans", new { id = account.ClanID }), account.ClanID);
-            }
-            else if (account.Faction != null)
-                clanStr = string.Format("<img src='{0}' width='16'/>", account.Faction.GetImageUrl());
-
-            var dudeStr = "";
-            if (account.AdminLevel >= AdminLevel.Moderator)
-                dudeStr = "<img src='/img/police.png'  class='icon16' alt='Admin' />";
-
-            var color = Faction.FactionColor(account.Faction, Global.FactionID);
-            if (string.IsNullOrEmpty(color)) color = "#B0D0C0";
-
-            var flag = string.Format("<img src='/img/flags/{0}.png' class='flag' height='11' width='16' alt='{0}'/>",
-                (account.Country != "??" && !account.HideCountry) ? account.Country : "unknown");
-            var rank = string.Format("<img src='/img/ranks/{0}.png'  class='icon16' alt='rank' />",
-                account.GetIconName());
-
-            var name = account.Name;
-            if (account.IsDeleted) name += "(REDACTED)";
-            var user = name;
-            if (makeLinks)
-                user = string.Format("<a href='/Users/Detail/{0}' style='color:{1}' nicetitle='$user${0}'>{2}</a>",
-                    account.AccountID, colorize ? color : "", name);
-
-            return new MvcHtmlString(string.Format("{0}{1}{2}{3}{4}", flag, rank, clanStr, dudeStr, user));
-        }
+        /// <summary>Delegates to the one implementation in ZkData/ZkHtmlFormat.cs.</summary>
+        public static MvcHtmlString PrintAccount(this IHtmlHelper helper, Account account, bool colorize = true, bool ignoreDeleted = false, bool makeLinks = true)
+            => new MvcHtmlString(ZkHtmlFormat.PrintAccount(WebContext(helper), account, colorize, ignoreDeleted, makeLinks));
 
 
         public static MvcHtmlString AccountAvatar(this IHtmlHelper helper, Account account)
@@ -238,63 +212,21 @@ namespace System.Web.Mvc
         }
 
 
+        /// <summary>Delegates to the one implementation in ZkData/ZkHtmlFormat.cs.</summary>
         public static MvcHtmlString PrintFactionTreaty(this IHtmlHelper helper, FactionTreaty treaty)
-        {
-            if (treaty == null) return new MvcHtmlString("");
-            // the original's markup really does close a </span> it never opened
-            return new MvcHtmlString(string.Format("<a href='{1}' nicetitle='$treaty${0}'>TR{0}</span></a>",
-                treaty.FactionTreatyID,
-                Global.UrlHelper().Action("TreatyDetail", "Factions", new { id = treaty.FactionTreatyID })));
-        }
+            => new MvcHtmlString(ZkHtmlFormat.PrintFactionTreaty(WebContext(helper), treaty));
 
+        /// <summary>Delegates to the one implementation in ZkData/ZkHtmlFormat.cs.</summary>
         public static MvcHtmlString PrintPlanet(this IHtmlHelper helper, Planet planet)
-        {
-            if (planet == null) return new MvcHtmlString("?");
-            return new MvcHtmlString(string.Format(
-                "<a href='{0}' title='$planet${4}' style='{5}'><img src='/img/planets/{1}' width='{2}'>{3}</a>",
-                Global.UrlHelper().Action("Planet", "Planetwars", new { id = planet.PlanetID }),
-                planet.Resource.MapPlanetWarsIcon,
-                planet.Resource.PlanetWarsIconSize / 3,
-                planet.Name,
-                planet.PlanetID,
-                planet.Faction != null ? "color:" + planet.Faction.Color : ""));
-        }
+            => new MvcHtmlString(ZkHtmlFormat.PrintPlanet(WebContext(helper), planet));
 
+        /// <summary>Delegates to the one implementation in ZkData/ZkHtmlFormat.cs.</summary>
         public static MvcHtmlString PrintStructureType(this IHtmlHelper helper, StructureType stype)
-        {
-            // the original calls Global.UrlHelper() here and never uses it; not carried over,
-            // because carrying it would mean calling into request state for nothing
-            if (stype == null) return new MvcHtmlString("");
-            return new MvcHtmlString(string.Format("<span nicetitle='$structuretype${0}'>{1}</span>",
-                stype.StructureTypeID, stype.Name));
-        }
+            => new MvcHtmlString(ZkHtmlFormat.PrintStructureType(WebContext(helper), stype));
 
+        /// <summary>Delegates to the one implementation in ZkData/ZkHtmlFormat.cs.</summary>
         public static MvcHtmlString PrintRoleType(this IHtmlHelper helper, RoleType rt)
-        {
-            var factoids = new List<string>();
-            if (rt.IsClanOnly) factoids.Add("clan based");
-            if (rt.IsOnePersonOnly) factoids.Add("only one person can hold this");
-            if (rt.IsVoteable) factoids.Add("is voteable");
-            if (rt.RoleTypeHierarchiesByMasterRoleTypeID.Any(x => x.CanAppoint))
-                factoids.Add("appoints: " + string.Join(", ",
-                    rt.RoleTypeHierarchiesByMasterRoleTypeID.Where(x => x.CanAppoint).Select(x => x.SlaveRoleType.Name)));
-            if (rt.RoleTypeHierarchiesByMasterRoleTypeID.Any(x => x.CanRecall))
-                factoids.Add("recalls: " + string.Join(", ",
-                    rt.RoleTypeHierarchiesByMasterRoleTypeID.Where(x => x.CanRecall).Select(x => x.SlaveRoleType.Name)));
-            if (rt.RightBomberQuota != 0) factoids.Add(string.Format("bomber quota {0:F0}%", rt.RightBomberQuota * 100));
-            if (rt.RightDropshipQuota != 0) factoids.Add(string.Format("dropship quota {0:F0}%", rt.RightDropshipQuota * 100));
-            if (rt.RightWarpQuota != 0) factoids.Add(string.Format("warp quota {0:F0}%", rt.RightWarpQuota * 100));
-            if (rt.RightMetalQuota != 0) factoids.Add(string.Format("metal quota {0:F0}%", rt.RightMetalQuota * 100));
-            if (rt.RightSetEnergyPriority) factoids.Add("can set energy priorities");
-            if (rt.RightDiplomacy) factoids.Add("can control diplomacy");
-            if (rt.RightEditTexts) factoids.Add("controls texts");
-
-            // &nbsp without the semicolon, as found
-            return new MvcHtmlString(string.Format("<span title=\"<b>{0}</b><ul>{1}</ul>\"><b>{2}</b></span>",
-                rt.Description,
-                string.Join("", factoids.Select(x => "<li>" + x + "</li>")),
-                rt.Name + "&nbsp"));
-        }
+            => new MvcHtmlString(ZkHtmlFormat.PrintRoleType(WebContext(helper), rt));
 
         public static MvcHtmlString PrintDate(this IHtmlHelper helper, DateTime? dateTime)
             => new MvcHtmlString($"<span nicetitle=\"{dateTime}\">{dateTime.ToAgoString()}</span>");
@@ -389,39 +321,13 @@ namespace System.Web.Mvc
                 Math.Floor(account.Faction.Dropships)));
         }
 
+        /// <summary>Delegates to the one implementation in ZkData/ZkHtmlFormat.cs.</summary>
         public static MvcHtmlString PrintFaction(this IHtmlHelper helper, Faction fac, bool big = true)
-        {
-            if (fac == null) return new MvcHtmlString("");
-            var url = Url(helper);
-            if (big)
-                return new MvcHtmlString(string.Format("<a href='{1}' nicetitle='$faction${2}'><img src='{0}'/></a>",
-                    fac.GetImageUrl(), url.Action("Detail", "Factions", new { id = fac.FactionID }), fac.FactionID));
+            => new MvcHtmlString(ZkHtmlFormat.PrintFaction(WebContext(helper), fac, big));
 
-            // two spaces before style= in the original, kept
-            return new MvcHtmlString(string.Format(
-                "<a href='{3}' nicetitle='$faction${4}'><span style='color:{0}'><img src='{1}'  style='width:16px;height:16px'/>{2}</span></a>",
-                fac.Color, fac.GetImageUrl(), fac.Shortcut,
-                url.Action("Detail", "Factions", new { id = fac.FactionID }), fac.FactionID));
-        }
-
+        /// <summary>Delegates to the one implementation in ZkData/ZkHtmlFormat.cs.</summary>
         public static MvcHtmlString PrintClan(this IHtmlHelper helper, Clan clan, bool colorize = true, bool big = false)
-        {
-            var url = Url(helper);
-            if (clan == null)
-                return new MvcHtmlString(string.Format("<a href='{0}'>No Clan</a>", url.Action("Index", "Clans")));
-
-            var color = Clan.ClanColor(clan, Global.ClanID);
-            if (string.IsNullOrEmpty(color)) color = "#B0D0C0";
-
-            if (big)
-                return new MvcHtmlString(string.Format("<a href='{1}' nicetitle='$clan${2}'><img width='64' src='{0}'/></a>",
-                    clan.GetImageUrl(), url.Action("Detail", "Clans", new { id = clan.ClanID }), clan.ClanID));
-
-            return new MvcHtmlString(string.Format(
-                "<a href='{0}' nicetitle='$clan${4}'><img src='{1}' width='16'><span style='color:{2}'>{3}</span></a>",
-                url.Action("Detail", "Clans", new { id = clan.ClanID }), clan.GetImageUrl(),
-                colorize ? color : "", System.Net.WebUtility.HtmlEncode(clan.Shortcut), clan.ClanID));
-        }
+            => new MvcHtmlString(ZkHtmlFormat.PrintClan(WebContext(helper), clan, colorize, big));
 
         public static MvcHtmlString PrintLines(this IHtmlHelper helper, IEnumerable<object> lines)
         {
