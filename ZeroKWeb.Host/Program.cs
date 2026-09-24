@@ -383,6 +383,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckSelectHelpers(client);
                 failures += await CheckDivergedViews(client);
                 failures += await CheckMaps(client);
+                failures += await CheckSteamAndRealLogon();
 
                 Console.WriteLine();
                 if (failures == 0)
@@ -395,6 +396,95 @@ namespace ZeroKWeb.Host
             }
         }
 
+
+        /// <summary>
+        /// HomeController's own Logon, which is the site's real sign-in page - the one visitors
+        /// use, as opposed to /Harness/Login, which this harness wrote for itself.
+        ///
+        /// Two paths, and neither existed on the port until HomeController was linked:
+        ///
+        /// **Password.** Goes through SteamOpenId.TryCompleteLogin first (which must answer null
+        /// for an ordinary post, or every password login would go asking Steam about itself), then
+        /// this.SignInCompat, which is the twin that replaces FormsAuthentication with the cookie
+        /// scheme the rest of the port already uses. The proof it is the SAME notion of signed-in
+        /// is that /Harness/Whoami - which reads Global.Account, set by the middleware from the
+        /// cookie - recognises the visitor afterwards.
+        ///
+        /// **Steam.** Only as far as the redirect: the assertion coming back cannot be exercised
+        /// without Steam, and is covered instead by Tests.Portable against a stubbed provider.
+        /// </summary>
+        private static async Task<int> CheckSteamAndRealLogon()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the site's own sign-in:");
+            var failures = 0;
+
+            const string password = "harness-home-password";
+            string name;
+            string originalHash;
+            using (var db = new ZkDataContext())
+            {
+                var account = db.Accounts.OrderBy(a => a.AccountID).First();
+                name = account.Name;
+                originalHash = account.PasswordBcrypt;
+                account.SetPasswordPlain(password);
+                db.SaveChanges();
+            }
+
+            try
+            {
+                var handler = new HttpClientHandler
+                {
+                    UseCookies = true,
+                    CookieContainer = new System.Net.CookieContainer(),
+                    AllowAutoRedirect = false
+                };
+                using (var client = new HttpClient(handler))
+                {
+                    var signIn = await client.PostAsync(Url + "/Home/Logon", new FormUrlEncodedContent(new[]
+                    {
+                        new KeyValuePair<string, string>("login", name),
+                        new KeyValuePair<string, string>("password", password),
+                        new KeyValuePair<string, string>("zklogin", "1"),
+                    }));
+                    failures += Check(signIn.StatusCode == System.Net.HttpStatusCode.Redirect,
+                        "a password login through the site's own Logon redirects (" + (int)signIn.StatusCode + ")");
+
+                    var whoami = await (await client.GetAsync(Url + "/Harness/Whoami")).Content.ReadAsStringAsync();
+                    failures += Check(whoami.Contains("signed in as " + name),
+                        "SignInCompat wrote the same cookie the rest of the port reads (" + whoami.Trim() + ")");
+
+                    // No zklogin: the Steam branch. A 302 to Steam, built by the port's own
+                    // protocol code rather than DotNetOpenAuth.
+                    var steam = await client.PostAsync(Url + "/Home/Logon", new FormUrlEncodedContent(new[]
+                    {
+                        new KeyValuePair<string, string>("login", name),
+                    }));
+                    var location = steam.Headers.Location?.ToString() ?? "";
+                    failures += Check(steam.StatusCode == System.Net.HttpStatusCode.Redirect,
+                        "no zklogin redirects to Steam (" + (int)steam.StatusCode + ")");
+                    failures += Check(location.StartsWith("https://steamcommunity.com/openid/login?"),
+                        "and it goes to Steam's OpenID endpoint");
+                    failures += Check(location.Contains("openid.mode=checkid_setup"),
+                        "asking for checkid_setup");
+                    failures += Check(location.Contains(Uri.EscapeDataString("http://specs.openid.net/auth/2.0/identifier_select")),
+                        "with identifier_select, so Steam names the account rather than us");
+                    failures += Check(location.Contains(Uri.EscapeDataString(Url + "/Home/Logon")),
+                        "and a return_to on this host");
+                }
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var account = db.Accounts.OrderBy(a => a.AccountID).First();
+                    account.PasswordBcrypt = originalHash;
+                    db.SaveChanges();
+                }
+            }
+
+            return failures;
+        }
 
         /// <summary>
         /// The Maps pages, which carry three claims that only a request can settle.

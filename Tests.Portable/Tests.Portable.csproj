@@ -32,6 +32,17 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
   </ItemGroup>
 
+  <!--
+    Steam's OpenID 2.0 exchange, which the .NET 9 port implements itself because DotNetOpenAuth
+    has no .NET Core version. SteamOpenIdProtocol.cs deliberately has no ASP.NET Core types so
+    it can be linked here and every branch driven against a stubbed provider - the refusals
+    above all, since an implementation that trusts the query string works fine for honest users.
+  -->
+  <ItemGroup>
+    <Compile Include="..\ZeroKWeb.Core\Mvc5Compat\SteamOpenIdProtocol.cs" Link="Linked\SteamOpenIdProtocol.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\SteamOpenIdResult.cs" Link="Linked\SteamOpenIdResult.cs" />
+  </ItemGroup>
+
   <!-- Whole History Rating: the Bayesian core, free of Entity Framework -->
   <ItemGroup>
     <Compile Include="..\ZkData\Ef\WHR\Game.cs"                Link="Linked\WHR\Game.cs" />

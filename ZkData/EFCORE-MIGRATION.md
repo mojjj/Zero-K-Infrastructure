@@ -3479,3 +3479,73 @@ blanket version failed on correct output. It now looks for the shapes that would
 Razor did not run.
 
 **110 of 123 views compile, 11 more have a ported copy.** The two left are `Engines` and `Home`.
+
+## HomeController: Steam sign-in, written out
+
+DotNetOpenAuth has no .NET Core version and is not getting one. `HomeController` used it for
+Steam sign-in, in one action and two helpers.
+
+**A twin pair, so the live site's authentication is not rewritten by a port.**
+`Zero-K.info/AppCode/SteamOpenId.cs` is DotNetOpenAuth exactly as before and is what MVC 5 runs;
+`ZeroKWeb.Core/Mvc5Compat/SteamOpenIdCore.cs` + `SteamOpenIdProtocol.cs` implement OpenID 2.0
+directly. `HomeController` calls `SteamOpenId.TryCompleteLogin(this)` / `BeginLogin(this, referer)`
+and the result type is one linked source, so the two halves cannot disagree about it.
+
+### The whole thing rests on one step
+
+An OpenID callback is a query string a browser was told to send. **Every byte of it is
+attacker-supplied until Steam confirms the signature.** `VerifyAsync` POSTs the parameters back
+with `openid.mode=check_authentication` and requires an `is_valid:true` line. An implementation
+that skips this and reads `openid.claimed_id` works perfectly for every honest user and lets
+anyone sign in as anyone - and trying it by hand would never show that.
+
+So the tests are mostly about refusing: a verified-looking assertion with `is_valid:false`, a
+`claimed_id` on another host, a claimed_id that is not 17 digits, a return_to pointing elsewhere,
+an OpenID 1.1 namespace, a provider returning 500, and a body containing the text `is_valid:true`
+somewhere other than on its own line. Several also assert Steam was **not** contacted, because
+refusing early matters too.
+
+Two positive controls, on the two that would be silent:
+
+- ignore the verification verdict → **3 tests fail**
+- take the last path segment of `claimed_id`, which is what the original does → **2 tests fail**
+
+The second is stricter than the MVC 5 code, deliberately: DotNetOpenAuth validates the provider
+itself, so `FriendlyIdentifierForDisplay.Split('/').Last()` is safe *there*. Nothing validates it
+here except this code, so it validates it.
+
+**What none of this establishes:** nothing talks to Steam. The provider is a stub. This proves the
+logic and says nothing about whether Steam's live endpoint behaves as documented, and that gap
+cannot be closed in CI.
+
+### `referer` comes out of the signed return_to
+
+It is fed straight to `Redirect()`, which is where an open redirect would ride in. Reading it from
+`openid.return_to` - which Steam signs, and only signs inside the realm this site asked for -
+gives it the same protection as the rest of the assertion. The raw query string would not.
+
+### Phase 1, on the sign-in path
+
+`Logon`'s first line was `Global.LobbyApi.VerifyIp(...)`: **the login rate limiter counts failures
+in the lobby server's memory.** Sign-in depends on the two processes being one.
+
+The call is now null-conditional. Where a server is attached this changes nothing - `null == false`
+is false, so a running server still blocks exactly as before - and the port, which has no server,
+serves the page. **The port therefore has no login rate limiting**, which is a Phase 1 blocker, not
+a detail, and is written down here rather than left to be discovered.
+
+### Two stand-ins retired, and the rest
+
+`ZeroKWeb.Host/Controllers/HomeController.cs` existed only because the real one was not linked;
+with both present, routing threw `AmbiguousMatchException` - the same collision the `ForumController`
+rename and the `_ViewStart` stand-in produced. Deleted, and `/Home/NotLoggedIn` is now served by the
+site's own controller.
+
+`FormsAuthentication` became a twin pair over `ZkAuth`, the same cookie scheme the rest of the port
+uses - proved by `/Harness/Whoami` recognising a visitor who signed in through `/Home/Logon`.
+`[AcceptVerbs(HttpVerbs.Post | HttpVerbs.Get)]` needed no shim at all: the string constructor
+`[AcceptVerbs("GET", "POST")]` exists on both stacks. `System.Web.Caching` in `SpotlightHandler`
+is another dead using. `Utils.Lines` and three Steam-release statics moved to the portable partials,
+and `MvcHtmlString` gained `ToHtmlString`.
+
+**111 of 123 views compile, 11 more have a ported copy. One view is left**: `Engines/EnginesIndex`.

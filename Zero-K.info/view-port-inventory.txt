@@ -12,10 +12,10 @@
 # other                  a package reference or an MVC 5 API
 
 total 123
-compiles                 110
+compiles                 111
 diverged                 11
 child-action             0
-waiting-on-controllers   2
+waiting-on-controllers   1
 razor-language           0
 other                    0
 
@@ -31,4 +31,3 @@ diverged                 Shared/CommentList.cshtml  -> PortedViews/Shared/Commen
 diverged                 Shared/TopMenu.cshtml  -> PortedViews/Shared/TopMenu.cshtml
 diverged                 Shared/UserDetail.cshtml  -> PortedViews/Shared/UserDetail.cshtml
 waiting-on-controllers   Engines/EnginesIndex.cshtml  [CS0246]
-waiting-on-controllers   Home/HomeIndex.cshtml  [CS0234]
