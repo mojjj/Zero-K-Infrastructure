@@ -172,10 +172,18 @@ What this does **not** mean is that the server can move out today. Still in the 
   **It is not wired up.** Nothing constructs a `RemoteLobbyServerApi`; `Global.LobbyApi` is
   still the in-process one. Choosing between them is deployment configuration, and it is
   not worth adding before the item below is answered.
-- **The shared statics still block the split, transport or not.** `Ratings.RatingSystems`
-  and `Ratings.MapRatings` are filled only by the lobby server and read by eight website
-  files, so moving the server out breaks `/Ladders`, `/Charts` and every rating on the site
-  whatever the website uses to talk to it. This is the next thing, not the transport.
+- **The shared statics: mostly answered.** `RatingSystems.Init()` is split. A process that
+  only READS ratings calls `RatingSystems.CreateRatingSystems()`, which creates the systems
+  and computes nothing; each one then serves `GetPlayerRating` out of the `AccountRatings`
+  table, which is the rating of record. That covers `Account.GetRating` (15 sites),
+  `GetPlayerRating`, `GetTopPlayers` and the PlanetWars faction stats - the website reads
+  ratings with no lobby server, and `ZeroKWeb.Host` runs that way so it stays true.
+
+  Three reads have no database behind them and come back **empty**, which is worse than
+  throwing: `GetPlayerRatingHistory` (the rating graph), `GetInternalRating` (WhrController)
+  and `MapRatings.GetMapRanking` (`/Ladders/Maps`). Plus two commands, `ForceRatingsUpdate`
+  and `ResetAll`. Those five want `ILobbyServerApi` members - the interface and the
+  transport are ready for them.
 - ~~Six members pass EF entities.~~ **Done.** All 40 members now take primitives and
   protocol DTOs only; the six that took `Account`, `Clan`, `Planet` or the caller's
   `ZkDataContext` take ids, and the server loads what it needs from its own context.

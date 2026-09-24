@@ -75,10 +75,15 @@ namespace ZeroKWeb.Host
             // KeyNotFoundException, not a default rating, because the "unknown category"
             // fallback indexes the same empty dictionary.
             //
-            // Called here for the same reason production ends up calling it: the pages need it.
-            // Both fill their dictionaries synchronously and then do the heavy work in the
-            // background, so this does not block startup on a full WHR pass.
-            Ratings.RatingSystems.Init();
+            // CreateRatingSystems, not Init: this process READS ratings, it does not compute them.
+            // Init would start a WHR pass over every battle in the database here as well as in the
+            // lobby server - two processes doing the same expensive work and disagreeing about the
+            // answer. The reader half creates the systems and stops, and each one then serves
+            // GetPlayerRating out of the AccountRatings table, which is the rating of record.
+            //
+            // This is the shape the website wants once the lobby server is elsewhere, so the
+            // harness runs it rather than the shape that only works when they share a process.
+            Ratings.RatingSystems.CreateRatingSystems();
             Ratings.MapRatings.Init();
 
             // Order matters and is not interchangeable: UseAuthentication populates
@@ -771,8 +776,16 @@ namespace ZeroKWeb.Host
             var index = await client.GetAsync(Url + "/Ladders");
             var indexHtml = await index.Content.ReadAsStringAsync();
             failures += Check(index.IsSuccessStatusCode,
-                "/Ladders was served (" + (int)index.StatusCode + ") - AwardCalculator ran its query"
-                + " and the lobby server's rating statics were there");
+                "/Ladders was served (" + (int)index.StatusCode + ") - AwardCalculator ran its query");
+
+            // NOT just a 200. The ladder is built from GetTopPlayers, and a process that reads
+            // ratings without computing them used to get an empty list from it - a heading over no
+            // rows, which is a 200 and a clean check and a broken page. This process deliberately
+            // calls CreateRatingSystems rather than Init, so this assertion is the one that says
+            // the database fallback works.
+            var ladderRows = System.Text.RegularExpressions.Regex.Matches(indexHtml, "/Users/Detail/").Count;
+            failures += Check(ladderRows >= 10,
+                "the ladder has players in it (" + ladderRows + " links) - not an empty list behind a 200");
             failures += Check(!indexHtml.Contains("@"), "no unprocessed Razor markers survived");
 
             var full = await client.GetAsync(Url + "/Ladders/Full");
@@ -790,6 +803,13 @@ namespace ZeroKWeb.Host
             failures += Check(maps.IsSuccessStatusCode, "/Ladders/Maps was served (" + (int)maps.StatusCode + ")");
             failures += Check(mapsHtml.Contains("<option selected=\"selected\" value=\"\"></option>"),
                 "a nullable enum got its empty option, selected, as MVC 5 emits it");
+
+            // MapRatings.GetMapRanking is computed by the WHR pass and has no database fallback, so
+            // this page is expected to be EMPTY in a process that only reads ratings. Asserted, not
+            // assumed: if it ever starts having rows the recorded remaining work is wrong.
+            var mapRows = System.Text.RegularExpressions.Regex.Matches(mapsHtml, "/Maps/Detail/").Count;
+            Console.WriteLine("   note  /Ladders/Maps has " + mapRows + " map rows"
+                              + " - MapRatings has no database fallback, see EFCORE-MIGRATION.md");
 
             return failures;
         }

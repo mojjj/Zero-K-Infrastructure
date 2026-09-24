@@ -3741,3 +3741,52 @@ between them is deployment configuration - not worth adding while the **shared s
 block the split regardless: `RatingSystems` and `MapRatings` are filled only by the lobby server
 and read by eight website files, so moving it out breaks `/Ladders`, `/Charts` and every rating on
 the site no matter what the website uses to talk to it. That is the next piece.
+
+## Phase 1: the rating statics
+
+The answer turned out to be much smaller than an API, and the code already contained it.
+
+**The crash was never missing data.** `WholeHistoryRating.GetPlayerRating` already falls back to
+the `AccountRatings` table whenever its own pass has not finished - which, for a process that only
+reads ratings, is always. What threw was `GetRatingSystem`, because `whr` was an empty dictionary:
+only `ZkLobbyServer` ever called `RatingSystems.Init()`, and `Init()` does two things at once -
+create the systems, then start a pass over every battle in the database.
+
+So `Init()` is split. `CreateRatingSystems()` is the first two lines and nothing else; `Init()`
+calls it and then starts the pass. **The website calls the reader half.** Calling `Init()` there
+would have two processes doing the same expensive work and disagreeing about the answer.
+
+That covers most of the coupling at once, including a part the earlier count missed:
+`Account.GetRating` and `GetBalancerRating` are the site's universal rating accessors and go
+through the statics - 15 call sites in 6 files, on top of the 9 direct ones.
+
+### `GetTopPlayers` would have gone quiet
+
+With the systems created but no pass run, `topPlayers` is empty, so the ladder came back as a
+heading over no rows - a 200, a clean check, and a broken page.
+
+The fix was already written: the `count > 200` branch is a database query ordered by the persisted
+`LadderElo`, so it runs whenever the instance is not completely initialised, not only for large
+counts. The second branch is now also gated, because it would otherwise overwrite the rows the
+first one just produced with an empty list.
+
+`ZeroKWeb.Host` runs on `CreateRatingSystems()` and asserts the ladder has players:
+
+    ok    the ladder has players in it (66 links) - not an empty list behind a 200
+
+Positive control - restore the old condition - gives **0 links**, which is what a 200 over nothing
+looks like.
+
+### What still needs the server, and is recorded rather than guessed
+
+Three reads are genuinely in-memory and have no database behind them, so they return **empty**:
+`GetPlayerRatingHistory` (the rating graph), `GetInternalRating` (WhrController) and
+`MapRatings.GetMapRanking`. The harness prints the last one rather than asserting it, so the
+recorded state is checked against reality on every run:
+
+    note  /Ladders/Maps has 0 map rows - MapRatings has no database fallback
+
+Plus two commands: `ForceRatingsUpdate` and `ResetAll`. Those five want `ILobbyServerApi` members,
+and both the interface and the transport are ready for them - `PlayerRating`, `RankBracket` and
+`Dictionary<DateTime, float>` are already crossable, and `PlayerDay` needs a two-float DTO because
+WhrController only reads `GetElo()` and `GetEloStdev()` off it.
