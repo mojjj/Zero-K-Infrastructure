@@ -1,5 +1,9 @@
 ﻿using System;
 using System.Linq;   // SingleOrDefault over a navigation collection
+using System.Collections.Generic;   // IEnumerable<SelectListItem> from GetFactionItems
+using System.Linq.Expressions;      // Expression<Func<>> in the filter it takes
+using System.IO;                    // File.Exists in IncludeFile
+using System.Net;                   // WebClient in IncludeWiki
 using ZeroKWeb;   // Global.AccountID, shimmed in the port by Mvc5Compat/GlobalCompat.cs
 using ZkData;     // Account, ZkDataContext
 
@@ -121,6 +125,172 @@ namespace System.Web.Mvc
                     downvote,
                     previousVote != null ? string.Format("(<a href='{0}'>cancel</a>)", url.Action("CancelVotePost", "Forum", new {forumPostID = post.ForumPostID})) : ""
                     ));
+        }
+
+        // The view helpers 28 views were waiting on, moved rather than ported: MvcHtmlString is
+        // shimmed and HtmlHelper is aliased to IHtmlHelper, so nothing in them is MVC 5 specific.
+        // The compiler checks both stacks, which is why this is safe in a way transcribing them
+        // would not have been.
+        public static MvcHtmlString IncludeWiki(this HtmlHelper helper, string node) {
+            var post = new ZkDataContext().ForumThreads.FirstOrDefault(x => x.WikiKey == node)?.ForumPosts.OrderBy(x => x.ForumPostID).FirstOrDefault();
+            if (post == null) return null;
+            return Global.ForumPostCache.GetCachedHtml(post, helper);
+        }
+
+        public static MvcHtmlString PrintSpringLink(this HtmlHelper helper, string link) {
+           return new MvcHtmlString(string.Format("javascript:SendLobbyCommand('{0}');void(0);",link));
+        }
+
+        /// <summary>
+        ///     <para>Returns an appropriately formatted link with thread title and mail icon for a thread</para>
+        ///     <para>(e.g. bold = posted in; italics = new; grey icon = already read)</para>
+        /// </summary>
+        /// <param name="thread">The thread to print</param>
+        /// <returns></returns>
+        public static MvcHtmlString Print(this HtmlHelper helper, ForumThread thread) {
+            var url = Global.UrlHelper();
+
+            ForumThreadLastRead lastRead = null;
+            ForumLastRead lastReadForum = null;
+            DateTime? lastTime = null;
+            if (Global.Account != null)
+            {
+                lastRead = Global.Account.ForumThreadLastReads.FirstOrDefault(x => x.ForumThreadID == thread.ForumThreadID);
+                lastReadForum = Global.Account.ForumLastReads.FirstOrDefault(x => x.ForumCategoryID == thread.ForumCategoryID);
+                if (lastReadForum != null) lastTime = lastReadForum.LastRead;
+            }
+            if (lastRead != null && (lastTime == null || lastRead.LastRead > lastTime)) lastTime = lastRead.LastRead;
+            ForumPost post = null;
+            if (lastTime != null) post = thread.ForumPosts.FirstOrDefault(x => x.Created > lastTime);
+            int page = post != null ? ZeroKWeb.Controllers.ForumController.GetPostPage(post) : (thread.PostCount-1)/GlobalConst.ForumPostsPerPage;
+
+            string link;
+            if (page > 0) link = url.Action("Thread", "Forum", new { id = thread.ForumThreadID, page = page});
+            else link = url.Action("Thread", "Forum", new { id = thread.ForumThreadID });
+            link = string.Format("<a href='{0}' title='$thread${1}' style='word-break:break-all;'>", link, thread.ForumThreadID);
+
+            string format;
+
+            if (lastTime == null) format = "<span>{0}<img src='/img/mail/mail-unread.png' height='15' /><i>{1}</i></a></span>";
+            else {
+                if (lastTime >= thread.LastPost) format = "<span>{0}<img src='/img/mail/mail-read.png' height='15' />{1}</a></span>";
+                else {
+                    if (lastRead != null && lastRead.LastPosted != null) format = "<span>{0}<img src='/img/mail/mail-new.png' height='15' /><b>{1}</b></a></span>";
+                    else format = "<span>{0}<img src='/img/mail/mail-unread.png' height='15' />{1}</a></span>";
+                }
+            }
+
+            string title = HttpUtility.HtmlEncode(thread.Title);
+            if (!string.IsNullOrEmpty(thread.WikiKey))
+            {
+                title = string.Format("<span style='color:lightblue'>[{0}]</span> {1}", thread.WikiKey, title);
+            }
+
+            return new MvcHtmlString(string.Format(format, link, title));
+        }
+
+        /// <summary>
+        /// Returns the printed <see cref="Account"/>s that hold specified <see cref="RoleType"/> in the <see cref="Faction"/>
+        /// </summary>
+        /// <param name="rt">The <see cref="RoleType"/> whose holders should be printed</param>
+        /// <param name="f">The <see cref="Faction"/> whose role holders should be printed</param>
+        public static MvcHtmlString PrintFactionRoleHolders(this HtmlHelper helper, RoleType rt, Faction f) {
+            List<MvcHtmlString> holders = new List<MvcHtmlString>();
+            foreach (AccountRole acc in rt.AccountRoles.Where(x=>x.Account.FactionID == f.FactionID)) 
+            {
+                holders.Add(PrintAccount(helper, acc.Account));
+            }
+            return new MvcHtmlString(String.Join(", ", holders));
+        }
+
+        /// <summary>
+        /// Returns the printed <see cref="Account"/>s that hold specified <see cref="RoleType"/> in the <see cref="Clan"/>
+        /// </summary>
+        /// <param name="rt">The <see cref="RoleType"/> whose holders should be printed</param>
+        /// <param name="c">The <see cref="Clan"/> whose role holders should be printed</param>
+        public static MvcHtmlString PrintClanRoleHolders(this HtmlHelper helper, RoleType rt, Clan c)
+        {
+            List<MvcHtmlString> holders = new List<MvcHtmlString>();
+            foreach (AccountRole acc in rt.AccountRoles.Where(x => x.Account.ClanID == c.ClanID))
+            {
+                holders.Add(PrintAccount(helper, acc.Account));
+            }
+            return new MvcHtmlString(String.Join(", ", holders));
+        }
+
+        public static MvcHtmlString IncludeFile(this HtmlHelper helper, string name) {
+            if (name.StartsWith("http://") || name.StartsWith("https://")) {
+                var ret = new WebClient().DownloadString(name);
+                return new MvcHtmlString(ret);
+            }
+            else {
+                var path = Global.MapPath(name);
+                return new MvcHtmlString(File.ReadAllText(path));
+            }
+        }
+
+        public static IEnumerable<SelectListItem> GetFactionItems(this HtmlHelper html, int factionID, Expression<Func<Faction, bool>> filter = null) {
+            var ret = new ZkDataContext().Factions.AsQueryable().Where(x => !x.IsDeleted);
+            if (filter != null) ret = ret.Where(filter);
+            return ret.Select(x => new SelectListItem { Text = x.Name, Value = x.FactionID.ToString(), Selected = x.FactionID == factionID });
+        }
+
+        public static MvcHtmlString PrintSeconds(this HtmlHelper helper, int? seconds)
+        {
+            if (seconds != null) return new MvcHtmlString($"<span nicetitle=\"{seconds}\">{TimeSpan.FromSeconds(seconds.Value).ToNiceString()}</span>");
+            else return new MvcHtmlString("");
+        }
+
+        public static MvcHtmlString PrintRankProgress(this HtmlHelper helper, Account account)
+        {
+            var ratio =  Ratings.Ranks.GetRankProgress(account);
+            int percentage = (int)Math.Round(ratio * 100);
+            var progressText = string.Format("Progress to the next rank: {0}%", percentage);
+            if (percentage >= 100)
+            {
+                if (Ratings.Ranks.ValidateRank(account.Rank + 1))
+                {
+                    progressText = "Rank up on next victory!";
+                }
+                else if (Global.IsAccountAuthorized && Global.AccountID == account.AccountID)
+                {
+                    progressText = "Congratulations, you are officially the best Zero-K player!";
+                }
+                else
+                {
+                    progressText = account.Name + " is officially the best Zero-K player.";
+                }
+            }
+            var str = new MvcHtmlString(string.Format("Current rank: <img src='/img/ranks/{0}_{1}.png'  class='icon16' alt='rank' /> {2} <br /> <br /> {3}<br /> <br />Win more games to improve your rank!", account.GetIconLevel(), account.Rank, Ratings.Ranks.RankNames[account.Rank], progressText));
+            return str;
+        }
+
+        /// <summary>
+        /// Returns the sum of the + and - votes on all the specified <see cref="Account"/>'s forum posts
+        /// </summary>
+        public static MvcHtmlString PrintTotalPostRating(this HtmlHelper helper, Account account)
+        {
+            return new MvcHtmlString(string.Format("{0} / {1}",
+                    string.Format("<font color='LawnGreen'>+{0}</font>", account.ForumTotalUpvotes),
+                    string.Format("<font color='Tomato'>-{0}</font>", account.ForumTotalDownvotes)
+                    ));
+        }
+
+        /// <summary>
+        /// Returns a colored string that says whether the specified <see cref="PlanetStructure"/> is ACTIVE, DISABLED or POWERING
+        /// </summary>
+        /// <param name="s">The <see cref="PlanetStructure"/> whose status should be printed</param>
+        public static MvcHtmlString PrintStructureState(this HtmlHelper helper, PlanetStructure s) {
+            var url = Global.UrlHelper();
+            var state = "";
+            if (!s.IsActive) {
+                if (s.ActivationTurnCounter == null) state = "<span style='color:red'>DISABLED</span>";
+                if (s.ActivationTurnCounter >= 0) {
+                    state = string.Format(" <span style='color:orange'>POWERING {0} turns left</span>", (s.TurnsToActivateOverride ?? s.StructureType.TurnsToActivate) - s.ActivationTurnCounter);
+                }
+            }
+            else state = "<span style='color:green'>ACTIVE</span>";
+            return new MvcHtmlString(state);
         }
 }
 }

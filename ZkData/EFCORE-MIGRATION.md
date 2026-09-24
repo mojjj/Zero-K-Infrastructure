@@ -2799,3 +2799,63 @@ moved is the *kind* of blocker: `CS0234`, a missing controller, is a dependency 
 answer somewhere else in the tree; `CS1061`, a missing helper, is a file move. Three controllers
 were worth linking to turn nine views' worth of the first into the second.
 
+## Eleven view helpers move; `compiles` 73 -> 82
+
+```
+compiles                 73 -> 82
+other                    23 -> 14
+waiting-on-controllers   21 -> 18
+child-action              2 -> 5
+```
+
+The largest jump since the harness was built, and the cheapest: the helpers were **moved**, not
+ported. `MvcHtmlString` is shimmed and `HtmlHelper` is aliased, so nothing in them is MVC 5
+specific, and both compilers check the result - none of the transcription risk that put two
+defects into the first ten helpers.
+
+`child-action` rising from 2 to 5 is progress too: three views that now compile turn out to call
+child actions, which they could not have been seen to do while they did not compile.
+
+### The ported helpers now return MvcHtmlString
+
+All 29 in `Mvc5Compat/HtmlHelperExtensions.Ported.cs` were written returning `IHtmlContent`,
+which is the ASP.NET Core idiom. It is not the MVC 5 signature, and the difference only shows when
+LINKED code stores a result:
+
+```csharp
+List<MvcHtmlString> holders = new List<MvcHtmlString>();
+holders.Add(PrintAccount(helper, acc.Account));    // CS1503, on .NET 9 only
+```
+
+`PrintFactionRoleHolders` does exactly that, and it is shared source. `MvcHtmlString` **is** an
+`IHtmlContent` - it subclasses `HtmlString` - so matching MVC 5's signature costs nothing and no
+existing caller is affected. The byte-exact helper checks still pass.
+
+### Two helpers cannot be single-source, and the reason is a language limit
+
+`EnumCheckboxesFor` and `MultiSelectFor` take `HtmlHelper<TModel>`. The alias that makes all of
+this work -
+
+```csharp
+global using HtmlHelper = Microsoft.AspNetCore.Mvc.Rendering.IHtmlHelper;
+```
+
+- is **not generic**, and C# has no generic using aliases:
+
+```
+CS0307: The using alias 'HtmlHelper' cannot be used with type arguments
+```
+
+So the technique this port leans on has a boundary, and this is it. Those two need a twin pair
+like `DbCompat` and `HtmlCompat`, not a move.
+
+### What is left of the 16
+
+| helper | uses | what it needs |
+| --- | --- | --- |
+| `PostLink` | 32 | a twin. `PostLinkExtensions.cs` builds its form with MVC 5's `TagBuilder`, whose `InnerHtml` is a string and whose `ToString(TagRenderMode)` does not exist in ASP.NET Core. Worth capturing ground truth for, like the Ajax helper. |
+| `EnumDropDownListFor` | 24 | a **shim**, not a move - it is an MVC 5 built-in (`System.Web.Mvc.Html.SelectExtensions`) that ASP.NET Core removed. |
+| `MultiSelectFor` | 8 | a twin, per the alias limit above. |
+| `EnumCheckboxesFor` | 2 | the same. |
+| `GetFileName` | 2 | not a helper at all: `Path.GetFileName`, where ASP.NET Core's `RazorPage.Path` property shadows `System.IO.Path`. A view edit. |
+
