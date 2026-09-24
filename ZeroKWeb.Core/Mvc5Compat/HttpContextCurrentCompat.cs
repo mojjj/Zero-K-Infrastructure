@@ -37,6 +37,13 @@ namespace System.Web
         public HttpRequest Request => new HttpRequest(context?.Request);
 
         /// <summary>
+        /// Shared/UserDetail.cshtml calls Server.HtmlEncode on a commander name. Only the
+        /// encoder is wired up: MapPath needs an IWebHostEnvironment, which an ambient context
+        /// has no business reaching for, and ControllerCompat.MapPath is where that belongs.
+        /// </summary>
+        public Mvc5Server Server => new Mvc5Server(null);
+
+        /// <summary>
         /// A tripwire, and the earliest possible one.
         ///
         /// One caller: UniGrid.RenderCsv, which does Clear, ClearHeaders, AddHeader, BinaryWrite

@@ -74,6 +74,22 @@ namespace ZeroKWeb.Compat
             return Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
         }
 
+        /// <summary>
+        /// Shared/UserDetail.cshtml calls this on a commander name, so its rules are part of
+        /// what the site serves rather than an implementation detail.
+        ///
+        /// MVC 5's is HttpUtility.HtmlEncode. WebUtility.HtmlEncode is NOT obviously the same
+        /// function - it is a different type in a different assembly - so the capture asks the
+        /// real one and ZeroKWeb.Render compares:
+        ///
+        ///     a &amp;lt; b &amp;amp; c &amp;quot; d &amp;#39; e &amp;gt; f &amp;#252; &amp;#169; 中
+        ///
+        /// They agree, including the two parts worth naming: characters 160-255 become numeric
+        /// entities, and characters ABOVE 255 are left alone, so a CJK name passes through
+        /// untouched. Neither is what ASP.NET Core's own HtmlEncoder does, which is the encoder
+        /// a port reaches for by default - it spells the apostrophe &amp;#x27; and escapes
+        /// non-ASCII as &amp;#xNNNN;. That is the positive control for this check.
+        /// </summary>
         public string HtmlEncode(string value) => WebUtility.HtmlEncode(value);
     }
 }

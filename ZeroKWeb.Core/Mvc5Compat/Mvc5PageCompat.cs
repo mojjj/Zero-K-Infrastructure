@@ -66,7 +66,14 @@ namespace ZeroKWeb.Compat
         /// this code is never a child. Always false is the faithful answer, not a stub - but
         /// it is a judgement about behaviour rather than a translation, so it is written here
         /// where it can be argued with rather than buried in a view.
+        ///
+        /// **Why the name has Compat on the end.** In MVC 5 this is a PROPERTY, and C# has no
+        /// extension properties - the wall Server.MapPath, Request.Params and Request.Url all
+        /// hit. The usual answer, an extension method of the same name, does not work here
+        /// either: a member always beats an extension method, so `ViewContext.IsChildAction()`
+        /// on MVC 5 would try to invoke a bool. Hence a name neither stack already has, with a
+        /// twin in Zero-K.info/AppCode/ViewContextCompat.cs that forwards to the real property.
         /// </summary>
-        public static bool IsChildAction(this ViewContext context) => false;
+        public static bool IsChildActionCompat(this ViewContext context) => false;
     }
 }

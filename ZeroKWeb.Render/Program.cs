@@ -383,6 +383,14 @@ namespace ZeroKWeb.Render
 
                 var cases = new (string Label, Func<string> Build)[]
                 {
+                    // Server.HtmlEncode, which Shared/UserDetail.cshtml calls on a commander
+                    // name. Not WebUtility.HtmlEncode, which is what this used to be: HttpUtility
+                    // encodes 160-255 and leaves everything above 255 alone, so a CJK name passes
+                    // through, and WebUtility would have turned it into a run of &#20013;.
+                    ("HttpUtility.HtmlEncode",
+                     () => new ZeroKWeb.Compat.Mvc5Server(null).HtmlEncode(
+                         "a < b & c \" d ' e > f \u00fc \u00a9 \u4e2d")),
+
                     ("ExpressionHelper.GetExpressionText(x => x.UserId)",
                      () => "name=" + html.NameFor(x => x.UserId) + " model=["
                            + string.Join(",", ((Expression<Func<CapturedListModel, IList<int>>>)(x => x.UserId))

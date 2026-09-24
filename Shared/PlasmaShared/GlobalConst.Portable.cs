@@ -22,6 +22,12 @@ namespace ZkData
         /// <summary>Thresholds for PlanetWars eligibility. Pure constants, lifted here
         /// with the rating ones so the lobby protocol can compile without GlobalConst.cs.
         /// </summary>
+        /// <summary>Used by PayPalInterface, which Contributions/ContributionsIndex.cshtml
+        /// reaches for GetItemCode. Moved here rather than copied: both stacks compile
+        /// PlasmaShared, so one partial class still has one definition of each.</summary>
+        public const double EurosToKudos = 10.0;
+        public const string TeamEmail = "Zero-K team <team@zero-k.info>";
+
         public const int MinPlanetWarsLevel = 5;
         public const int MinPlanetWarsElo = -1000;
 
