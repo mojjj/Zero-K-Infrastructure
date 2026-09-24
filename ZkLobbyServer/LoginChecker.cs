@@ -160,7 +160,10 @@ namespace ZkLobbyServer
 
                     db.SaveChanges();
 
-                    ret.LoginResponse.SessionToken = Guid.NewGuid().ToString(); // create session token
+                    // A bearer credential, so it comes from a cryptographic generator rather
+                    // than Guid.NewGuid - see LobbyApiProtocol.NewSessionToken for why that
+                    // distinction is worth making even though a v4 GUID is strong in practice.
+                    ret.LoginResponse.SessionToken = Api.LobbyApiProtocol.NewSessionToken();
 
                     var banPenalty = Punishment.GetActivePunishment(acc.AccountID, ip, userID, installID, x => x.BanLobby);
 

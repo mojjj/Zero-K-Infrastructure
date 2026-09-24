@@ -26,6 +26,15 @@ namespace ZkLobbyServer.Api
         public const string SecretKey = "LobbyApiSecret";
         public const string ListenPrefixKey = "LobbyApiListenPrefix";
 
+        /// <summary>
+        /// <c>LobbyApiAllowInsecureTransport</c> - set to "true" to permit plaintext off loopback.
+        /// The secret and the single sign-on token both cross this connection, so the default is
+        /// no; this exists for a private segment where a certificate is not available, and it has
+        /// to be set deliberately.
+        /// </summary>
+        public static bool AllowInsecureTransport(string configured) =>
+            string.Equals(configured?.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+
         /// <summary>True when the website should NOT start a lobby server of its own.</summary>
         public static bool IsRemote(string url) => !string.IsNullOrWhiteSpace(url);
 
@@ -33,7 +42,7 @@ namespace ZkLobbyServer.Api
         /// The client for a remote server, or an exception saying what is missing. Never null and
         /// never a quiet fallback - see the class note on why.
         /// </summary>
-        public static ILobbyServerApi CreateClient(string url, string secret)
+        public static ILobbyServerApi CreateClient(string url, string secret, bool allowInsecureTransport = false)
         {
             if (!IsRemote(url))
                 throw new InvalidOperationException(
@@ -46,7 +55,7 @@ namespace ZkLobbyServer.Api
                     + "kicks players and posts as a moderator, so it is not reachable without one. "
                     + "Set both MiscVars or neither.");
 
-            return new RemoteLobbyServerApi(url, secret);
+            return new RemoteLobbyServerApi(url, secret, handler: null, allowInsecureTransport: allowInsecureTransport);
         }
 
         /// <summary>

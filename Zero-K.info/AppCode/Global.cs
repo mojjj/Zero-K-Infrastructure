@@ -177,7 +177,10 @@ namespace ZeroKWeb
             {
                 Trace.TraceInformation("Using a lobby server at {0}", lobbyApiUrl);
                 LobbyApi = LobbyApiConfiguration.CreateClient(
-                    lobbyApiUrl, MiscVar.GetValue(LobbyApiConfiguration.SecretKey));
+                    lobbyApiUrl,
+                    MiscVar.GetValue(LobbyApiConfiguration.SecretKey),
+                    LobbyApiConfiguration.AllowInsecureTransport(
+                        MiscVar.GetValue(LobbyApiProtocol.AllowInsecureKey)));
             }
             else
             {

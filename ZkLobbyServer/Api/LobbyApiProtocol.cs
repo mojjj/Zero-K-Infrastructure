@@ -81,6 +81,75 @@ namespace ZkLobbyServer.Api
         }
 
         /// <summary>
+        /// Refuses a plaintext endpoint that is not loopback.
+        ///
+        /// **What crosses this connection decides it.** The shared secret goes in every request's
+        /// Authorization header, and <c>RedeemSessionToken</c> carries a bearer credential that
+        /// signs someone into the website - so the wire has to be at least as trusted as the token
+        /// table. On loopback nothing leaves the machine. Anywhere else, plaintext hands both to
+        /// whoever is on the path.
+        ///
+        /// <paramref name="allowInsecure"/> exists because "put a certificate on it" is not always
+        /// available and a private segment is a real deployment - but it has to be SAID. Same
+        /// principle as the host refusing to listen without a secret: the unsafe configuration is
+        /// reachable, never accidental.
+        /// </summary>
+        public static void RequireTrustworthyTransport(string urlOrPrefix, bool allowInsecure)
+        {
+            if (string.IsNullOrWhiteSpace(urlOrPrefix)) return;
+            if (allowInsecure) return;
+            if (urlOrPrefix.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return;
+            if (IsLoopback(urlOrPrefix)) return;
+
+            throw new InvalidOperationException(
+                "refusing a plaintext lobby API at '" + urlOrPrefix + "'. The shared secret and the "
+                + "single sign-on token both cross this connection, so off loopback it needs https. "
+                + "If the network really is private, set the " + AllowInsecureKey + " MiscVar - "
+                + "deliberately, and knowing what is on the wire.");
+        }
+
+        public const string AllowInsecureKey = "LobbyApiAllowInsecureTransport";
+
+        /// <summary>
+        /// A single sign-on token: 256 bits from a cryptographic generator, base64url so it
+        /// survives a query string and a cookie without escaping.
+        ///
+        /// It replaces <c>Guid.NewGuid().ToString()</c>. A version-4 GUID does come from a strong
+        /// generator on .NET, so this is not a break - but Guid is a UNIQUENESS primitive and
+        /// nothing in its contract promises unpredictability, which is the property a bearer
+        /// credential actually needs. Being right by accident is not a thing to leave in an
+        /// authentication path, and the replacement costs nothing.
+        ///
+        /// Clients treat the token as opaque - it goes in a cookie and a URL and comes back - so
+        /// the change in shape reaches nothing that reads it.
+        /// </summary>
+        public static string NewSessionToken()
+        {
+            var bytes = new byte[32];
+            using (var random = System.Security.Cryptography.RandomNumberGenerator.Create())
+                random.GetBytes(bytes);
+            return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        /// <summary>
+        /// Host-only test: the wildcards HttpListener accepts - <c>+</c> and <c>*</c> - are not
+        /// loopback however they look, because they bind every interface the machine has.
+        /// </summary>
+        public static bool IsLoopback(string urlOrPrefix)
+        {
+            Uri uri;
+            if (!Uri.TryCreate(urlOrPrefix.Replace("://+", "://0.0.0.0").Replace("://*", "://0.0.0.0"),
+                               UriKind.Absolute, out uri)) return false;
+            if (urlOrPrefix.Contains("://+") || urlOrPrefix.Contains("://*")) return false;
+
+            var host = uri.Host;
+            return host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                   || host == "127.0.0.1"
+                   || host == "::1"
+                   || host == "[::1]";
+        }
+
+        /// <summary>
         /// Comparison whose duration does not depend on how much of the secret was right, so a
         /// caller cannot find it a byte at a time by timing the answer.
         ///
