@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!--
     Phase 3 gate: tests that run on .NET 9 today, on Linux, with `dotnet test`.
@@ -54,6 +54,11 @@
   <!-- PlanetWars galaxy map geometry (Phase 5) -->
   <ItemGroup>
     <Compile Include="..\Zero-K.info\AppCode\GalaxyMapGeometry.cs" Link="Linked\GalaxyMapGeometry.cs" />
+  </ItemGroup>
+
+  <!-- The counting behind ContentService.svc's deprecation notice (Phase 2) -->
+  <ItemGroup>
+    <Compile Include="..\Zero-K.info\AppCode\LegacyCallReporter.cs" Link="Linked\LegacyCallReporter.cs" />
   </ItemGroup>
 
   <!-- Diagrams vector math. Uses System.Drawing.Point, which lives in

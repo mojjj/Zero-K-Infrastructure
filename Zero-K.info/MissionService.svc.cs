@@ -24,8 +24,12 @@ namespace ZeroKWeb
 	/// **So it says who is still calling it.** Every operation logs, and SendMission logs the
 	/// caller's editor version, which is the number that decides when this can go. That plus
 	/// the MissionEditorVersion column - written on every publish, through either endpoint -
-	/// answers "has everyone updated?" from the site's own data. Unlike ContentService.svc,
-	/// this one does not need production access logs to retire.
+	/// answers "has everyone updated?" from the site's own data.
+	///
+	/// ContentService.svc reports itself too now, but differently and for a reason: publishing
+	/// a mission is rare, so this one can afford a line per call, and that line carries the
+	/// editor version the retirement turns on. That endpoint's traffic is unknown and every
+	/// trace is a database insert, so it counts rather than logs. See LegacyCallReporter.
 	///
 	/// The logic is in MissionServiceLogic below and is shared with the JSON endpoint, so this
 	/// class can be deleted along with the .svc file in one commit when the time comes.

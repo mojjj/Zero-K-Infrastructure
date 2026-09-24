@@ -146,6 +146,7 @@
     <Compile Include="ForumParser\TranslateContext.cs" />
     <Compile Include="AppCode\Global.cs" />
     <Compile Include="AppCode\GalaxyMapGeometry.cs" />
+    <Compile Include="AppCode\LegacyCallReporter.cs" />
     <Compile Include="AppCode\HtmlHelperExtensions.cs" />
     <Compile Include="AppCode\HttpCompat.cs" />
     <Compile Include="AppCode\HtmlCompat.cs" />

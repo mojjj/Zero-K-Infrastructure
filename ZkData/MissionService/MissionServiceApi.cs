@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using PlasmaShared;
 using ZkData.UnitSyncLib;
@@ -11,9 +11,10 @@ namespace ZkData
     ///
     /// **Why this exists.** Server-side WCF has no in-box successor on .NET 9, and
     /// `MissionService.svc` is one of the two endpoints that made the port's WCF step
-    /// "could not be carried out as written". Unlike `ContentService.svc`, whose remaining callers
-    /// are clients deployed years ago and can only be identified from production logs, both ends
-    /// of this one are in this repository - so it can move without waiting for anyone.
+    /// "could not be carried out as written". Both ends of this one are in this repository, so it
+    /// can move without waiting for anyone - where `ContentService.svc`'s remaining callers are
+    /// clients deployed years ago, which is why that one had to be made to report itself (see
+    /// `Zero-K.info/AppCode/LegacyCallReporter.cs`) before it can be retired.
     ///
     /// **The contract does not change, only the envelope.** `Mission` is `[DataContract]` with
     /// explicit `[DataMember]` fields, and Json.NET honours that, so exactly the same fields cross
