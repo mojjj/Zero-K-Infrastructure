@@ -102,6 +102,36 @@ before touching any of them:
   a `ChannelFactory<IMissionService>` against `GlobalConst.BaseSiteUrl +
   "/MissionService.svc"`. Removing it breaks the mission editor.
 
+## Phase 2, measured
+
+The modernization plan describes Phase 2 as "remove dead ends - 3 WebForms pages,
+LINQ-to-SQL remnant, WCF". Two of those three are not what they sound like.
+
+**The WebForms pages were not in the live site.** There are no `.aspx`, `.ashx` or `.asmx`
+files under `Zero-K.info` at all. The ones the plan counted were in `PlanetWars.old/` and
+`PlanetWars/` - two trees last touched in **2010**, carrying their own `PlanetWars2.sln`,
+in neither `Zero-K.sln` nor referenced by any tracked file outside themselves. 470 files,
+6 MB, now deleted; git keeps them if anyone wants them back. The only WebForms left in the
+live site were two `using System.Web.UI` lines that use nothing, already marked as dead
+usings by the .NET 9 port.
+
+**The LINQ-to-SQL remnant is vocabulary, not a dependency.** `InsertOnSubmit`,
+`DeleteOnSubmit` and friends appear 185 times across 44 files - and they are extension
+methods over EF6, defined in `ZkData/DbExtensions.cs`, with a twin in `ZkData.Core` for
+the port. Nothing links LINQ to SQL. Renaming 185 call sites would change no behaviour and
+risk a typo in each one; it is cosmetic debt and is left alone deliberately.
+
+**WCF is the real item**, and it splits in two:
+
+- `MissionService.svc` - both ends are **in this repository**. Six operations, one
+  implementation here and one client in `MissionEditor`. Re-exposing it as JSON, the way
+  `/ContentService` already is, and pointing the editor at it would remove the hard
+  constraint below without waiting on anyone. Note that `SendMission` passes EF entities,
+  which is the same question Phase 1 spent its length on.
+- `ContentService.svc` - obsolete, uncalled from this repository, and **cannot be retired
+  from the evidence available here**: it exists for clients deployed before the JSON
+  endpoint, so the decision needs production access logs.
+
 **Porting note.** Server-side WCF hosting has no in-box successor on .NET 9. The two
 `.svc` endpoints are therefore a hard constraint on the port: either host them with
 CoreWCF, or re-expose their operations as JSON endpoints and ship updated clients
