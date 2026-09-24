@@ -171,9 +171,30 @@ risk a typo in each one; it is cosmetic debt and is left alone deliberately.
   This is the difference between this endpoint and `ContentService.svc`: that one serves
   clients the repository cannot see, so it needs production access logs; this one reports
   itself.
-- `ContentService.svc` - obsolete, uncalled from this repository, and **cannot be retired
-  from the evidence available here**: it exists for clients deployed before the JSON
-  endpoint, so the decision needs production access logs.
+- `ContentService.svc` - obsolete and uncalled from this repository: every caller here goes
+  through `IContentServiceClient` to `/ContentService`, and inside the website `Global.cs`
+  overrides that to run the implementation in-process. It is hosted purely for clients
+  deployed before the JSON endpoint existed.
+
+  This used to say it **could not be retired from the evidence available here**, because
+  the decision needed production access logs. It does not any more: **all 14 operations
+  now report their callers**, by user agent and address, plus the login and API version
+  where the operation carries one. The same `LogEntries` that answers the question for
+  `MissionService.svc` answers it for this one.
+
+  **It counts rather than logs, and the difference is the point.**
+  `ZkServerTraceListener` turns every trace into its own `ZkDataContext` and one insert.
+  Publishing a mission is rare, so `MissionService.svc` can afford a line per call;
+  `DownloadFile` and `GetResourceData` are whatever a fleet of outdated lobbies asks for,
+  and a line per call would put a database write on a path that has none today. So the
+  first call from each operation and user agent reports immediately - no line means no
+  caller, which is what the retirement turns on - and after that one line an hour carries
+  the count. `Zero-K.info/AppCode/LegacyCallReporter.cs` holds that, clock-injected, with
+  ten tests in `Tests.Portable` and both failure directions covered: reporting per call,
+  and losing calls so a busy endpoint looks idle.
+
+  What it still needs is **time**, not evidence. Nothing can be concluded until the
+  instrumented build has been deployed and watched.
 
 **Porting note.** Server-side WCF hosting has no in-box successor on .NET 9. The two
 `.svc` endpoints are therefore a hard constraint on the port: either host them with
