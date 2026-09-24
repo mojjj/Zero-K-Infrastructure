@@ -11,6 +11,11 @@
   -->
   <ItemGroup>
     <Content Remove="..\Zero-K.info\Views\Shared\CommentList.cshtml" />
+    <Content Remove="..\Zero-K.info\Views\Clans\Detail.cshtml" />
+    <Content Remove="..\Zero-K.info\Views\Factions\Detail.cshtml" />
+    <Content Remove="..\Zero-K.info\Views\Forum\NewPost.cshtml" />
+    <Content Remove="..\Zero-K.info\Views\Planetwars\Planet.cshtml" />
+    <Content Remove="..\Zero-K.info\Views\My\Commanders.cshtml" />
     <Content Remove="..\Zero-K.info\Views\Shared\TopMenu.cshtml" />
     <Content Remove="..\Zero-K.info\Views\Planetwars\Galaxy.cshtml" />
 

@@ -321,31 +321,40 @@ namespace ZeroKWeb.Controllers
 			return View("UnlockList", new UnlockListResult() { Account = Global.Account, Unlocks = unlocks, FutureUnlocks = future, AlreadyUnlockedCounts = GetUserUnlockCountsListIncludingFree(db) });
 		}
 
-		PartialViewResult GetCommanderProfileView(int profile)
+		/// <summary>
+		/// The model MyCommanderProfileViewComponent also builds. Extracted rather than copied:
+		/// it is twenty lines of unlock filtering, and this port has put two defects into ten
+		/// lines of helper by transcribing them.
+		/// </summary>
+		public static CommanderProfileModel BuildCommanderProfileModel(ZkDataContext db, int profile)
 		{
-            var db = new ZkDataContext();
 			var com = db.Commanders.SingleOrDefault(x => x.AccountID == Global.AccountID && x.ProfileNumber == profile);
 
-            return PartialView("CommanderProfile",
-                               new CommanderProfileModel
-                               {
-                                   ProfileID = profile,
-                                   Commander = com,
-                                   Slots = db.CommanderSlots.ToList().Where(x=> x.ChassisID == null || (com !=null && x.ChassisID == com.ChassisUnlockID)).ToList(),
-                                   DecorationSlots = db.CommanderDecorationSlots.ToList(),
-			                   	   Unlocks =
-								        GetUserUnlockCountsListIncludingFree(db).Where(
-			                   			   x =>
-			                   			   (x.Unlock.UnlockType != UnlockTypes.Unit)).ToList().Where(
-			                   			 	   x =>
-			                   			 	   (com == null || x.Unlock.LimitForChassis == null || x.Unlock.LimitForChassis.Contains(com.Unlock.Code)) &&
-							   			 	   (com == null || x.Count > com.CommanderModules.Count(y => y.ModuleUnlockID == x.Unlock.UnlockID)) &&
-											   (com == null || x.Count > com.CommanderDecorations.Count(y => y.DecorationUnlockID == x.Unlock.UnlockID))
-											   ).ToList()
-			                   });
+			return new CommanderProfileModel
+			{
+				ProfileID = profile,
+				Commander = com,
+				Slots = db.CommanderSlots.ToList().Where(x => x.ChassisID == null || (com != null && x.ChassisID == com.ChassisUnlockID)).ToList(),
+				DecorationSlots = db.CommanderDecorationSlots.ToList(),
+				Unlocks =
+					GetUserUnlockCountsListIncludingFree(db).Where(
+						x =>
+						(x.Unlock.UnlockType != UnlockTypes.Unit)).ToList().Where(
+							x =>
+							(com == null || x.Unlock.LimitForChassis == null || x.Unlock.LimitForChassis.Contains(com.Unlock.Code)) &&
+							(com == null || x.Count > com.CommanderModules.Count(y => y.ModuleUnlockID == x.Unlock.UnlockID)) &&
+							(com == null || x.Count > com.CommanderDecorations.Count(y => y.DecorationUnlockID == x.Unlock.UnlockID))
+							).ToList()
+			};
 		}
 
-		Dictionary<Unlock, int> GetUserUnlockCountsDictIncludingFree(ZkDataContext db)
+		PartialViewResult GetCommanderProfileView(int profile)
+		{
+			var db = new ZkDataContext();
+			return PartialView("CommanderProfile", BuildCommanderProfileModel(db, profile));
+		}
+
+		static Dictionary<Unlock, int> GetUserUnlockCountsDictIncludingFree(ZkDataContext db)
 		{
 			Account account = db.Accounts.FirstOrDefault(x => x.AccountID == Global.AccountID);
 			Dictionary<ZkData.Unlock, int> unlocks = account.AccountUnlocks.Select(x => new {x.Unlock, x.Count}).ToDictionary(x=> x.Unlock, x=> x.Count);
@@ -357,7 +366,7 @@ namespace ZeroKWeb.Controllers
 			return unlocks;
 		}
 
-		List<UnlockCountEntry> GetUserUnlockCountsListIncludingFree(ZkDataContext db)
+		public static List<UnlockCountEntry> GetUserUnlockCountsListIncludingFree(ZkDataContext db)
 		{
 			return GetUserUnlockCountsDictIncludingFree(db).Select(x => new UnlockCountEntry() {Unlock = x.Key, Count = x.Value}).ToList();
 		}
