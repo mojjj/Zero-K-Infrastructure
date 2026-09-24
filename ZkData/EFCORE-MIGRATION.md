@@ -3118,3 +3118,99 @@ Positive control: dropping `IsBuiltIn()` fails the check.
 declared in a `@{ }` block *below* the block that builds the grid from them. An `@helper` was a
 method and could be called before its declaration; a delegate is a local and cannot. The two
 blocks are simply swapped.
+
+## The Ladders controller, and three usings that were not what they looked like
+
+`LaddersController` was recorded as blocked on `AwardCalculator`, which "needs `ZkLobbyServer` and
+`EntityFramework.Extensions`". It needs neither. That assessment counted the names in the using
+list, which is precisely the test this document already warns against - the one
+`EntityFramework.Extensions` failed in the other direction, where a using that looked dead was
+supplying six batch operations.
+
+Checked by what `LadderCalculator.cs` actually *uses*: no `Delete`, no `Update`, no `Future`,
+nothing from `ZkLobbyServer`, nothing from `Ratings`. All three usings are dead. The file needed
+exactly one production edit - `Database.CommandTimeout` to `SetCommandTimeoutCompat`, the
+extension-property move `DbCompat` already exists for - and then linked unmodified.
+
+`Global.AwardCalculator` is the one deliberate behaviour change. MVC 5 builds it in
+`Application_Start` and calls `RecomputeNow()` there, so the site does not finish starting until
+a query with a 600-second timeout has run. The port has no `Application_Start` to put that in,
+and builds it on first use instead: the first visitor to `/Ladders` waits for the query rather
+than the process doing so, and everyone after either one sees the same table.
+
+## `EnumDropDownListFor`: four answers, three of which were not guessable
+
+ASP.NET Core dropped this helper. Fourteen call sites across seven views needed it back, so it
+was captured from MVC 5 under mono first and written second.
+
+| question | the answer | what the obvious implementation does |
+|---|---|---|
+| option order | **declaration order** | `Enum.GetNames` sorts by value, silently reordering every dropdown |
+| `[Description]` | **ignored** | honouring it would "improve" four enums into a regression |
+| `[Display(Name)]` | honoured | — |
+| option value | the **number** | the name is the tempting choice |
+| nullable enum | extra `<option value="">`, carrying the selection when null | omitted entirely |
+
+The `[Description]` answer is the one that matters for Zero-K. `PlanetWarsModes`,
+`TreatyUnableToTradeMode`, `AutohostMode` and `Account.Level` all carry `[Description]` and none
+carry `[Display]`, so the live site has always rendered `AllOffline`, not `offline`. A port that
+showed the descriptions would look like a fix and be a change nobody asked for.
+
+The ordering answer is the one that would have shipped. Every enum in the first capture had
+declaration order equal to numeric order, so none of them could tell the two apart; a sixth case
+with `{ Third = 30, First = 10, Second = 20 }` was added for no other purpose, and it settled it.
+Positive control: sorting the fields by value fails that case and only that case.
+
+**One thing the capture cannot settle, stated rather than hidden.** MVC 5 separates options with
+`Environment.NewLine`, so the live site on Windows emits CRLF and this capture under mono emits
+LF. The port uses the same construct, so the two stay in step on whichever platform each runs;
+the byte comparison is therefore platform-relative, and both sides are Linux in CI.
+
+## Phase 1: coupling that the `InProcess` count cannot see
+
+`/Ladders` and `/Ladders/Maps` returned **500** the first time they were requested, with
+`KeyNotFoundException` out of `RatingSystems.GetRatingSystem` and `MapRatings.GetMapRanking`.
+
+Neither is a porting defect. The website reads `Ratings.RatingSystems` and `Ratings.MapRatings`
+as **statics**, in eight files - `ChartsController`, `HomeController`, `AdminController`,
+`PlanetwarsAdminController`, `WhrController`, `HtmlHelperExtensions.Portable`,
+`Ladders/ladders.cshtml` and `Factions/FactionBox.cshtml` - and nothing in the website ever fills
+them. The only caller of either `Init()` is `ZkLobbyServer.ZkLobbyServer`. **These pages work
+today because the lobby server shares their process.**
+
+That is Phase 1 coupling in a shape the work so far has not been counting. The tracked number has
+been uses of `LobbyApi.InProcess` - an API surface, which a remote call can replace. This is
+shared static memory, which it cannot: when the lobby server moves out, these pages do not
+degrade, they throw, because the "unknown category" fallback indexes the same empty dictionary.
+
+The host now calls both `Init()` methods at startup, which is what production effectively does.
+Deciding what fills them once the server is remote is Phase 1 work, and is now on the list.
+
+## An EF Core query that will not translate
+
+With the statics initialised, `/Ladders` failed again, deeper:
+
+    Expression of type 'IQueryable<Nullable<Double>>' cannot be used for parameter of type
+    'IQueryable<AccountRating>' of method 'Where[AccountRating]'
+
+from `WholeHistoryRating.GetTopPlayers`. EF Core 9 cannot translate `DefaultIfEmpty(value)`
+applied to a `Select` over a collection navigation; it fails while compiling the query, not while
+running it.
+
+The rewrite is equivalent **by construction** rather than by argument, because `LadderElo` is
+`double?` and the two cases are not the same:
+
+```csharp
+x.AccountRatings.Any(r => r.RatingCategory == category)
+    ? x.AccountRatings.Where(r => r.RatingCategory == category).Select(r => r.LadderElo).FirstOrDefault()
+    : -1
+```
+
+An account with **no rating row** sorts as `-1`; an account with **a row whose LadderElo is
+NULL** keeps its NULL. A `?? -1` would have merged those two, which is the tempting one-liner and
+is not what the original says. The WHR pipeline tests still pass, which is the check that matters
+here: this is a display query inside the rating code, and the ratings themselves are unchanged.
+
+Four other sites use the same `DefaultIfEmpty` shape and are left alone deliberately - they run
+over in-memory collections, where LINQ to Objects handles it, and `PlanetwarsLadder` is exercised
+in the render harness to prove it.

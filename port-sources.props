@@ -48,6 +48,8 @@
     -->
     <Compile Include="..\Zero-K.info\Controllers\UsersController.cs" Link="Linked\Controllers\UsersController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\BattlesController.cs" Link="Linked\Controllers\BattlesController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\LaddersController.cs" Link="Linked\Controllers\LaddersController.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\LadderCalculator.cs" Link="Linked\LadderCalculator.cs" />
     <Compile Include="..\Zero-K.info\Controllers\ClansController.cs" Link="Linked\Controllers\ClansController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\FactionsController.cs" Link="Linked\Controllers\FactionsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\NewsController.cs" Link="Linked\Controllers\NewsController.cs" />

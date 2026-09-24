@@ -39,6 +39,7 @@ if ! OUT=$(docker run --rm -v "$PWD":/src -v "$CACHE":/cache -w /src mono:6.12 b
       Zero-K.info/AppCode/PostLinkExtensions.cs > /tmp/PostLinkExtensions.cs
   mcs -nologo -out:/tmp/capture.exe \
       -r:System.Web.dll -r:System.Web.Routing.dll -r:System.Core.dll \
+      -r:System.ComponentModel.DataAnnotations.dll \
       -r:$MVC/System.Web.Mvc.dll -r:$WEBPAGES/System.Web.WebPages.dll \
       tools/ajax-ground-truth/Capture.cs /tmp/PostLinkExtensions.cs 2>&1
   MONO_PATH=/tmp/asm mono /tmp/capture.exe 2>&1

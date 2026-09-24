@@ -111,7 +111,7 @@ namespace ZeroKWeb
                 {
 
                     var db = new ZkDataContext();
-                    db.Database.CommandTimeout = 600;
+                    db.Database.SetCommandTimeoutCompat(600);
 
                     var awardItems = CalculateAwards(db);
                     return new AwardModel { AwardItems = awardItems };

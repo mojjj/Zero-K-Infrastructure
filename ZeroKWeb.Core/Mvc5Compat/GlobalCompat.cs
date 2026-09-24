@@ -141,6 +141,45 @@ namespace ZeroKWeb
         // it yet. False is what an unconfigured request would answer anyway.
         public static bool IsWebLobbyAccess => false;
 
+        private static readonly object awardCalculatorLock = new object();
+        private static AwardCalculator awardCalculator;
+
+        /// <summary>
+        /// The monthly awards table, recomputed on a 30-minute timer.
+        ///
+        /// <c>AwardCalculator</c> itself is LINKED from Zero-K.info/AppCode/LadderCalculator.cs
+        /// and compiles unmodified on both stacks - its three suspicious usings
+        /// (EntityFramework.Extensions, ZkLobbyServer, Ratings) turn out to be dead, checked by
+        /// what the file uses rather than by counting the name. It needed one production edit,
+        /// <c>Database.CommandTimeout</c> to <c>SetCommandTimeoutCompat</c>, which is the
+        /// extension-property move DbCompat already exists for.
+        ///
+        /// One behaviour difference, deliberate and named: MVC 5 builds this in
+        /// Application_Start and calls RecomputeNow() there, so the site does not finish
+        /// starting until a 600-second-timeout query has run. Here it is built on first use.
+        /// The first visitor to /Ladders waits for that query instead of the process doing so,
+        /// and every visitor after either one sees the same table. The port has no
+        /// Application_Start to put it in, and a host that blocks on the database before it can
+        /// serve a page is not a property worth carrying over.
+        /// </summary>
+        public static AwardCalculator AwardCalculator
+        {
+            get
+            {
+                if (awardCalculator != null) return awardCalculator;
+                lock (awardCalculatorLock)
+                {
+                    if (awardCalculator == null)
+                    {
+                        var created = new AwardCalculator();
+                        created.RecomputeNow();
+                        awardCalculator = created;
+                    }
+                }
+                return awardCalculator;
+            }
+        }
+
         /// <summary>
         /// The site's own AjaxOptions factory, copied from Zero-K.info/AppCode/Global.cs rather
         /// than linked - that file needs System.Web and cannot compile here. Sixteen of the

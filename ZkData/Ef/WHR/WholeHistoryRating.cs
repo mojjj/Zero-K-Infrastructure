@@ -210,7 +210,15 @@ namespace Ratings
                     laddersCache = db.Accounts
                         .Include(a => a.Clan)
                         .Include(a => a.Faction)
-                        .OrderByDescending(x => x.AccountRatings.Where(r => r.RatingCategory == category).Select(r => r.LadderElo).DefaultIfEmpty(-1).FirstOrDefault())
+                        // DefaultIfEmpty(-1) after a Select over a navigation is not translatable by EF Core 9:
+                        // it hands IQueryable<double?> back to Where<AccountRating> and throws
+                        // ArgumentException while compiling the query. Rewritten to be equivalent BY
+                        // CONSTRUCTION rather than by argument - LadderElo is nullable, so "no rating
+                        // row" and "a row whose LadderElo is NULL" are different cases and a COALESCE
+                        // would have quietly merged them.
+                        .OrderByDescending(x => x.AccountRatings.Any(r => r.RatingCategory == category)
+                            ? x.AccountRatings.Where(r => r.RatingCategory == category).Select(r => r.LadderElo).FirstOrDefault()
+                            : -1)
                         .Take(count)
                         .ToList();
                 }
@@ -225,7 +233,15 @@ namespace Ratings
                         .Where(a => retIDs.Contains(a.AccountID))
                         .Include(a => a.Clan)
                         .Include(a => a.Faction)
-                        .OrderByDescending(x => x.AccountRatings.Where(r => r.RatingCategory == category).Select(r => r.LadderElo).DefaultIfEmpty(-1).FirstOrDefault())
+                        // DefaultIfEmpty(-1) after a Select over a navigation is not translatable by EF Core 9:
+                        // it hands IQueryable<double?> back to Where<AccountRating> and throws
+                        // ArgumentException while compiling the query. Rewritten to be equivalent BY
+                        // CONSTRUCTION rather than by argument - LadderElo is nullable, so "no rating
+                        // row" and "a row whose LadderElo is NULL" are different cases and a COALESCE
+                        // would have quietly merged them.
+                        .OrderByDescending(x => x.AccountRatings.Any(r => r.RatingCategory == category)
+                            ? x.AccountRatings.Where(r => r.RatingCategory == category).Select(r => r.LadderElo).FirstOrDefault()
+                            : -1)
                         .ToList();
                 }
             }
