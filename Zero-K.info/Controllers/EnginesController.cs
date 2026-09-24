@@ -46,7 +46,7 @@ namespace ZeroKWeb.Controllers
 
             var defaultPlatform = EnginePlatforms[0];
 
-            var winBasePath = Path.Combine(Server.MapPath("~"), "engine", defaultPlatform);
+            var winBasePath = Path.Combine(this.MapPath("~"), "engine", defaultPlatform);
             if (!Directory.Exists(winBasePath)) Directory.CreateDirectory(winBasePath);
 
             var items = new List<EngineItem>();
@@ -56,7 +56,7 @@ namespace ZeroKWeb.Controllers
 
                 foreach (var p in EnginePlatforms.Where(x => x != defaultPlatform))
                 {
-                    if (System.IO.File.Exists(Path.Combine(Server.MapPath("~"), "engine", p, $"{name}.zip"))) item.Platforms.Add(p);
+                    if (System.IO.File.Exists(Path.Combine(this.MapPath("~"), "engine", p, $"{name}.zip"))) item.Platforms.Add(p);
                 }
                 items.Add(item);
             }
@@ -80,7 +80,7 @@ namespace ZeroKWeb.Controllers
                 var link = uploadPlatforms[i];
                 if (string.IsNullOrEmpty(link)) continue;
 
-                var dir = Path.Combine(Server.MapPath("~"), "engine", platform);
+                var dir = Path.Combine(this.MapPath("~"), "engine", platform);
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
                 var temp = Path.Combine(dir, uploadName);
@@ -94,7 +94,7 @@ namespace ZeroKWeb.Controllers
                     wc.DownloadFile(link, path7z);
                     var pi = new ProcessStartInfo();
                     pi.WorkingDirectory = temp;
-                    pi.FileName = Path.Combine(Server.MapPath("~"), "7za.exe");
+                    pi.FileName = Path.Combine(this.MapPath("~"), "7za.exe");
                     pi.CreateNoWindow = true;
                     pi.UseShellExecute = false;
                     pi.Arguments = "x " + path7z;

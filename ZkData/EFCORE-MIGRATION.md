@@ -3549,3 +3549,77 @@ is another dead using. `Utils.Lines` and three Steam-release statics moved to th
 and `MvcHtmlString` gained `ToHtmlString`.
 
 **111 of 123 views compile, 11 more have a ported copy. One view is left**: `Engines/EnginesIndex`.
+
+## EnginesController, and 123 of 123
+
+The last controller, and its recorded blocker was wrong in the way this document keeps recording.
+`SharpCompress` is **one call** and has supported netstandard for years; the MVC 5 build already
+restores 0.31.0 in three projects. `System.Web.UI.WebControls` is a dead using.
+
+The real blockers are all in `MakeDefault`, and there are three of them, not one:
+`PlasmaShared.ContentService` (a WCF `[ServiceContract]`, and .NET 9 has no server-side WCF),
+`Global.SteamDepotGenerator` (the registrar, so unitsync), and `Global.LobbyApi.SetEngine` (a
+lobby server). All three are out-of-process concerns - this is the Engines equivalent of
+`MapsController.UploadResource`, and gets the same treatment: tripwires, so the other two actions
+and the view work while that one throws.
+
+A shim returning an empty engine list would have been particularly bad here. `MakeDefault` reads
+`GetEngineList(null).Contains(engine)` and, on a miss, logs *"Engine not found in the list"* and
+carries on - so an empty list turns every attempt to change the default engine into a line in a
+log nobody reads, with the button appearing to work.
+
+`EnginesIndex.cshtml` then hit **CS0841 for the third time**: a templated Razor delegate declared
+in a `@{ }` block below the one that builds the grid from it. An `@helper` was a method and could
+be called before its declaration; a delegate is a local and cannot. Same two-block swap as
+`ClansIndex` and `Home`.
+
+### A package reference that had to move
+
+`SharpCompress` was added to `ZeroKWeb.Core` and `ZeroKWeb.Render` promptly failed to build.
+The three port projects **compile the same linked sources**, so a package listed in only one of
+them builds there and fails in the other two - which is exactly the drift `port-sources.props`
+was created to stop, repeating itself one layer up. Package references for linked sources now
+live in that file too.
+
+### A guard that reported success as a failure
+
+With every view compiling, a full `ZeroKWeb.Core` build produces **no view diagnostics and a
+non-zero exit** - the entry-point CS5001, which the no-views guard had always filtered and the
+second guard had not. That is precisely the shape the second guard was written to catch: "failed,
+and no view was blamed, so the failure is invisible to this report". It now filters CS5001 too.
+
+Worth noting what this means: the guard was correct for every state the port had ever been in,
+and became wrong the moment the port finished. Positive control after the change - breaking one
+view - still moves it out of `compiles` and into the report.
+
+### Where the view port ends up
+
+    total 123
+    compiles                 112
+    diverged                  11
+    child-action               0
+    waiting-on-controllers     0
+    razor-language             0
+    other                      0
+
+**Every view in Zero-K.info either compiles on .NET 9 or has a ported copy that does.** Thirteen
+controllers are linked. What remains is not view work: the tripwires mark the places where the
+website reaches for something that lives in another process, and Phase 1 is where those get
+answered.
+
+## A finding in production code, unrelated to the port
+
+`EnginesController.UploadEngine` carries `[Auth(Role = AdminLevel.SuperAdmin)]`, `[HttpPost]` and
+`[ValidateAntiForgeryToken]` - and **none of them do anything**, because it is a `private` method
+called directly from `Index`. MVC applies action filters to actions it invokes, not to ordinary
+method calls.
+
+What is actually enforced is the controller's own `[Auth(Role = AdminLevel.Moderator)]`. So the
+effective policy is *Moderator, any verb, no anti-forgery token*, where the code says *SuperAdmin,
+POST, token* - and `Index` is a GET that will run the upload when given the right query
+parameters. The upload downloads a URL of the caller's choosing and runs `7za.exe` over it.
+
+**Not fixed here.** This is a live authorization change, it predates the port, and it should be a
+deliberate decision with its own review rather than a line inside a port branch. The fix is to
+make it a real action - public, `[HttpPost]`, with the attributes on something MVC will honour -
+and have `Index` route to it rather than call it.

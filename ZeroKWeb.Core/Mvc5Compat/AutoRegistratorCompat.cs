@@ -69,6 +69,16 @@ namespace AutoRegistrator
         public UnitSyncer UnitSyncer => throw AutoRegistratorCompat.Unavailable();
     }
 
+    /// <summary>
+    /// Same tripwire, for the Steam depot builder - EnginesController.MakeDefault calls
+    /// RunAll() after changing the default engine. It lives in the AutoRegistrator project and
+    /// reaches unitsync through it, so it is unportable for the same reason and in the same way.
+    /// </summary>
+    public class SteamDepotGenerator
+    {
+        public void RunAll() => throw AutoRegistratorCompat.Unavailable();
+    }
+
     internal static class AutoRegistratorCompat
     {
         internal static NotSupportedException Unavailable() => new NotSupportedException(
