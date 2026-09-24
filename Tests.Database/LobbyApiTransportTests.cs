@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using LobbyClient;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using ZeroKWeb;
+using PlasmaShared;
 using ZkLobbyServer;
 using ZkLobbyServer.Api;
 
@@ -38,7 +39,7 @@ namespace Tests.Database
             using (var client = new RemoteLobbyServerApi(host.Prefix, Secret))
             {
                 var members = MembersOf();
-                Assert.AreEqual(40, members.Count, "the interface has 40 members; see seam-inventory.txt");
+                Assert.AreEqual(45, members.Count, "the interface has 45 members; see seam-inventory.txt");
 
                 foreach (var member in members)
                 {
@@ -133,6 +134,14 @@ namespace Tests.Database
             if (underlying == typeof(SiteToLobbyCommand)) return new SiteToLobbyCommand { Command = "cmd" + position };
             if (underlying == typeof(TourneyPrototypeInfo))
                 return new TourneyPrototypeInfo { Title = "t" + position, FounderName = "founder" };
+            if (underlying == typeof(DateTime)) return new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+            // Any enum: take a declared value rather than default(T), so a member that drops the
+            // argument shows up instead of matching zero by accident.
+            if (underlying.IsEnum)
+            {
+                var values = Enum.GetValues(underlying);
+                return values.GetValue(Math.Min(position, values.Length - 1));
+            }
             throw new NotSupportedException("no sample for " + type.FullName
                 + " - a new parameter type needs one here, which is the point of failing loudly");
         }
@@ -200,6 +209,9 @@ namespace Tests.Database
                     case "CreateTourneyBattle": return 4242;
                     case "RemoveTourneyBattle": return true;
                     case "RedeemSessionToken": return 99;
+                    case "GetPlayerRatingHistory": return RatingHistory;
+                    case "GetInternalRating": return InternalRating;
+                    case "GetMapRanking": return MapRanking;
                     default: return null;
                 }
             }
@@ -214,6 +226,12 @@ namespace Tests.Database
                 new List<PlanetBattleInfo> { new PlanetBattleInfo() };
             private static readonly List<TourneyBattleInfo> TourneyBattles =
                 new List<TourneyBattleInfo> { new TourneyBattleInfo { BattleID = 5, Title = "t" } };
+            private static readonly Dictionary<DateTime, float> RatingHistory =
+                new Dictionary<DateTime, float> { { new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc), 1234.5f } };
+            private static readonly InternalRatingInfo InternalRating =
+                new InternalRatingInfo { Elo = 1500.5f, EloStdev = 42.25f };
+            private static readonly List<MapRatingInfo> MapRanking =
+                new List<MapRatingInfo> { new MapRatingInfo { ResourceID = 9, Elo = 1600f, Rank = 2, Percentile = 0.75f } };
 
             public Task GhostChanSay(string channelName, string text, bool isEmote = true, bool isRing = false)
                 => Record(Task.CompletedTask, "GhostChanSay", channelName, text, isEmote, isRing);
@@ -256,6 +274,14 @@ namespace Tests.Database
             public Task ForceJoinTourneyBattle(string player, int battleID) => Record(Task.CompletedTask, "ForceJoinTourneyBattle", player, battleID);
             public int? RedeemSessionToken(string token) => Record((int?)99, "RedeemSessionToken", token);
             public Task ConnectPlayerToBattle(string userName, int battleID) => Record(Task.CompletedTask, "ConnectPlayerToBattle", userName, battleID);
+            public void ForceRatingsUpdate() => Record<object>(null, "ForceRatingsUpdate");
+            public void ResetPlanetwarsRatings() => Record<object>(null, "ResetPlanetwarsRatings");
+            public Dictionary<DateTime, float> GetPlayerRatingHistory(RatingCategory category, int accountID)
+                => Record(RatingHistory, "GetPlayerRatingHistory", category, accountID);
+            public InternalRatingInfo GetInternalRating(RatingCategory category, int accountID, DateTime time)
+                => Record(InternalRating, "GetInternalRating", category, accountID, time);
+            public List<MapRatingInfo> GetMapRanking(Ratings.MapRatings.Category category)
+                => Record(MapRanking, "GetMapRanking", category);
         }
     }
 }

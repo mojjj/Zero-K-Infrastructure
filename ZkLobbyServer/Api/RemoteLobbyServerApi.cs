@@ -5,6 +5,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using LobbyClient;
+using PlasmaShared;
+using Ratings;
 using ZeroKWeb;
 
 namespace ZkLobbyServer.Api
@@ -165,6 +167,23 @@ namespace ZkLobbyServer.Api
 
         public PwMatchCommand GeneratePlanetWarsLobbyCommand(string playerName, string playerFaction)
             => Call<PwMatchCommand>("GeneratePlanetWarsLobbyCommand", new { playerName, playerFaction });
+
+        // ---- ratings ----------------------------------------------------------------------------
+
+        public void ForceRatingsUpdate() => CallVoid("ForceRatingsUpdate", null);
+
+        public void ResetPlanetwarsRatings() => CallVoid("ResetPlanetwarsRatings", null);
+
+        public Dictionary<DateTime, float> GetPlayerRatingHistory(RatingCategory category, int accountID)
+            => Call<Dictionary<DateTime, float>>("GetPlayerRatingHistory", new { category, accountID })
+               ?? new Dictionary<DateTime, float>();
+
+        public InternalRatingInfo GetInternalRating(RatingCategory category, int accountID, DateTime time)
+            => Call<InternalRatingInfo>("GetInternalRating", new { category, accountID, time });
+
+        public List<MapRatingInfo> GetMapRanking(Ratings.MapRatings.Category category)
+            => Call<List<MapRatingInfo>>("GetMapRanking", new { category })
+               ?? new List<MapRatingInfo>();
 
         // ---- battles --------------------------------------------------------------------------
 

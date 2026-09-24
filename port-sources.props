@@ -93,6 +93,7 @@
     -->
     <Compile Include="..\ZkLobbyServer\ILobbyServerApi.cs" Link="Linked\ILobbyServerApi.cs" />
     <Compile Include="..\ZkLobbyServer\TourneyApi.cs" Link="Linked\TourneyApi.cs" />
+    <Compile Include="..\ZkLobbyServer\RatingApi.cs" Link="Linked\RatingApi.cs" />
     <Compile Include="..\ZkLobbyServer\PlanetWarsApi.cs" Link="Linked\PlanetWarsApi.cs" />
     <Compile Include="..\ZkLobbyServer\SpringieInterface\PlanetWarsTurnHandler.Portable.cs" Link="Linked\PlanetWarsTurnHandler.Portable.cs" />
     <!--
