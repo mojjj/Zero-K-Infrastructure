@@ -3288,3 +3288,96 @@ assertion exists for and the second time it has paid for itself.
 Encoding is `WebUtility`, not `IHtmlHelper.Encode`: MVC 5 used HttpUtility's rules, which spell an
 apostrophe `&#39;`, and ASP.NET Core's `HtmlEncoder` spells it `&#x27;`. Same choice and same
 reason as `PostLinkCompat`.
+
+## Clearing the `other` bucket
+
+Four views, four unrelated reasons, and clearing them turned up a fifth thing nobody was
+looking for.
+
+### `_ViewStart.cshtml`: the extension-property wall, with a twist
+
+`ViewContext.IsChildAction` is a **property** on MVC 5, and C# has no extension properties - the
+wall `Server.MapPath`, `Request.Params` and `Request.Url` all hit. The usual answer, an extension
+method of the same name, does not work here either: **a member always beats an extension method**,
+so `ViewContext.IsChildAction()` on MVC 5 would try to invoke a `bool`.
+
+So the twin pair is `IsChildActionCompat()` - a name neither stack already has. MVC 5's forwards
+to the property; the port's returns false, which is the faithful answer because `_ViewStart` does
+not run for partials or view components at all.
+
+The MVC 5 half lives in `namespace System.Web.Mvc`, like `PostLinkExtensions`, because that is one
+of the four namespaces `Views/Web.config` imports into every view and `_ViewStart.cshtml` is the
+caller.
+
+**And then the host's stand-in had to go.** `ZeroKWeb.Host/Views/_ViewStart.cshtml` existed only
+because the site's could not compile - its own comment said so. With the site's compiling, the two
+collided and the Razor generator failed **outright**, producing *no views at all*:
+
+    CS8785: the hintName 'Views__ViewStart_cshtml.g.cs' must be unique
+
+which surfaces as every view in the site being "not found" at runtime. Deleting the stand-in is
+the fix, and is an improvement: layout selection now goes through the site's real `_ViewStart`,
+including the `IsAjaxRequest()` branch the stand-in did not have.
+
+### `BattleDetail.cshtml`: `Path` is a property on RazorPageBase
+
+`Path.GetFileName(...)` compiled on MVC 5 and failed here with *'string' does not contain a
+definition for 'GetFileName'*, because ASP.NET Core's `RazorPageBase` has a `public string Path`
+that shadows `System.IO.Path`. Qualified to `System.IO.Path.GetFileName`, which both stacks accept
+- `_SiteLayout.cshtml` already spelled it that way.
+
+### `UserDetail.cshtml`: Razor v3 imports `System.Web` and this Web.config does not say so
+
+`HttpContext.Current.Server.HtmlEncode(...)` resolved on MVC 5 through Razor v3's **own default
+imports**, not through `Views/Web.config`, which lists only the four `System.Web.Mvc*` namespaces.
+So `@using System.Web` is now in the port's `_ViewImports.cshtml` - where it picks up the compat
+namespace of the same name - and `Mvc5AmbientContext` gained a `Server`.
+
+### `Server.HtmlEncode`, and a claim that was wrong in the write-up before it was wrong in the code
+
+The capture was added because `WebUtility.HtmlEncode` is a different type in a different assembly
+from `HttpUtility.HtmlEncode` and their agreement is not obvious:
+
+    a &lt; b &amp; c &quot; d &#39; e &gt; f &#252; &#169; 中
+
+Two things worth naming: 160-255 become numeric entities, and **characters above 255 are left
+alone**, so a CJK name passes through untouched.
+
+The first conclusion drawn from that was that `WebUtility` must differ above 255, and the existing
+one-liner was replaced with twenty hand-written lines. **The positive control disproved it**: with
+`WebUtility.HtmlEncode` back, the check still passed, because modern .NET's `WebUtility` follows
+the same rule. The hand-written version was reverted and the comment now records the equivalence
+rather than an invented difference.
+
+The control that does discriminate is ASP.NET Core's own `HtmlEncoder.Default` - the encoder a
+port reaches for by default:
+
+    wanted  ... d &#39; e &gt; f &#252; &#169; 中
+    got     ... d &#x27; e &gt; f &#xFC; &#xA9; &#x4E2D;
+
+Different on the apostrophe, on the entity radix, and on the CJK character.
+
+### `ContributionsIndex.cshtml`: a static on an unlinked type
+
+`PayPalInterface.GetItemCode` is a pure `string.Format`, but the type it hangs on needed
+`CsvTable` - self-contained - and two constants that were on the wrong side of the
+`GlobalConst` / `GlobalConst.Portable` split. They are pure `const`s, which is exactly what that
+file says it is for, so they were **moved rather than copied**: one partial class, one definition
+of each, both stacks still see them.
+
+### Two views that were never in `other` at all
+
+With their compile errors gone, `BattleDetail` and `UserDetail` reclassified as **child-action**
+views - the errors had been hiding what they were. Both call actions that already have view
+components (`PlanetwarsEvents`, `PollView`), so both took the established divergence treatment,
+bringing `PortedViews` to eleven.
+
+`other`, `child-action` and `razor-language` are now all **zero**. 117 of 123 views either compile
+or have a ported copy; the remaining six are `Maps` (4), `Home` (1) and `Engines` (1), each waiting
+on a controller with a real external dependency.
+
+One assertion in the host harness was written and then corrected: it claimed the `PlanetwarsEvents`
+component rendered on `/Battles/Detail/1`, but that call sits inside `@if (Model.Events.Any())` and
+battle 1 has no events - so the assertion would have passed for the wrong reason on any fixture
+that did have them. It now asserts what the request establishes and says where the component itself
+is covered.

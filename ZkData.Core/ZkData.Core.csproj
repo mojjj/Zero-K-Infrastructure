@@ -68,6 +68,8 @@
     <Compile Include="..\Shared\ZkData\ResourceType.cs" Link="Linked\ResourceType.cs" />
     <Compile Include="..\ZkData\Ef\WHR\PlayerRating.cs" Link="Linked\WHR\PlayerRating.cs" />
     <Compile Include="..\ZkData\Ef\WHR\MapRatings.cs" Link="Linked\WHR\MapRatings.cs" />
+    <Compile Include="..\Shared\PlasmaShared\CsvTable.cs" Link="Linked\CsvTable.cs" />
+    <Compile Include="..\ZkData\PayPal\PayPalInterface.cs" Link="Linked\PayPalInterface.cs" />
     <Compile Include="..\ZkData\SpringFilesUnitsyncAttempt.cs" Link="Linked\SpringFilesUnitsyncAttempt.cs" />
     <Compile Include="..\ZkData\SteamWebApi.cs" Link="Linked\SteamWebApi.cs" />
     <Compile Include="..\ZkData\Secrets.cs" Link="Linked\Secrets.cs" />

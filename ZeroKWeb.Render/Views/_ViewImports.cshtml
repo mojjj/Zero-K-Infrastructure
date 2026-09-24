@@ -2,6 +2,10 @@
 @using System.Collections.Generic
 @using System.IO
 @using System.Linq
+@* Razor v3 imports System.Web into every view by its own defaults, not through
+   Views/Web.config, so MVC 5 views can name HttpContext.Current unqualified and one does.
+   Here it is the compat namespace of the same name - Mvc5Compat/HttpContextCurrentCompat.cs. *@
+@using System.Web
 @* not the real System.Web.Mvc - the linked helper file declares that namespace *@
 @using System.Web.Mvc
 @* AjaxOptions and InsertionMode, reimplemented in Mvc5Compat/AjaxCompat.cs against markup

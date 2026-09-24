@@ -148,6 +148,7 @@
     <Compile Include="AppCode\HttpCompat.cs" />
     <Compile Include="AppCode\HtmlCompat.cs" />
     <Compile Include="AppCode\ControllerCompat.cs" />
+    <Compile Include="AppCode\ViewContextCompat.cs" />
     <Compile Include="AppCode\HtmlHelperExtensions.Portable.cs" />
     <Compile Include="AppCode\JsonRequest.cs" />
     <Compile Include="AppCode\NoCache.cs" />

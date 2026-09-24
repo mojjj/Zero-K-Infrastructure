@@ -67,6 +67,8 @@
 <option value="10">First</option>
 <option selected="selected" value="20">Second</option>
 </select>
+### HttpUtility.HtmlEncode
+a &lt; b &amp; c &quot; d &#39; e &gt; f &#252; &#169; 中
 ### ExpressionHelper.GetExpressionText(x => x.UserId)
 name=UserId model=[4,11]
 ### ExpressionHelper.GetExpressionText(x => x.Types)

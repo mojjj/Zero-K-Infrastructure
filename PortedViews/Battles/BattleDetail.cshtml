@@ -230,6 +230,6 @@
     <h3>
         PlanetWars events
     </h3>
-    @Html.Action("Events", "Planetwars", new { springBattleID = Model.SpringBattleID, partial = true })
+    @await Component.InvokeAsync("PlanetwarsEvents", new { springBattleID = Model.SpringBattleID, partial = true })
 }
 @{Html.RenderPartial("CommentList", new ZeroKWeb.Models.CommentList() { Thread = Model.ForumThread, ActionData = new { springBattleID = Model.SpringBattleID, threadID = Model.ForumThreadID } });}

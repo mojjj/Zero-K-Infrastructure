@@ -381,6 +381,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckLadders(client);
                 failures += await CheckResumableDownload(client);
                 failures += await CheckSelectHelpers(client);
+                failures += await CheckDivergedViews(client);
 
                 Console.WriteLine();
                 if (failures == 0)
@@ -393,6 +394,46 @@ namespace ZeroKWeb.Host
             }
         }
 
+
+        /// <summary>
+        /// The two views that diverged for their child actions - Users/Detail and
+        /// Battles/Detail - requested as pages.
+        ///
+        /// Divergence is where this port has had silent breakage before: the mechanism was once
+        /// producing mixed path separators, so the Razor SDK found no _ViewImports and the
+        /// PortedViews copies were quietly not being used. The report notices an orphaned or
+        /// broken copy, but only a request notices that the component inside it actually runs.
+        ///
+        /// Both were in `other` until now for unrelated compile errors, which is what had been
+        /// hiding the fact that they were child-action views at all.
+        /// </summary>
+        private static async Task<int> CheckDivergedViews(HttpClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine("the two newly diverged views:");
+            var failures = 0;
+
+            var user = await client.GetAsync(Url + "/Users/Detail/1");
+            var userHtml = await user.Content.ReadAsStringAsync();
+            failures += Check(user.IsSuccessStatusCode, "/Users/Detail/1 was served (" + (int)user.StatusCode + ")");
+            failures += Check(userHtml.Contains("player01"), "the account reached the page");
+            failures += Check(!userHtml.Contains("@"), "no unprocessed Razor markers survived");
+
+            var battle = await client.GetAsync(Url + "/Battles/Detail/1");
+            var battleHtml = await battle.Content.ReadAsStringAsync();
+            failures += Check(battle.IsSuccessStatusCode, "/Battles/Detail/1 was served (" + (int)battle.StatusCode + ")");
+            failures += Check(battleHtml.Contains("Battle 1 detail"), "the battle reached the page");
+            // NOT asserted here: that the PlanetwarsEvents component produced output. Its call
+            // sits inside `@if (Model.Events.Any())`, and battle 1 in the fixture has no events,
+            // so the block never runs however the view was compiled - an assertion on it would
+            // have passed for the wrong reason, or, as it first did, failed for one.
+            // The component itself is exercised in ZeroKWeb.Render (CheckEventsComponent), and
+            // that the PortedViews copy is the one compiled is what view-port-report --check
+            // establishes, by failing on an orphaned or un-removed original.
+            failures += Check(!battleHtml.Contains("@"), "no unprocessed Razor markers survived");
+
+            return failures;
+        }
 
         /// <summary>
         /// MultiSelectFor and EnumDropDownListFor on a real page, through the real IHtmlHelper.

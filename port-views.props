@@ -19,6 +19,8 @@
     <Content Remove="..\Zero-K.info\Views\My\Commanders.cshtml" />
     <Content Remove="..\Zero-K.info\Views\Shared\TopMenu.cshtml" />
     <Content Remove="..\Zero-K.info\Views\Planetwars\Galaxy.cshtml" />
+    <Content Remove="..\Zero-K.info\Views\Battles\BattleDetail.cshtml" />
+    <Content Remove="..\Zero-K.info\Views\Shared\UserDetail.cshtml" />
 
     <!--
       Link uses a FORWARD slash after Views, and it matters. %(RecursiveDir) comes back with

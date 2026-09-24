@@ -145,8 +145,6 @@ namespace ZkData
 
         public const bool VpnCheckEnabled = true; 
 
-        public const double EurosToKudos = 10.0;
-        public const string TeamEmail = "Zero-K team <team@zero-k.info>";
 
 
         public const int PlanetWarsMinutesToAttackIfNoOption = 2;

@@ -136,6 +136,14 @@ public static class Capture
         // Core does not have: what ExpressionHelper.GetExpressionText makes of a lambda, and
         // what ModelMetadata.FromLambdaExpression gives back as .Model. The port reaches those
         // through NameFor and a compiled expression, and whether that agrees is not obvious.
+        // Server.HtmlEncode, which Shared/UserDetail.cshtml calls. MVC 5's is
+        // HttpUtility.HtmlEncode; the port would use WebUtility.HtmlEncode, and the two are
+        // only KNOWN to agree on ASCII punctuation - PostLink established that much. Whether
+        // they agree on characters above 127 is the open question, and guessing it wrong would
+        // mangle every commander name with an accent in it.
+        Console.WriteLine("### HttpUtility.HtmlEncode");
+        Console.WriteLine(HttpUtility.HtmlEncode("a < b & c \" d ' e > f \u00fc \u00a9 \u4e2d"));
+
         var listModel = new ListModel { UserId = new List<int> { 4, 11 } };
         EmitExpression(routes, "ExpressionHelper.GetExpressionText(x => x.UserId)", listModel, m => m.UserId);
         EmitExpression(routes, "ExpressionHelper.GetExpressionText(x => x.Types)", listModel, m => m.Types);
