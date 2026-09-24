@@ -100,7 +100,7 @@ namespace ZeroKWeb.Controllers
             }
             db.SaveChanges();
 
-            await Global.LobbyApi.PublishAccountUpdate(acc);
+            await Global.LobbyApi.PublishAccountUpdate(acc.AccountID);
 
             return RedirectToAction("Detail", "Users", new { id = acc.AccountID });
         }
@@ -337,7 +337,7 @@ namespace ZeroKWeb.Controllers
                     }
                     if (banMute == true)
                     {
-                        await Global.LobbyApi.PublishAccountUpdate(acc);
+                        await Global.LobbyApi.PublishAccountUpdate(acc.AccountID);
                         pmAction += "Muted, ";
                     }
                     if (banForum == true)
@@ -415,7 +415,7 @@ namespace ZeroKWeb.Controllers
                 var acc = db.Accounts.Find(accountID);
                 if (acc == null) return Content("Invalid accountID");
 
-                await Global.LobbyApi.ReportUser(db, Global.Account, acc, text);
+                await Global.LobbyApi.ReportUser(Global.AccountID, acc.AccountID, text);
             }
             return Content("Thank you. Your issue was reported. Moderators will now look into it.");
         }

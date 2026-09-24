@@ -137,7 +137,7 @@ namespace ZeroKWeb.Controllers
             }
 
             db.SaveChanges();
-            Global.LobbyApi.PublishAccountUpdate(acc);
+            Global.LobbyApi.PublishAccountUpdate(acc.AccountID);
             return clan;
         }
 
@@ -179,7 +179,7 @@ namespace ZeroKWeb.Controllers
                     }
 
                     db.SaveChanges();
-                    Global.LobbyApi.PublishAccountUpdate(acc);
+                    Global.LobbyApi.PublishAccountUpdate(acc.AccountID);
                     return RedirectToAction("Detail", new { id = clan.ClanID });
                 }
             }
@@ -210,7 +210,7 @@ namespace ZeroKWeb.Controllers
             PerformLeaveClan(accountID);
             db.SaveChanges();
             PlanetWarsTurnHandler.SetPlanetOwners(new PlanetwarsEventCreator());
-            await Global.LobbyApi.PublishAccountUpdate(kickee_acc);
+            await Global.LobbyApi.PublishAccountUpdate(kickee_acc.AccountID);
             return RedirectToAction("Detail", new { id = clanID });
         }
 
@@ -385,8 +385,8 @@ namespace ZeroKWeb.Controllers
                 db.SaveChanges();
             }
 
-            await Global.LobbyApi.PublishAccountUpdate(acc);
-            Global.LobbyApi.AddClanChannel(clan);
+            await Global.LobbyApi.PublishAccountUpdate(acc.AccountID);
+            Global.LobbyApi.AddClanChannel(clan.ClanID);
             await Global.LobbyApi.SetTopic(clan.GetClanChannel(), clan.SecretTopic, Global.Account.Name);
             return RedirectToAction("Detail", new { id = clan.ClanID });
         }

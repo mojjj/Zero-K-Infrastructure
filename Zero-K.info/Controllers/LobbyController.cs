@@ -214,7 +214,7 @@ namespace ZeroKWeb.Controllers
             if (!string.IsNullOrEmpty(model.Channel))
             {
                 // only show allowed channels
-                if (!Global.LobbyApi.CanJoinChannel(Global.Account, model.Channel)) return PartialView("LobbyChatMessages", model);
+                if (!Global.LobbyApi.CanJoinChannel(Global.AccountID, model.Channel)) return PartialView("LobbyChatMessages", model);
                 if (!String.IsNullOrEmpty(model.Message) && !isMuted)
                 {
                     await Global.LobbyApi.GhostSay(new Say()

@@ -8,15 +8,15 @@
 # yet, and the design is the Phase 1 work.
 
 members   40
-crossable 34
-blocked   6
+crossable 40
+blocked   0
 
 crossable   ConnectedUserCount { get; }
 crossable   IsPlanetWarsMatchMakerRunning { get; }
 crossable   PlanetWarsPhase { get; }
-BLOCKED     AddClanChannel(Clan clan)  [clan: Clan (an EF entity)]
-BLOCKED     AddPlanetWarsAttackOption(Planet planet, Int32 attackerFactionId)  [planet: Planet (an EF entity)]
-BLOCKED     CanJoinChannel(Account acc, String channel)  [acc: Account (an EF entity)]
+crossable   AddClanChannel(Int32 clanID)
+crossable   AddPlanetWarsAttackOption(Int32 planetID, Int32 attackerFactionId)
+crossable   CanJoinChannel(Int32 accountID, String channel)
 crossable   ConnectPlayerToBattle(String userName, Int32 battleID)
 crossable   CreateTourneyBattle(TourneyPrototypeInfo prototype)
 crossable   ForceJoinBattle(String playerName, String battleHost)
@@ -40,11 +40,11 @@ crossable   KickFromServer(String kickerName, String kickeeName, String reason)
 crossable   LogIpFailure(String ip)
 crossable   OnNewsChanged()
 crossable   OnServerMapsChanged()
-BLOCKED     PublishAccountUpdate(Account acc)  [acc: Account (an EF entity)]
-BLOCKED     PublishUserProfileUpdate(Account acc)  [acc: Account (an EF entity)]
+crossable   PublishAccountUpdate(Int32 accountID)
+crossable   PublishUserProfileUpdate(Int32 accountID)
 crossable   RedeemSessionToken(String token)
 crossable   RemoveTourneyBattle(Int32 battleID)
-BLOCKED     ReportUser(ZkDataContext db, Account reporter, Account reported, String report)  [db: ZkDataContext (the caller's DbContext); reporter: Account (an EF entity); reported: Account (an EF entity)]
+crossable   ReportUser(Int32 reporterAccountID, Int32 reportedAccountID, String report)
 crossable   RequestJoinPlanet(String name, Int32 planetId, String attackerFaction)
 crossable   SendSiteToLobbyCommand(String user, SiteToLobbyCommand command)
 crossable   SetEngine(String engine)
