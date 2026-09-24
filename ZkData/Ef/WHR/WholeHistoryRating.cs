@@ -201,9 +201,20 @@ namespace Ratings
         }
 
 
+        /// <summary>
+        /// The top <paramref name="count"/> accounts, best first.
+        ///
+        /// The database branch runs whenever this instance has not finished its own pass, not
+        /// only for large counts. Without that, a process that reads ratings but does not
+        /// compute them - the website, once the lobby server is elsewhere - gets an EMPTY
+        /// ladder rather than an error: topPlayers is empty, so the second branch below loads
+        /// nothing and the page renders a heading over no rows. The ordering key, LadderElo, is
+        /// persisted on AccountRatings, so the query is not an approximation of the in-memory
+        /// answer; it is the same ordering from the rows the pass writes.
+        /// </summary>
         public List<Account> GetTopPlayers(int count)
         {
-            if (count > 200)
+            if (count > 200 || !completelyInitialized)
             {
                 using (ZkDataContext db = new ZkDataContext())
                 {
@@ -223,7 +234,9 @@ namespace Ratings
                         .ToList();
                 }
             }
-            if (laddersCache.Count < count)
+            // Only worth topping up from topPlayers when there IS a topPlayers - otherwise this
+            // overwrites the rows the database branch just produced with an empty list.
+            if (laddersCache.Count < count && completelyInitialized)
             {
 
                 using (ZkDataContext db = new ZkDataContext())
