@@ -55,6 +55,9 @@
     <Compile Include="..\Zero-K.info\Controllers\BattlesController.cs" Link="Linked\Controllers\BattlesController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\LaddersController.cs" Link="Linked\Controllers\LaddersController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\MissionsController.cs" Link="Linked\Controllers\MissionsController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\MapsController.cs" Link="Linked\Controllers\MapsController.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\PlasmaServer.Portable.cs" Link="Linked\PlasmaServer.Portable.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\ResourceLinkProvider.cs" Link="Linked\ResourceLinkProvider.cs" />
     <Compile Include="..\Zero-K.info\AppCode\LadderCalculator.cs" Link="Linked\LadderCalculator.cs" />
     <Compile Include="..\Zero-K.info\Controllers\ClansController.cs" Link="Linked\Controllers\ClansController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\FactionsController.cs" Link="Linked\Controllers\FactionsController.cs" />

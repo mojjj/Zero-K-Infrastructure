@@ -25,6 +25,9 @@ namespace ZkData
         /// <summary>Used by PayPalInterface, which Contributions/ContributionsIndex.cshtml
         /// reaches for GetItemCode. Moved here rather than copied: both stacks compile
         /// PlasmaShared, so one partial class still has one definition of each.</summary>
+        /// <summary>Used by ResourceLinkProvider, which MapsController.Detail calls.</summary>
+        public const string SpringfilesBaseUrl = "https://springfiles.springrts.com/";
+
         public const double EurosToKudos = 10.0;
         public const string TeamEmail = "Zero-K team <team@zero-k.info>";
 

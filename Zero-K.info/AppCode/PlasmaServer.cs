@@ -14,7 +14,7 @@ using ZkData;
 
 namespace ZeroKWeb
 {
-    public class PlasmaServer
+    public partial class PlasmaServer
     {
         public const int PlasmaServerApiVersion = 3;
         const int ThumbnailSize = 96;
@@ -95,31 +95,6 @@ namespace ZeroKWeb
             return db.Resources.Where(x => lastChange == null || x.LastChange > lastChange).AsEnumerable().Select(ToResourceData).ToList();
         }
 
-
-        public static byte[] GetTorrentData(ResourceContentFile cf)
-        {
-            return File.ReadAllBytes(GetTorrentPath(cf));
-        }
-
-        public static string GetTorrentFileName(string name, string md5)
-        {
-            return String.Format("{0}_{1}.torrent", name.EscapePath(), md5);
-        }
-
-        public static string GetTorrentFileName(ResourceContentFile cf)
-        {
-            return GetTorrentFileName(cf.Resource.InternalName, cf.Md5);
-        }
-
-        public static string GetTorrentPath(string name, string md5)
-        {
-            return Global.MapPath(String.Format("~/Resources/{0}", (object)GetTorrentFileName(name, md5)));
-        }
-
-        public static string GetTorrentPath(ResourceContentFile cf)
-        {
-            return GetTorrentPath(cf.Resource.InternalName, cf.Md5);
-        }
 
         public static ReturnValue RegisterResource(RegisterResourceRequest req)
         {

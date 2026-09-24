@@ -144,6 +144,24 @@ public static class Capture
         Console.WriteLine("### HttpUtility.HtmlEncode");
         Console.WriteLine(HttpUtility.HtmlEncode("a < b & c \" d ' e > f \u00fc \u00a9 \u4e2d"));
 
+        // Maps/Detail calls Html.DropDownList(name, EnumHelper.GetSelectList(type, value)).
+        // Both halves are MVC 5 framework code the port has to reproduce, and one capture
+        // settles them together: what GetSelectList makes of an enum, and what DropDownList
+        // makes of the list. ASP.NET Core has a DropDownList of its own, and it is NOT the
+        // same markup - so this is what the port is written against.
+        EmitDropDown(routes, "DropDownList(EnumHelper.GetSelectList(enum, value))",
+            typeof(Support), Support.Featured);
+        EmitDropDown(routes, "DropDownList(EnumHelper.GetSelectList(enum, null))",
+            typeof(Support), null);
+        // Support starts at 0, so the line above cannot tell "selects the value 0" from
+        // "selects the first item". Plain starts at 1 and separates them.
+        EmitDropDown(routes, "DropDownList(EnumHelper.GetSelectList(enum starting at 1, null))",
+            typeof(Plain), null);
+        // ... and whether that synthesised entry is about the NULL or about the enum having no
+        // zero member. Same enum, a real value.
+        EmitDropDown(routes, "DropDownList(EnumHelper.GetSelectList(enum starting at 1, value))",
+            typeof(Plain), Plain.Planetwars);
+
         var listModel = new ListModel { UserId = new List<int> { 4, 11 } };
         EmitExpression(routes, "ExpressionHelper.GetExpressionText(x => x.UserId)", listModel, m => m.UserId);
         EmitExpression(routes, "ExpressionHelper.GetExpressionText(x => x.Types)", listModel, m => m.Types);
@@ -221,6 +239,14 @@ public static class Capture
     // Both halves at once: the name MVC 5 derives from the lambda, and what it hands back as
     // the model value - printed as its element count and contents so a null and an empty list
     // are not the same line.
+    static void EmitDropDown(RouteCollection routes, string label, Type enumType, Enum value)
+    {
+        var writer = new StringWriter();
+        var html = MakeHtmlHelper(routes, writer, new EnumModel());
+        Console.WriteLine("### " + label);
+        Console.WriteLine(html.DropDownList("mapSupportLevel", EnumHelper.GetSelectList(enumType, value)).ToString());
+    }
+
     static void EmitExpression<T>(RouteCollection routes, string label, ListModel model,
                                   Expression<Func<ListModel, IList<T>>> expression)
     {

@@ -43,6 +43,16 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
+    <!-- COMPILE-TIME ONLY, and not a change of imaging library: ImageSharp above stays the
+         one this project actually uses. ZkData.UnitSyncLib.Map declares three Image/Bitmap
+         members, which the website never reads - it reads MinimapName and the other DB
+         columns - but the type does not compile without them, and MapsController
+         deserialises a real Map out of the registrar's metadata.
+         The package is Windows-only AT RUNTIME: the assembly loads anywhere and only
+         constructing a Bitmap throws, which nothing here does. The members are [XmlIgnore],
+         so XmlSerializer does not touch them either. Maps/Detail deserialising a real Map on
+         Linux is what establishes that, rather than this comment. -->
+    <PackageReference Include="System.Drawing.Common" Version="9.0.0" />
   </ItemGroup>
 
   <!-- the entity classes, linked from ZkData and unmodified -->
@@ -65,10 +75,34 @@
     <Compile Include="..\Shared\PlasmaShared\Imaging\ImageSharpImageProcessor.cs" Link="Linked\ImageSharpImageProcessor.cs" />
     <Compile Include="..\Shared\PlasmaShared\IContentService\ClientMissionInfo.cs" Link="Linked\ClientMissionInfo.cs" />
     <Compile Include="..\Shared\PlasmaShared\CommandJsonSerializer.cs" Link="Linked\CommandJsonSerializer.cs" />
-    <Compile Include="..\Shared\ZkData\ResourceType.cs" Link="Linked\ResourceType.cs" />
+    <!-- PlasmaShared's ResourceType, not Shared/ZkData/ResourceType.cs, which this used to
+         link. There are two files in the repository declaring ZkData.ResourceType, and the
+         Shared/ZkData one is in NO project - production compiles this one. They differ:
+         production has Helper = 2 and the dead file stops at Mod = 1.
+         Nothing broke, because the column is an int either way and the two agree on Map and
+         Mod, so the schema diff and every read still passed. It surfaced only when
+         ResourceInfo.cs - which says `= ResourceType.Helper` - was linked for MapsController. -->
+    <Compile Include="..\Shared\PlasmaShared\IContentService\ResourceType.cs" Link="Linked\ResourceType.cs" />
     <Compile Include="..\ZkData\Ef\WHR\PlayerRating.cs" Link="Linked\WHR\PlayerRating.cs" />
     <Compile Include="..\ZkData\Ef\WHR\MapRatings.cs" Link="Linked\WHR\MapRatings.cs" />
     <Compile Include="..\Shared\PlasmaShared\CsvTable.cs" Link="Linked\CsvTable.cs" />
+    <!-- The unitsync DATA types, for MapsController: it deserialises a Map out of the
+         metadata the registrar wrote. NativeMethods.cs and UnitSync.cs are deliberately NOT
+         here - those are the P/Invoke into unitsync itself, which is what makes the registrar
+         unportable, and nothing the website does needs them. -->
+    <Compile Include="..\Shared\PlasmaShared\SerializableDictionary.cs" Link="Linked\SerializableDictionary.cs" />
+    <Compile Include="..\Shared\PlasmaShared\ResourceInfo.cs" Link="Linked\UnitSyncLib\ResourceInfo.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\Map.cs" Link="Linked\UnitSyncLib\Map.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\Mod.cs" Link="Linked\UnitSyncLib\Mod.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\Option.cs" Link="Linked\UnitSyncLib\Option.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\ListOption.cs" Link="Linked\UnitSyncLib\ListOption.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\StartPos.cs" Link="Linked\UnitSyncLib\StartPos.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\Ai.cs" Link="Linked\UnitSyncLib\Ai.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\AiInfoPair.cs" Link="Linked\UnitSyncLib\AiInfoPair.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\UnitInfo.cs" Link="Linked\UnitSyncLib\UnitInfo.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\MapInfo.cs" Link="Linked\UnitSyncLib\MapInfo.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\ModMissionSlot.cs" Link="Linked\UnitSyncLib\ModMissionSlot.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\VfsMode.cs" Link="Linked\UnitSyncLib\VfsMode.cs" />
     <Compile Include="..\ZkData\PayPal\PayPalInterface.cs" Link="Linked\PayPalInterface.cs" />
     <Compile Include="..\ZkData\SpringFilesUnitsyncAttempt.cs" Link="Linked\SpringFilesUnitsyncAttempt.cs" />
     <Compile Include="..\ZkData\SteamWebApi.cs" Link="Linked\SteamWebApi.cs" />

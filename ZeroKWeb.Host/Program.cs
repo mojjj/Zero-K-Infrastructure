@@ -382,6 +382,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckResumableDownload(client);
                 failures += await CheckSelectHelpers(client);
                 failures += await CheckDivergedViews(client);
+                failures += await CheckMaps(client);
 
                 Console.WriteLine();
                 if (failures == 0)
@@ -394,6 +395,119 @@ namespace ZeroKWeb.Host
             }
         }
 
+
+        /// <summary>
+        /// The Maps pages, which carry three claims that only a request can settle.
+        ///
+        /// **System.Drawing.Common on Linux.** ZkData.UnitSyncLib.Map declares Image and Bitmap
+        /// members, so ZkData.Core references a package that is Windows-only at RUNTIME. The
+        /// argument for referencing it anyway is that the members are [XmlIgnore] and nothing
+        /// reads them, so the assembly never has to do anything. Detail deserialises a real Map
+        /// through XmlSerializer, which is where that argument is either true or a 500.
+        ///
+        /// **The AutoRegistrator tripwire stays out of the way.** Eight of the nine actions must
+        /// work with the registrar absent; only UploadResource may throw.
+        ///
+        /// **ResourceLinkProvider and its ExecuteSqlCommandCompat.** Detail calls RefreshLinks on
+        /// every content file on every view, which runs the raw UPDATE that moved from EF6's
+        /// ExecuteSqlCommand to EF Core's ExecuteSqlRaw.
+        /// </summary>
+        private static async Task<int> CheckMaps(HttpClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine("maps:");
+            var failures = 0;
+
+            var index = await client.GetAsync(Url + "/Maps");
+            failures += Check(index.IsSuccessStatusCode, "/Maps was served (" + (int)index.StatusCode + ")");
+
+            var detail = await client.GetAsync(Url + "/Maps/Detail/1");
+            var html = await detail.Content.ReadAsStringAsync();
+            failures += Check(detail.IsSuccessStatusCode,
+                "/Maps/Detail/1 was served (" + (int)detail.StatusCode + ")"
+                + " - Map deserialised, and RefreshLinks ran its raw UPDATE");
+            failures += Check(html.Contains("test_map_1"), "the resource reached the page");
+
+            // BoolSelect, the four-argument Select and Html.DropDownList are all behind
+            // @if (Global.IsModerator), so an anonymous request cannot see them - the first
+            // version of this check asserted them anyway and failed for that reason. This owns
+            // the role state the way CheckSignIn does, rather than trusting the fixture: a
+            // `ZkData.Core -- grant` by hand leaves the local database ahead of fixture.sql,
+            // and a check that depends on which one you have is not a check.
+            failures += await AsModerator(async client2 =>
+            {
+                var moderator = await client2.GetAsync(Url + "/Maps/Detail/1");
+                var modHtml = await moderator.Content.ReadAsStringAsync();
+                var inner = 0;
+                inner += Check(moderator.IsSuccessStatusCode,
+                    "/Maps/Detail/1 as a moderator (" + (int)moderator.StatusCode + ")");
+                inner += Check(modHtml.Contains("<select name='assymetrical'>"),
+                    "BoolSelect rendered");
+                inner += Check(modHtml.Contains("<select name='sea'>"),
+                    "the four-argument Select rendered");
+                inner += Check(modHtml.Contains("<select id=\"mapSupportLevel\" name=\"mapSupportLevel\">"),
+                    "Html.DropDownList over EnumHelper.GetSelectList rendered");
+                // NOT the blanket !Contains("@") the other pages use. This page legitimately
+                // serves one, in a lobby command inside a javascript: URL -
+                // chat/battle@select_map:1 - so the blanket version failed on correct output.
+                // These are the shapes that would actually mean Razor did not run.
+                inner += Check(!System.Text.RegularExpressions.Regex.IsMatch(modHtml, @"@(Html\.|Url\.|Model\b|\(|\{|if\b|foreach\b)"),
+                    "no unprocessed Razor markers survived");
+                return inner;
+            });
+
+            return failures;
+        }
+
+        /// <summary>
+        /// Runs a block signed in as a moderator, and puts the account back afterwards.
+        /// Same arrangement as CheckSignIn, and for the same reason: the check owns the role.
+        /// </summary>
+        private static async Task<int> AsModerator(Func<HttpClient, Task<int>> body)
+        {
+            const string password = "harness-moderator-password";
+            string name;
+            string originalHash;
+            AdminLevel originalAdminLevel;
+
+            using (var db = new ZkDataContext())
+            {
+                var account = db.Accounts.OrderBy(a => a.AccountID).First();
+                name = account.Name;
+                originalHash = account.PasswordBcrypt;
+                originalAdminLevel = account.AdminLevel;
+                account.AdminLevel = AdminLevel.Moderator;
+                account.SetPasswordPlain(password);
+                db.SaveChanges();
+            }
+
+            try
+            {
+                var handler = new HttpClientHandler
+                {
+                    UseCookies = true,
+                    CookieContainer = new System.Net.CookieContainer(),
+                    AllowAutoRedirect = false
+                };
+                using (var client = new HttpClient(handler))
+                {
+                    await client.PostAsync(Url + "/Harness/Login", new FormUrlEncodedContent(
+                        new[] { new KeyValuePair<string, string>("login", name),
+                                new KeyValuePair<string, string>("password", password) }));
+                    return await body(client);
+                }
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var account = db.Accounts.OrderBy(a => a.AccountID).First();
+                    account.AdminLevel = originalAdminLevel;
+                    account.PasswordBcrypt = originalHash;
+                    db.SaveChanges();
+                }
+            }
+        }
 
         /// <summary>
         /// The two views that diverged for their child actions - Users/Detail and

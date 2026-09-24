@@ -94,7 +94,6 @@ namespace ZkData
         public static string BaseImageUrl;
         public static string BaseSiteUrl;
 
-        public const string SpringfilesBaseUrl = "https://springfiles.springrts.com/";
 
         public static string DefaultZkTag => Mode == ModeType.Live ? "zk:stable" : "zk:test";
         public static string DefaultChobbyTag => Mode == ModeType.Live ? "zkmenu:stable" : "zkmenu:test";

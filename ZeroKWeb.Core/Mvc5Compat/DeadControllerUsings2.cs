@@ -23,3 +23,8 @@ namespace System.Web.Routing { internal static class DeadUsingMarker { } }
 // no HtmlTextWriter, no Page, nothing else from WebForms. It names the namespace once and then
 // never touches it.
 namespace System.Web.UI { internal static class DeadUsingMarker { } }
+
+// Dead in MapsController, checked by what the file uses rather than by counting the name: no
+// JavaScriptSerializer, no ScriptIgnore, nothing else from it. The controller serialises with
+// XmlSerializer and Newtonsoft, both of which it names elsewhere.
+namespace System.Web.Script.Serialization { internal static class DeadUsingMarker { } }

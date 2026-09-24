@@ -3381,3 +3381,101 @@ component rendered on `/Battles/Detail/1`, but that call sits inside `@if (Model
 battle 1 has no events - so the assertion would have passed for the wrong reason on any fixture
 that did have them. It now asserts what the request establishes and says where the component itself
 is covered.
+
+## MapsController, and a tripwire instead of a stub
+
+Nine actions. **One** of them, `UploadResource`, needs the map registrar; the other eight and
+three of the four Maps views have nothing to do with unitsync. So the controller is linked and
+that one action throws.
+
+`AutoRegistrator` P/Invokes into unitsync and drags MonoTorrent and PlasmaDownloader behind it.
+The compat type exists only so the other eight actions compile: every member throws a
+`NotSupportedException` naming unitsync, on the first line `UploadResource` executes. The shim
+that returns an empty scan was considered and rejected - it would accept the upload, report "0
+resources registered" and lose the file, which is the `EntityFramework.Extensions` trap for the
+fourth time. `Paths` is deliberately typed `PathsAreUnavailable` rather than `ZkData.SpringPaths`,
+so nothing hollow sits under a real name.
+
+This is also **the same coupling the Ladders work found**: the website reaching into
+infrastructure that happens to share its process. `RatingSystems` is the lobby server's, this is
+the registrar's, and neither appears in a count of API calls.
+
+### A dead file the port had been compiling
+
+`ZkData.ResourceType` is declared **twice** in the repository, and `Shared/ZkData/ResourceType.cs`
+- the one `ZkData.Core` linked - is in **no project at all**. Production compiles PlasmaShared's,
+which has `Helper = 2`; the dead one stops at `Mod = 1`.
+
+Nothing broke, because the column is an int either way and the two agree on `Map` and `Mod`, so
+the schema diff and every read passed. It surfaced only when `ResourceInfo.cs`, which says
+`= ResourceType.Helper`, was linked.
+
+### `System.Drawing.Common`, referenced on purpose and bounded
+
+`ZkData.UnitSyncLib.Map` declares three `Image`/`Bitmap` members. The website never reads them -
+it reads `MinimapName` and the other DB columns - but the type will not compile without them, and
+`Maps/Detail` deserialises a real `Map` out of the registrar's metadata.
+
+The package is **Windows-only at runtime**: the assembly loads anywhere and only constructing a
+`Bitmap` throws. The members are `[XmlIgnore]`, so `XmlSerializer` does not touch them either.
+That is an argument, not evidence, so `/Maps/Detail/1` is requested over HTTP on Linux and has to
+come back 200. ImageSharp remains the project's actual imaging library; this reference is
+compile-time only and says so where it is declared.
+
+### Four more splits, all the repository's own pattern
+
+`GlobalConst.SpringfilesBaseUrl` moved to `GlobalConst.Portable.cs`; `Utils.Decompress` - eleven
+lines of `System.IO.Compression` - moved to `Utils.Enumerable.cs` out of a 900-line GDI+ file;
+`PlasmaServer` gained a `PlasmaServer.Portable.cs` holding the five torrent-path methods, out of a
+290-line file built on `System.Drawing.Drawing2D`. Each is one partial class with one definition
+of each member, so both stacks still compile them. `ResourceLinkProvider` is linked, and its two
+`ExecuteSqlCommand` calls moved to a `DbCompat` twin over EF Core's `ExecuteSqlRaw`.
+
+### Three more compat pieces, and one more extension-property wall
+
+`JsonRequestBehavior` is an enum and an overload, because ASP.NET Core answers GETs with JSON by
+default - the switch defended against a JSON-hijacking attack browsers closed. `Response.AddHeader`
+is a plain extension method onto a method, so no call site moved. `HttpContext.Application` is a
+**property**, so the call sites did: `this.ApplicationState()`, backed by a process-wide
+`ConcurrentDictionary` rather than `IMemoryCache`, because Application state had no eviction and a
+port that changes caching lifetimes while changing frameworks cannot tell which caused a
+difference. It is unbounded on both stacks; that is today's behaviour, carried over rather than
+fixed.
+
+### `EnumHelper.GetSelectList`, and the shape that took four captures
+
+`Maps/Detail` calls `Html.DropDownList(name, EnumHelper.GetSelectList(type, value))`. Options come
+out as `EnumDropDownListFor`'s do - declaration order, `[Display]`, numeric values. What no
+amount of reading would have given is **what a null value does**:
+
+| captured | result |
+|---|---|
+| `GetSelectList(Support, Featured)` | Featured selected, four options |
+| `GetSelectList(Support, null)` | **None** selected (Support has a 0), four options |
+| `GetSelectList(Plain, null)` | `<option selected value="0"></option>` **prepended** |
+| `GetSelectList(Plain, Planetwars)` | Planetwars selected, three options, **no extra** |
+
+A null is rendered as the enum's zero, and where no member is zero MVC 5 synthesises an empty
+entry to hold the selection. The third capture alone would have supported "this enum has no zero
+member, so add a blank" equally well - and that reading puts a stray blank option on every
+dropdown whose enum starts at 1. The fourth capture is the one that rules it out. Positive
+control: dropping the synthesised entry fails that case and only that case.
+
+ASP.NET Core's own `Html.DropDownList` turns out to emit MVC 5's markup exactly, so no call site
+moved for it - asked rather than assumed, by rendering through the real `IHtmlHelper` and
+comparing.
+
+### Two assertions written wrong, both caught
+
+The first version asserted `BoolSelect` and the four-argument `Select` on an anonymous request.
+Both sit behind `@if (Global.IsModerator)`. The check now takes the role the way `CheckSignIn`
+does - setting it, using it, putting it back - rather than trusting the fixture, because a
+`ZkData.Core -- grant` by hand leaves the local database ahead of `fixture.sql` and a check that
+depends on which one you have is not a check.
+
+The second was the blanket `!Contains("@")` every other page check uses. `Maps/Detail` legitimately
+serves one, in a lobby command inside a `javascript:` URL - `chat/battle@select_map:1` - so the
+blanket version failed on correct output. It now looks for the shapes that would actually mean
+Razor did not run.
+
+**110 of 123 views compile, 11 more have a ported copy.** The two left are `Engines` and `Home`.
