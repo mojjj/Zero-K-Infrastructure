@@ -20,10 +20,27 @@ if ! OUT=$(docker run --rm -v "$PWD":/src -v "$CACHE":/cache -w /src mono:6.12 b
   # MVC 5 resolves System.Web.WebPages at runtime, from RouteCollectionExtensions.MapRoute
   # onwards, so both directories have to be on MONO_PATH or the capture dies before it prints.
   mkdir -p /tmp/asm && cp $MVC/*.dll $WEBPAGES/*.dll /tmp/asm/
+
+  # PostLinkExtensions, with the one call to Html.AntiForgeryToken replaced by a literal.
+  #
+  # Not a convenience. Anti-forgery in MVC 5 reads web.config through
+  # System.Web.Configuration, and mono outside a hosted application cannot supply that - it dies
+  # in WebConfigurationHost.InitForConfiguration. The token is also RANDOM per request, so it
+  # could never have been byte-compared in any case.
+  #
+  # What this captures is the form and button structure, which is the part a port gets wrong by
+  # transcribing. That the token is PRESENT is asserted separately, in ZeroKWeb.Render: a port
+  # dropping it would turn every one of these links into a CSRF hole and still match here.
+  #
+  # The substitution is string.Empty rather than a placeholder so that no quoting is needed:
+  # the whole block lives inside a single-quoted bash -c, which is also why these comments
+  # carry no apostrophes.
+  sed "s/html.AntiForgeryToken().ToHtmlString()/string.Empty/" \
+      Zero-K.info/AppCode/PostLinkExtensions.cs > /tmp/PostLinkExtensions.cs
   mcs -nologo -out:/tmp/capture.exe \
       -r:System.Web.dll -r:System.Web.Routing.dll -r:System.Core.dll \
       -r:$MVC/System.Web.Mvc.dll -r:$WEBPAGES/System.Web.WebPages.dll \
-      tools/ajax-ground-truth/Capture.cs 2>&1
+      tools/ajax-ground-truth/Capture.cs /tmp/PostLinkExtensions.cs 2>&1
   MONO_PATH=/tmp/asm mono /tmp/capture.exe 2>&1
 '); then
     echo "capture failed:" >&2

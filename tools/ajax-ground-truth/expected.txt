@@ -10,5 +10,17 @@
 <form action="/PlanetWars/MatchMaker" data-ajax="true" data-ajax-complete="GlobalPageInit($(&#39;#events&#39;))" data-ajax-mode="replace" data-ajax-success="ReplaceHistory($(&#39;#events&#39;).find(&#39;form&#39;).serialize())" data-ajax-update="#events" id="mmForm" method="post"></form>
 ### BeginForm(action, routeValues, options) with method
 <form action="/Planetwars/CommanderProfile?profileNumber=1" data-ajax="true" data-ajax-loading="#busy" data-ajax-method="post" data-ajax-mode="replace" data-ajax-update="#com1" method="post"></form>
+### PostLink(text, action)
+<form action="" class="postlink" method="post"><button class="postlink-button" type="submit">Delete</button></form>
+### PostLink(text, action, controller, routeValues)
+<form action="" class="postlink" method="post"><button class="postlink-button" type="submit">Select</button></form>
+### PostLink with cssClass and nicetitle
+<form action="" class="postlink" method="post"><button class="js_confirm postlink-button" nicetitle="Really?" type="submit">Delete</button></form>
+### PostLink encodes its text
+<form action="" class="postlink" method="post"><button class="postlink-button" type="submit">a &lt; b &amp; c &quot; d &#39; e</button></form>
+### PostImageLink(src, height, action)
+<form action="" class="postlink" method="post"><button class="postlink-button" type="submit"><img alt="" height="24" src="/img/x.png" /></button></form>
+### PostImageLink with height 0 omits the attribute
+<form action="" class="postlink" method="post"><button class="postlink-button" type="submit"><img alt="" src="/img/x.png" /></button></form>
 ### ActionLink(text, action, routeValues, options)
 <a data-ajax="true" data-ajax-mode="replace" data-ajax-update="#matchMaker" href="/Planetwars/MatchMakerJoin?planetID=7&amp;attackerFaction=Dyn">Join</a>

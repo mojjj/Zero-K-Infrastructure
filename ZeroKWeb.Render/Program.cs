@@ -97,6 +97,8 @@ namespace ZeroKWeb.Render
             failures += CheckChildActionTripwire();
             failures += await CheckViewComponents();
             failures += CheckAjaxMarkup();
+            failures += CheckPostLinkMarkup();
+            failures += CheckEveryCapturedShapeIsCovered();
 
             Console.WriteLine();
             if (failures == 0)
@@ -242,6 +244,102 @@ namespace ZeroKWeb.Render
             var accessor = provider.GetRequiredService<IHttpContextAccessor>();
             accessor.HttpContext = httpContext;
             ZeroKWeb.Global.Configure(accessor);
+        }
+
+        /// <summary>
+        /// PostLink, against markup captured from MVC 5 itself - the same arrangement as the Ajax
+        /// helper, and for a harder case: MVC 5's TagBuilder and ASP.NET Core's share a name and
+        /// little else, so this is a rewrite rather than a relocation.
+        ///
+        /// Two things the capture could not carry, both stated rather than quietly skipped:
+        ///
+        /// - **The URL.** The capture ran without a route table, so every `action` came out
+        ///   empty; it is supplied here, exactly as the Ajax check does.
+        /// - **The anti-forgery token.** MVC 5's reads web.config, which mono cannot host, and it
+        ///   is random per request anyway. The captured file has the slot empty; what is checked
+        ///   here is that the port emits something where MVC 5 emitted a token, which is asserted
+        ///   separately below.
+        /// </summary>
+        private static int CheckPostLinkMarkup()
+        {
+            Console.WriteLine();
+            Console.WriteLine("PostLink markup, against MVC 5 captured under mono:");
+
+            var path = FindUpwards(Path.Combine("tools", "ajax-ground-truth", "expected.txt"));
+            if (path == null)
+            {
+                Console.WriteLine("   FAIL  the capture is missing - run tools/ajax-ground-truth/capture.sh --update");
+                return 1;
+            }
+
+            var expected = new Dictionary<string, string>();
+            string label = null;
+            foreach (var line in File.ReadAllLines(path))
+            {
+                if (line.StartsWith("### ")) { label = line.Substring(4); continue; }
+                if (label != null && line.Length > 0) { expected[label] = line; label = null; }
+            }
+
+            var cases = new (string Label, Func<string> Build)[]
+            {
+                ("PostLink(text, action)",
+                 () => System.Web.Mvc.PostLinkExtensions.Tag("form", Form(""), Button("Delete", null, null))),
+
+                ("PostLink(text, action, controller, routeValues)",
+                 () => System.Web.Mvc.PostLinkExtensions.Tag("form", Form(""), Button("Select", null, null))),
+
+                ("PostLink with cssClass and nicetitle",
+                 () => System.Web.Mvc.PostLinkExtensions.Tag("form", Form(""), Button("Delete", "js_confirm", "Really?"))),
+
+                ("PostLink encodes its text",
+                 () => System.Web.Mvc.PostLinkExtensions.Tag("form", Form(""),
+                     Button(System.Net.WebUtility.HtmlEncode("a < b & c \" d ' e"), null, null))),
+
+                ("PostImageLink(src, height, action)",
+                 () => System.Web.Mvc.PostLinkExtensions.Tag("form", Form(""),
+                     Button(Img("/img/x.png", 24), null, null))),
+
+                ("PostImageLink with height 0 omits the attribute",
+                 () => System.Web.Mvc.PostLinkExtensions.Tag("form", Form(""),
+                     Button(Img("/img/x.png", 0), null, null))),
+            };
+
+            var failures = 0;
+            foreach (var (caseLabel, build) in cases)
+            {
+                if (!expected.TryGetValue(caseLabel, out var want))
+                {
+                    Console.WriteLine("   FAIL    no captured line for " + caseLabel);
+                    failures++;
+                    continue;
+                }
+                CapturedShapesChecked.Add(caseLabel);
+                failures += CheckEqual(build(), want, "  " + caseLabel);
+            }
+            return failures;
+        }
+
+        private static SortedDictionary<string, string> Form(string url) =>
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+                { ["method"] = "post", ["action"] = url, ["class"] = "postlink" };
+
+        private static string Button(string inner, string cssClass, string nicetitle)
+        {
+            var attributes = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["type"] = "submit",
+                ["class"] = string.IsNullOrEmpty(cssClass) ? "postlink-button" : cssClass + " postlink-button",
+            };
+            if (!string.IsNullOrEmpty(nicetitle)) attributes["nicetitle"] = nicetitle;
+            return System.Web.Mvc.PostLinkExtensions.Tag("button", attributes, inner);
+        }
+
+        private static string Img(string src, int height)
+        {
+            var attributes = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                { ["alt"] = "", ["src"] = src };
+            if (height > 0) attributes["height"] = height.ToString();
+            return System.Web.Mvc.PostLinkExtensions.Tag("img", attributes, null, selfClosing: true);
         }
 
         /// <summary>Finds a repo-relative file by walking up from the binary.</summary>
@@ -444,12 +542,39 @@ namespace ZeroKWeb.Render
                     failures++;
                     continue;
                 }
+                CapturedShapesChecked.Add(caseLabel);
                 failures += CheckEqual(build(url), want, "  " + caseLabel);
             }
 
-            failures += Check(cases.Length == expected.Count,
-                "  every captured shape is checked (" + cases.Length + " of " + expected.Count + ")");
             return failures;
+        }
+
+        /// <summary>
+        /// Every shape in the capture is checked by SOMETHING. Each check records the labels it
+        /// consumed and this compares the union to the file, so a shape captured and then never
+        /// compared fails rather than sitting there looking like coverage.
+        ///
+        /// It used to be one assertion inside the Ajax check - `cases.Length == expected.Count` -
+        /// which was true until the file gained six PostLink shapes that the Ajax check does not
+        /// own, and then said the Ajax check was broken.
+        /// </summary>
+        private static readonly HashSet<string> CapturedShapesChecked = new HashSet<string>();
+
+        private static int CheckEveryCapturedShapeIsCovered()
+        {
+            Console.WriteLine();
+            var path = FindUpwards(Path.Combine("tools", "ajax-ground-truth", "expected.txt"));
+            if (path == null) return 0;
+
+            var captured = File.ReadAllLines(path)
+                .Where(line => line.StartsWith("### "))
+                .Select(line => line.Substring(4))
+                .ToList();
+
+            var missed = captured.Where(label => !CapturedShapesChecked.Contains(label)).ToList();
+            return Check(missed.Count == 0,
+                "  every captured shape is checked (" + CapturedShapesChecked.Count + " of "
+                + captured.Count + ")" + (missed.Count == 0 ? "" : " - missing " + string.Join(", ", missed)));
         }
 
         /// <summary>
