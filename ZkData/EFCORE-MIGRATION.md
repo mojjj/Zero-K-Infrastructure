@@ -3960,3 +3960,42 @@ logs.
 Both are the lobby protocol and the game client rather than the process split, and changing either
 alters behaviour a shipped client depends on. They are written down here and in HOSTING.md rather
 than changed in a Phase 1 branch.
+
+## Phase 1: session tokens expire
+
+The last recorded property. A token used to live until redeemed - which is single use - or until
+the account's tokens were cleared. A bearer credential that signs someone into the website and
+never expires is worth bounding even when it is usually spent within seconds of being issued.
+
+`SessionTokenStore` now holds the whole lifecycle in one place: issue, redeem, clear-for-account,
+prune. It takes its clock, so the tests move time rather than sleeping - a test that waits out a
+real lifetime either takes a day or tests a lifetime nobody runs.
+
+Three decisions worth naming:
+
+**Expiry is enforced on redeem**, not by a timer, so there is no window where a token is expired
+but something still says otherwise. Pruning is opportunistic, on issue, because the store lives as
+long as the server does and would otherwise keep every token anyone was ever issued - which the
+tests check by filling it and watching it sweep.
+
+**An expired token is consumed anyway.** Leaving it in place would make redemption a way to ask
+whether a token exists, which is a question worth denying to anyone holding a stolen log.
+
+**A configured lifetime of zero or less is not honoured.** It reads as "turn expiry off" and would
+actually make every token dead on arrival, so it falls back to the default along with anything
+else unparseable.
+
+### The cost, which is real
+
+The client receives its token **once**, in the login response, and nothing refreshes it. A client
+connected for longer than the lifetime finds the website no longer signs it in automatically: the
+user sees a login page and reconnecting to the lobby fixes it. The default is 24 hours and the
+lifetime is a MiscVar, so it can be moved without a deploy.
+
+Positive control: removing the expiry check fails exactly the two expiry tests and nothing else.
+
+### Still not changed
+
+The game client passes the token in a **query string**, which is where URLs end up in history,
+referer headers and proxy logs. Expiry bounds how long a leaked one is worth having; moving it out
+of the URL changes a shipped client and remains a decision rather than a port task.
