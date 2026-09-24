@@ -15,7 +15,19 @@ concurrency:
 jobs:
   build:
     name: Build and test Zero-K
-    runs-on: zk
+    # `zk` is a self-hosted runner registered on ZeroK-RTS/Zero-K-Infrastructure. Self-hosted
+    # runners do not come with a fork, so on this one the label matches nothing and every run of
+    # this workflow queues until GitHub expires it - which is why no pull request here has ever
+    # compiled MissionEditor, CMissionLib, ZeroKLobby or run Tests.dll.
+    #
+    # Nothing in the steps below is machine-specific: setup-msbuild, setup-nuget and Setup-VSTest
+    # all provision a GitHub-hosted Windows image, and there is no database, game install or
+    # absolute path involved except one publish profile that writes to c:\temp\mb, which a
+    # FileSystem publish creates.
+    #
+    # NOTE FOR UPSTREAM: this line is a fork-local change. Upstream has the runner and should keep
+    # `runs-on: zk`.
+    runs-on: windows-latest
 
     steps:
       - name: Setup MSBuild Path

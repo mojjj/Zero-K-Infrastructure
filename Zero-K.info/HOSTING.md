@@ -1,4 +1,4 @@
-# Hosting notes for Zero-K.info
+﻿# Hosting notes for Zero-K.info
 
 ## Why this file exists
 
@@ -240,7 +240,13 @@ What this does **not** mean is that the server can move out today. Still in the 
   lobby server in its own process exactly as before. Set, and it starts none and talks to
   `LobbyApiUrl` with `LobbyApiSecret`. A URL without a secret **refuses to start** rather
   than falling back, because falling back means two lobby servers against one database.
-  `ZkLobbyServer.Standalone` is the other end.
+  `ZkLobbyServer.Standalone` is the other end. It is also the only Exe/net48/SDK-style
+  project in `Zero-K.sln`, which made it the first here to meet all three conditions of
+  the SDK's RuntimeIdentifier inference and so **broke the Windows solution build** -
+  restore and compile were choosing different RIDs. Its csproj now says `PlatformTarget`
+  out loud and carries the explanation. Nothing in this fork could have caught it: the
+  inference only fires on a Windows host, and `tools/build-website.sh` is mono on Linux
+  building one project rather than the solution.
 - ~~The reverse dependency.~~ **Moved.** The event feed's formatting is now
   `ZkData/ZkHtmlFormat.cs` and `ZkData/PlanetwarsEventFormatter.cs`, one implementation that
   both halves call. It used to be two near-verbatim copies - the website's and the port's -
