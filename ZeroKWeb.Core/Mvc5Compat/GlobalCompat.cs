@@ -141,6 +141,13 @@ namespace ZeroKWeb
         // it yet. False is what an unconfigured request would answer anyway.
         public static bool IsWebLobbyAccess => false;
 
+        /// <summary>
+        /// The map registrar. A tripwire - see Mvc5Compat/AutoRegistratorCompat.cs for why it is
+        /// one rather than a shim, and which single action reaches for it.
+        /// </summary>
+        public static global::AutoRegistrator.AutoRegistrator AutoRegistrator
+            => new global::AutoRegistrator.AutoRegistrator();
+
         private static readonly object awardCalculatorLock = new object();
         private static AwardCalculator awardCalculator;
 

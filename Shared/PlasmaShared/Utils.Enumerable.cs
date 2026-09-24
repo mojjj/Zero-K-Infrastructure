@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -65,6 +67,22 @@ namespace PlasmaShared
                 return e.Types.Where(t => t != null);
             }
         }
+        /// <summary>Moved here from Utils.cs, which cannot compile outside .NET Framework -
+        /// it is 900 lines of GDI+. This is eleven lines of System.IO.Compression, and
+        /// MapsController.Detail needs it to read the map metadata the registrar wrote.</summary>
+        public static byte[] Decompress(this byte[] data)
+        {
+            using (var compressedStream = new MemoryStream(data))
+            using (var zipStream = new GZipStream(compressedStream, CompressionMode.Decompress))
+            using (var resultStream = new MemoryStream())
+            {
+                var buffer = new byte[4096];
+                int read;
+                while ((read = zipStream.Read(buffer, 0, buffer.Length)) > 0) resultStream.Write(buffer, 0, read);
+                return resultStream.ToArray();
+            }
+        }
+
         public static string EscapePath(this string path)
         {
             if (String.IsNullOrEmpty(path)) return path;

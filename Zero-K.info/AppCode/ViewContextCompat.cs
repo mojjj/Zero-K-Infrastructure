@@ -13,3 +13,17 @@ namespace System.Web.Mvc
         public static bool IsChildActionCompat(this ViewContext context) => context.IsChildAction;
     }
 }
+
+namespace ZeroKWeb
+{
+    /// <summary>
+    /// The MVC 5 half of the Application-state twin pair. <c>HttpContext.Application</c> is a
+    /// PROPERTY and C# has no extension properties, so the call site moves - the same shape as
+    /// SetCommandTimeoutCompat and this.MapPath.
+    /// </summary>
+    public static class ApplicationStateCompat
+    {
+        public static System.Web.HttpApplicationStateBase ApplicationState(this System.Web.Mvc.Controller controller)
+            => controller.HttpContext.Application;
+    }
+}

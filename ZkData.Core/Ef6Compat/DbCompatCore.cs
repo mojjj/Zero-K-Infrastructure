@@ -16,6 +16,17 @@ namespace ZkData
             database.SetCommandTimeout(seconds);
         }
 
+        /// <summary>
+        /// EF6's Database.ExecuteSqlCommand. ExecuteSqlRaw takes the same {0} placeholders and
+        /// parameterises them the same way, so the SQL that reaches the server is unchanged -
+        /// which matters, because the one call site interpolates nothing and passes the id as a
+        /// parameter precisely so it is not string-concatenated.
+        /// </summary>
+        public static int ExecuteSqlCommandCompat(this DatabaseFacade database, string sql, params object[] parameters)
+        {
+            return database.ExecuteSqlRaw(sql, parameters);
+        }
+
         public static void MarkModified<T>(this ZkDataContext db, T entity) where T : class
         {
             db.Entry(entity).State = EntityState.Modified;

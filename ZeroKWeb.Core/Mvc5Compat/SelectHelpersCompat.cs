@@ -59,6 +59,41 @@ namespace System.Web.Mvc
             return new MvcHtmlString(sb.ToString());
         }
 
+        /// <summary>Verbatim from HtmlHelperExtensions.cs, like Select above.</summary>
+        public static MvcHtmlString BoolSelect(this IHtmlHelper helper, string name, bool? selected, string anyItem)
+        {
+            var sb = new StringBuilder();
+            sb.AppendFormat("<select name='{0}'>", Encode(name));
+            if (anyItem != null) sb.AppendFormat("<option {1}>{0}</option>", Encode(anyItem), selected == null ? "selected" : "");
+            sb.AppendFormat("<option value='True' {0}>Yes</option>", selected == true ? "selected" : "");
+            sb.AppendFormat("<option value='False' {0}>No</option>", selected == false ? "selected" : "");
+
+            sb.Append("</select>");
+            return new MvcHtmlString(sb.ToString());
+        }
+
+        /// <summary>
+        /// Verbatim from HtmlHelperExtensions.cs. Note that THIS one walks Enum.GetNames, so its
+        /// options come out in numeric order - unlike EnumDropDownListFor, which MVC 5 built from
+        /// GetFields and which therefore uses declaration order. Two helpers on the same page
+        /// ordering enums differently is the site's behaviour, not a porting choice.
+        /// </summary>
+        public static MvcHtmlString Select(this IHtmlHelper helper, string name, Type etype, int? selected, string anyItem)
+        {
+            var sb = new StringBuilder();
+            sb.AppendFormat("<select name='{0}'>", Encode(name));
+            var names = Enum.GetNames(etype);
+            var values = (int[])Enum.GetValues(etype);
+            if (anyItem != null) sb.AppendFormat("<option {1}>{0}</option>", Encode(anyItem), selected == null ? "selected" : "");
+            for (var i = 0; i < names.Length; i++)
+                sb.AppendFormat("<option value='{0}' {2}>{1}</option>",
+                                Encode(values[i]),
+                                Encode(names[i]),
+                                selected == values[i] ? "selected" : "");
+            sb.Append("</select>");
+            return new MvcHtmlString(sb.ToString());
+        }
+
         public static MvcHtmlString EnumCheckboxesFor<TModel, TEnum>(this IHtmlHelper<TModel> htmlHelper,
                                                                      Expression<Func<TModel, IList<TEnum>>> expression,
                                                                      IList<TEnum> hideList = null)
@@ -120,5 +155,8 @@ namespace System.Web.Mvc
         }
 
         private static string Encode(string value) => WebUtility.HtmlEncode(value ?? "");
+
+        /// <summary>MVC 5's HtmlHelper.Encode(object), which the 4-argument Select uses on an int.</summary>
+        private static string Encode(object value) => WebUtility.HtmlEncode(Convert.ToString(value) ?? "");
     }
 }

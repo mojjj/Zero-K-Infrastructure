@@ -483,6 +483,18 @@ namespace ZeroKWeb.Render
             }
             if (label != null) expected[label] = string.Join("\n", block);
 
+            var provider = BuildServices();
+            var httpContext = new DefaultHttpContext { RequestServices = provider };
+            var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
+            var viewData = new ViewDataDictionary<CapturedListModel>(
+                new EmptyModelMetadataProvider(), new ModelStateDictionary()) { Model = new CapturedListModel() };
+            var writer = new StringWriter();
+            var viewContext = new ViewContext(actionContext, new FakeView(), viewData,
+                new TempDataDictionary(httpContext, provider.GetRequiredService<ITempDataProvider>()),
+                writer, new HtmlHelperOptions());
+            var html = provider.GetRequiredService<IHtmlHelper<CapturedListModel>>();
+            ((IViewContextAware)html).Contextualize(viewContext);
+
             var cases = new (string Label, Func<string> Build)[]
             {
                 ("EnumDropDownListFor(plain enum)",
@@ -508,6 +520,25 @@ namespace ZeroKWeb.Render
 
                 ("EnumDropDownListFor(declaration order != numeric order)",
                  () => Enum_(typeof(CapturedUnordered), false, "Unordered", "20", null)),
+
+                // Does ASP.NET Core's own DropDownList emit MVC 5's markup? Asked, not
+                // assumed - the list comes from the port's EnumHelper either way, so this
+                // isolates the rendering.
+                ("DropDownList(EnumHelper.GetSelectList(enum, value))",
+                 () => Rendered(html.DropDownList("mapSupportLevel",
+                     System.Web.Mvc.EnumHelper.GetSelectList(typeof(CapturedSupport), CapturedSupport.Featured)))),
+
+                ("DropDownList(EnumHelper.GetSelectList(enum, null))",
+                 () => Rendered(html.DropDownList("mapSupportLevel",
+                     System.Web.Mvc.EnumHelper.GetSelectList(typeof(CapturedSupport), null)))),
+
+                ("DropDownList(EnumHelper.GetSelectList(enum starting at 1, null))",
+                 () => Rendered(html.DropDownList("mapSupportLevel",
+                     System.Web.Mvc.EnumHelper.GetSelectList(typeof(CapturedPlain), null)))),
+
+                ("DropDownList(EnumHelper.GetSelectList(enum starting at 1, value))",
+                 () => Rendered(html.DropDownList("mapSupportLevel",
+                     System.Web.Mvc.EnumHelper.GetSelectList(typeof(CapturedPlain), CapturedPlain.Planetwars)))),
             };
 
             var failures = 0;
@@ -531,6 +562,15 @@ namespace ZeroKWeb.Render
         /// comparison honest if either side ever runs on Windows - the separator would then be
         /// CRLF on BOTH, which is the property that matters, and not a diff.
         /// </summary>
+        private static string Rendered(Microsoft.AspNetCore.Html.IHtmlContent content)
+        {
+            using (var writer = new StringWriter())
+            {
+                content.WriteTo(writer, System.Text.Encodings.Web.HtmlEncoder.Default);
+                return writer.ToString().Replace("\r\n", "\n").TrimEnd('\n');
+            }
+        }
+
         private static string Enum_(Type enumType, bool isNullable, string name, string selected, object attributes)
         {
             var markup = System.Web.Mvc.EnumDropDownListExtensions.Render(

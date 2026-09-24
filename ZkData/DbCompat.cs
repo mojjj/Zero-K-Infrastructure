@@ -22,6 +22,16 @@ namespace ZkData
             database.CommandTimeout = seconds;
         }
 
+        /// <summary>
+        /// EF6 spells it ExecuteSqlCommand, EF Core spells it ExecuteSqlRaw, and the
+        /// parameter placeholders are the same {0} form in both. ResourceLinkProvider uses it
+        /// to bump a download counter without loading the row.
+        /// </summary>
+        public static int ExecuteSqlCommandCompat(this Database database, string sql, params object[] parameters)
+        {
+            return database.ExecuteSqlCommand(sql, parameters);
+        }
+
         public static void MarkModified<T>(this ZkDataContext db, T entity) where T : class
         {
             db.Entry(entity).State = EntityState.Modified;

@@ -122,7 +122,7 @@ namespace ZeroKWeb.Controllers
         {
             public override void OnActionExecuting(ActionExecutingContext filterContext)
             {
-                filterContext.RequestContext.HttpContext.Response.AddHeader("Access-Control-Allow-Origin", "*");
+                filterContext.HttpContext.Response.AddHeader("Access-Control-Allow-Origin", "*");
                 base.OnActionExecuting(filterContext);
             }
         }
@@ -214,7 +214,7 @@ namespace ZeroKWeb.Controllers
             var map = db.Resources.Single(x => x.ResourceID == resourceID);
             res.ResourceID = resourceID;
             res.IconSize = map.PlanetWarsIconSize;
-            res.Icons = Directory.GetFiles(Server.MapPath("/img/planets")).Select(Path.GetFileName).ToList();
+            res.Icons = Directory.GetFiles(this.MapPath("/img/planets")).Select(Path.GetFileName).ToList();
             return View("PlanetImageSelect", res);
         }
 
@@ -390,20 +390,20 @@ namespace ZeroKWeb.Controllers
             };
 
             // load map info from disk - or used cached copy if its in memory
-            var cachedEntry = HttpContext.Application["mapinfo_" + res.ResourceID] as Map;
+            var cachedEntry = this.ApplicationState()["mapinfo_" + res.ResourceID] as Map;
             if (cachedEntry != null) data.MapInfo = cachedEntry;
             else {
-                var path = Server.MapPath("~/Resources/") + res.MetadataName;
+                var path = this.MapPath("~/Resources/") + res.MetadataName;
 
                 if (System.IO.File.Exists(path)) {
                     try {
                         data.MapInfo =
                             (Map)new XmlSerializer(typeof(Map)).Deserialize(new MemoryStream(System.IO.File.ReadAllBytes(path).Decompress()));
-                        HttpContext.Application["mapinfo_" + res.ResourceID] = data.MapInfo;
+                        this.ApplicationState()["mapinfo_" + res.ResourceID] = data.MapInfo;
                     } catch (Exception ex) {
                         Trace.TraceWarning("Failed to get map metedata {0}:{1}", res.MetadataName, ex);
                         data.MapInfo = new Map();
-                        HttpContext.Application["mapinfo_" + res.ResourceID] = data.MapInfo;
+                        this.ApplicationState()["mapinfo_" + res.ResourceID] = data.MapInfo;
                     }
                 }
             }
@@ -471,7 +471,7 @@ namespace ZeroKWeb.Controllers
                             var isMap = resource?.TypeID == ResourceType.Map
                                         || (resource == null && res.ResourceInfo is Map);
                             var subfolder = isMap ? "maps" : "games";
-                            var contentFolder = Path.Combine(Server.MapPath("~/content"), subfolder);
+                            var contentFolder = Path.Combine(this.MapPath("~/content"), subfolder);
                             if (!Directory.Exists(contentFolder)) Directory.CreateDirectory(contentFolder);
 
                             // case-insensitive FileName match: DB row may have different casing than the
