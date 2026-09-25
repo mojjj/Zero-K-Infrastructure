@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 using ZkData;
@@ -44,10 +44,11 @@ namespace AutoRegistrator
         {
             AlreadyExists = 0,
             Registered = 1,
-            RegistrationError = 2
+            RegistrationError = 2,
+            Reregistered = 3
         }
 
-        public List<ScanResult> Scan() => throw AutoRegistratorCompat.Unavailable();
+        public List<ScanResult> Scan(ICollection<string> forceReregister = null) => throw AutoRegistratorCompat.Unavailable();
     }
 
     public class AutoRegistrator
@@ -67,6 +68,14 @@ namespace AutoRegistrator
 
         public PathsAreUnavailable Paths => throw AutoRegistratorCompat.Unavailable();
         public UnitSyncer UnitSyncer => throw AutoRegistratorCompat.Unavailable();
+
+        /// <summary>
+        /// Mirrors the real signature so AdminController links. Note what it does NOT take: the
+        /// real one reaches PlasmaDownloader for the archive, and keeping that inside the
+        /// registrar rather than at the call site is what stops DownloadType having to exist here.
+        /// </summary>
+        public string ReregisterResource(string internalName, TimeSpan? downloadTimeout = null) =>
+            throw AutoRegistratorCompat.Unavailable();
     }
 
     /// <summary>

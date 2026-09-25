@@ -155,8 +155,30 @@ Three things about it are deliberate:
 **What it cannot do is recover detail.** The old rule resized the short axis away, and no stretch
 brings it back: a corrected 2:1 minimap is geometrically right and softer than one registered
 today. The correction keeps the long axis at its stored resolution for that reason - throwing away
-the axis that survived would lose more. **Re-registering every map from its archive remains the
-lossless option**, and remains not this program.
+the axis that survived would lose more.
+
+### The lossless option: re-registration
+
+Going back to the archive does recover the detail, because unitsync renders the images again.
+`UnitSyncer.Scan` takes a list of resources to register **again** although the database already has
+them, and `AutoRegistrator.ReregisterResource(name)` downloads the archive first - a map registered
+long ago is usually not on the machine, and Scan only sees archives it can find. A SuperAdmin POST
+to `/Admin/ReregisterResource` drives it.
+
+**One map per call, deliberately.** Every part of this - unitsync, the archive download, the upload
+through RegisterResource - is something no test in this repository can exercise: there is no
+unitsync here and no map archives. So the unit of work is the one a person can check the result of
+before doing the next, rather than a loop that is either fine or has quietly rewritten a library.
+
+**It is therefore compiled, not verified**, and that distinction is the point. What is known: the
+website, AutoRegistrator and the .NET 9 port all build with it, the ordinary scan is unchanged
+because the force list defaults to null, and `RegisterResource` already rewrites stored images when
+the same md5 arrives again, which is the path it depends on. What is not known is how it behaves
+against a real archive, and the only way to find out is to run it on one map and look.
+
+Suggested order for whoever does: `minimaps` to list the affected maps, re-register **one**, check
+its images and its thumbnail on the site, then decide between doing the rest that way and running
+the in-place `backfill-minimaps` for the ones not worth a download.
 
 Note what the defect actually did, since it was never a cosmetic rounding: for a 2:1 map the
 stored minimap, metal map and height map were squashed to 4:1, and the thumbnail
