@@ -27,12 +27,7 @@ trap 'rm -f "$PROPS"' EXIT
 
 [ -f "$INVENTORY" ] || { echo "missing $INVENTORY - run tools/view-port-report.sh --update" >&2; exit 2; }
 
-{
-    echo "<Project><ItemGroup>"
-    grep -v '^child-action' "$INVENTORY" | grep -oE '[A-Za-z0-9_/.]+\.cshtml' | sort -u \
-      | sed 's|/|\\|g; s|^|    <Content Remove="..\\Zero-K.info\\Views\\|; s|$|" />|'
-    echo "</ItemGroup></Project>"
-} > "$PROPS"
+./tools/view-set.sh "$PROPS"
 
 # Checked before anything is built or run: without it a stopped container surfaces as a
 # forty-frame SqlClient stack trace in the middle of the output. Skipped when

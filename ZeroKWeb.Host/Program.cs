@@ -44,7 +44,16 @@ namespace ZeroKWeb.Host
                 WebRootPath = FindSiteRoot(),
             });
             builder.Logging.SetMinimumLevel(LogLevel.Warning);
-            builder.WebHost.UseUrls(Url);
+            // 127.0.0.1 for the checks, which request exactly that. A container has to bind
+            // 0.0.0.0 instead or nothing outside it can connect, so ZK_HOST_URLS overrides - but
+            // ONLY when serving. Honouring it during the checks would move the server without
+            // moving what they ask for, and they would fail for a reason that is not about the
+            // site.
+            var serving = args.Contains("--serve");
+            var urls = serving
+                ? Environment.GetEnvironmentVariable("ZK_HOST_URLS") ?? Url
+                : Url;
+            builder.WebHost.UseUrls(urls);
             // The HttpPostedFileBase binder. Without it an upload action compiles and always
             // receives null - see ZeroKWeb.Core/Mvc5Compat/HttpPostedFileCompat.cs. Inserted at 0
             // so it is consulted before the built-in providers, none of which know the type.
@@ -101,9 +110,28 @@ namespace ZeroKWeb.Host
             // broken one. The first version of this check asserted the wrong URL for that reason.
             app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
 
-            if (args.Contains("--serve"))
+            if (serving)
             {
-                Console.WriteLine("serving on " + Url + " - try " + Url + "/Home/NotLoggedIn, /Tourney, /Harness/ForumPath/3");
+                // Static content, and ONLY these three directories. WebRootPath above is the site
+                // SOURCE tree - Zero-K.info - so a plain UseStaticFiles over it would serve
+                // Web.config and every .cs file in the project. Named folders, mapped one at a
+                // time, is the difference between serving a site and publishing its source.
+                //
+                // Not done for the checks: they assert HTML, and this is the kind of thing that
+                // should differ between "serve it" and "test it" only deliberately.
+                foreach (var assets in new[] { "img", "Scripts", "Styles" })
+                {
+                    var directory = System.IO.Path.Combine(FindSiteRoot(), assets);
+                    if (!System.IO.Directory.Exists(directory)) continue;
+
+                    app.UseStaticFiles(new StaticFileOptions
+                    {
+                        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(directory),
+                        RequestPath = "/" + assets,
+                    });
+                }
+
+                Console.WriteLine("serving on " + urls + " - try /Home/NotLoggedIn, /Tourney, /Harness/ForumPath/3");
                 await app.RunAsync();
                 return 0;
             }
