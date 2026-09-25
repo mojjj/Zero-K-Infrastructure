@@ -14,6 +14,7 @@ namespace ZkData.Core
     ///     ZK_CONNECTION_STRING=... dotnet run -- write    write to one through it (rolled back)
     ///     ZK_CONNECTION_STRING=... dotnet run -- rate     run the rating pipeline, print the result
     ///     ZK_CONNECTION_STRING=... dotnet run -- minimaps <dir>   report stored images that predate the ToBytes fix
+    ///     ZK_CONNECTION_STRING=... dotnet run -- backfill-minimaps <dir> [--apply]   correct them
     ///
     /// The comparison is the point: it is how the port knows whether the model is right,
     /// rather than whether it compiles.
@@ -100,6 +101,10 @@ namespace ZkData.Core
                         // see LegacyMinimapReport and IMAGING-MIGRATION.md.
                         case "minimaps":
                             return LegacyMinimapReport.Run(db, args.Skip(1).FirstOrDefault());
+
+                        // ...and the one that changes them. Dry run unless --apply.
+                        case "backfill-minimaps":
+                            return LegacyMinimapBackfill.Run(db, args.Skip(1).ToArray());
 
                         // A development convenience, and deliberately a thin one: the fixture
                         // stores PasswordBcrypt as NULL for every account, so there is nothing to

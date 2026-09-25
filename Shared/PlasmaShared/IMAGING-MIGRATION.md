@@ -133,10 +133,30 @@ squared** where a correct one has **R**, and the database knows R. That is
 reports how many stored images are of each kind, with examples and the size each should have
 been. It only reads.
 
-**So a backfill is now a targeted decision rather than a blocked one**, and it stays open:
-re-stretching stored images fixes the geometry but cannot recover the detail squashed out at
-upload, and only re-registering each map from its archive would be lossless. Neither is this
-change, and both can be decided later on the numbers this report gives.
+**The backfill exists too**, as the re-stretching option:
+
+    ZK_CONNECTION_STRING=... dotnet run --project ZkData.Core -- backfill-minimaps <dir> [--apply] [--touch]
+
+It corrects the minimap, metal map and height map of every legacy resource and regenerates the
+thumbnail from the corrected minimap - the thumbnail being the case where the defect hides best,
+since its dimensions were always right and only its content was distorted.
+
+Three things about it are deliberate:
+
+- **It writes nothing without `--apply`**, and copies every file it overwrites to `<name>.legacy`
+  first, so a run is undone with `mv`. These are the only copies of images whose originals live in
+  map archives that would need re-scanning with unitsync to reproduce.
+- **It is idempotent**, because `LooksLikeLegacyToBytes` stops recognising an image once it has
+  been corrected. That is asserted as a property over a range of ratios, not as an example.
+- **`--touch` is opt-in.** It moves `LastChange` so clients re-sync rather than keeping the image
+  they already have; it is off by default because it is a database write and a first run is
+  usually a rehearsal.
+
+**What it cannot do is recover detail.** The old rule resized the short axis away, and no stretch
+brings it back: a corrected 2:1 minimap is geometrically right and softer than one registered
+today. The correction keeps the long axis at its stored resolution for that reason - throwing away
+the axis that survived would lose more. **Re-registering every map from its archive remains the
+lossless option**, and remains not this program.
 
 Note what the defect actually did, since it was never a cosmetic rounding: for a 2:1 map the
 stored minimap, metal map and height map were squashed to 4:1, and the thumbnail
