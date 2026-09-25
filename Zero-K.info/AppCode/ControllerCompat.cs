@@ -1,3 +1,6 @@
+﻿using System.IO;
+using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Web.Mvc;
 
 namespace ZeroKWeb
@@ -18,4 +21,34 @@ namespace ZeroKWeb
         public static string MapPath(this Controller controller, string virtualPath)
             => controller.Server.MapPath(virtualPath);
     }
+    /// <summary>
+    /// The MVC 5 half of ZeroKWeb.Core/Mvc5Compat/RequestBodyCompat.cs. Both members already exist
+    /// here as properties, so these only give them a name an extension method can carry - a member
+    /// always beats a same-named extension, which is why the port cannot simply supply InputStream.
+    /// </summary>
+    public static class RequestBodyCompat
+    {
+        public static Stream RequestInputStream(this Controller controller)
+        {
+            return controller.Request.InputStream;
+        }
+
+        public static IEnumerable<string> AllKeysCompat(this NameValueCollection form)
+        {
+            return form.AllKeys;
+        }
+
+        /// <summary>
+        /// The twin of the ASP.NET Core BorrowController. Note it sets ControllerContext, which
+        /// DependencyResolver does not: a controller resolved this way has none, and SubmitPost -
+        /// the only thing this is used for - reads Request. See the note in the Core half.
+        /// </summary>
+        public static T BorrowController<T>(this Controller caller) where T : Controller
+        {
+            var borrowed = (T)DependencyResolver.Current.GetService(typeof(T));
+            borrowed.ControllerContext = caller.ControllerContext;
+            return borrowed;
+        }
+    }
+
 }

@@ -91,6 +91,25 @@ namespace PlasmaShared
             else return source.Replace("\r\n", "\n").Split('\n');
         }
 
+        /// <summary>
+        /// Moved here from Utils.cs for the same reason as Decompress and Lines: that file is
+        /// 900 lines of GDI+ and cannot compile on .NET 9. GithubController hashes the webhook
+        /// body and compares the hex against the X-Hub-Signature header, so the whole controller
+        /// was stranded behind one StringBuilder loop.
+        /// </summary>
+        public static string ToHex(this byte[] array)
+        {
+            var sb = new StringBuilder();
+
+            for (var i = 0; i < array.Length; i++)
+            {
+                var hex = array[i].ToString("X");
+                if (hex.Length != 2) sb.Append("0");
+                sb.Append(hex);
+            }
+            return sb.ToString();
+        }
+
         public static string EscapePath(this string path)
         {
             if (String.IsNullOrEmpty(path)) return path;

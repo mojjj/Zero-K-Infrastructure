@@ -1,4 +1,4 @@
-# Migrating ZkData from Entity Framework 6 to EF Core
+﻿# Migrating ZkData from Entity Framework 6 to EF Core
 
 EF6 does not run on .NET 9. It is the first blocker in the port: everything else in
 Phase 3 waits behind it, because `ZkData` is referenced by the website, the lobby server,
@@ -3603,9 +3603,73 @@ view - still moves it out of `compiles` and into the report.
     other                      0
 
 **Every view in Zero-K.info either compiles on .NET 9 or has a ported copy that does.** Thirteen
-controllers are linked. What remains is not view work: the tripwires mark the places where the
+controllers were linked at that point; **30 of 34 are now** - see "Phase 3: the remaining
+controllers" below. What remains is not view work: the tripwires mark the places where the
 website reaches for something that lives in another process, and Phase 1 is where those get
 answered.
+
+## Phase 3: the remaining controllers
+
+**30 of Zero-K.info's 34 controllers now link.** The view port had taken 20; this took the other
+ten that could go, and the four that cannot are named below with the reason rather than left to
+look like work nobody got to.
+
+Linking all 14 at once and reading the compiler was the whole method, and it paid for itself
+immediately: **six needed nothing at all** - Autocomplete, Download, Images, Replays, Static and
+Wiki. Reading their usings first would have suggested otherwise for at least two of them.
+
+**The masking trap appeared again, twice in one sitting.** Four files had declaration-level errors,
+and Roslyn binds no method bodies while those stand - so the first run reported 7 errors in 4
+files, and looked like a small job. Removing those four surfaced 12 more in files that had
+appeared clean, and fixing the declaration errors surfaced 5 more after that. The count only
+means something once it stops changing.
+
+What the ten needed:
+
+- **`ToHex` was stranded**, the ninth thing found marooned in the half of `Utils.cs` that needs
+  System.Drawing. `GithubController` hashes the webhook body and compares hex against
+  `X-Hub-Signature`, so a 900-line GDI+ file was holding up a whole controller for one
+  StringBuilder loop. Moved to `Utils.Enumerable.cs`. `GlobalConst.MapBansPerPlayer` was the same
+  shape - a bare `const int` in the half that pulls in WCF, blocking four call sites in
+  `MapBansController`.
+- **`[Auth]` twice on one action.** `MapBansController.Update` carries it above and below its doc
+  comment, which MVC 5 accepts because `AuthorizeAttribute` is declared `AllowMultiple = true`.
+  The port's shim had not said so and failed with CS0579. **The shim was corrected, not the
+  source**: a duplicate filter runs twice and answers the same, while a shim stricter than the
+  framework it stands in for silently narrows what the port can accept.
+- **`System.Web.Services.Description`**, named by a using in `PostHistoryController` and used
+  nowhere - the same dead-using shape as the others, and the file's only declaration blocker.
+- **Headers are `StringValues`, not `string`.** `GithubController` did `Request.Headers[...]
+  .Substring(5)` and `switch (eventType)`, neither of which `StringValues` supports though it
+  converts to string implicitly. Naming the type at the two call sites compiles on both stacks.
+- **Two new twins**, both because C# has no extension properties - the same wall as `Server.MapPath`
+  and `Request.Params`. `Request.Form.AllKeys` became `AllKeysCompat()`, and `Request.InputStream`
+  became `RequestInputStream()`.
+
+**`RequestInputStream` is not a pass-through, and the reason is a runtime failure a compiler
+cannot see.** Kestrel refuses synchronous stream reads unless `AllowSynchronousIO` is set, and this
+port does not set it - so `Request.Body.CopyTo(...)`, which is exactly the MVC 5 call site's shape,
+compiles perfectly and throws when a webhook arrives. The Core twin copies the body asynchronously
+into a `MemoryStream` and blocks, which also makes it seekable: `Request.Body` is read-once, and a
+second reader would otherwise get an empty stream rather than an error. One webhook is an
+affordable place to block, and it is the trade `RemoteLobbyServerApi` already makes.
+
+**A latent defect found on the way.** `PostHistoryController` borrows `ForumController` through
+`DependencyResolver.Current.GetService(...)` and calls `SubmitPost` on it. A controller resolved
+that way has no `ControllerContext`, and `SubmitPost` reads `Request.UserHostAddressCompat()` - so
+that path appears to throw a `NullReferenceException` on MVC 5 today. The twin sets the context in
+**both** stacks, which makes the port work and changes MVC 5 from apparently-broken to working.
+That is a production behaviour change and is called out rather than buried; it was not reachable
+in any other way while keeping one source.
+
+**The four that do not link, and why:**
+
+| controller | blocker |
+|---|---|
+| `PlanetwarsController.Imaging.cs` | `Bitmap.SaveJpeg`/`GetResized` and `Server` - System.Drawing imaging, the blocker measured in `Shared/PlasmaShared/IMAGING-MIGRATION.md` |
+| `ContentServiceController` | `AsyncController`, and `NullTempDataProvider` implements `ITempDataProvider`, whose signature differs between the stacks (`ControllerContext` vs `HttpContext`) - a twin, not a shim |
+| `MissionServiceController` | the same two, by construction: it was written to mirror ContentServiceController exactly |
+| `ContributionsController` | `Global.PayPalInterface`, plus an ordering trap worth its own increment - the IPN action passes `Request.Params` and `Request.BinaryRead(...)` in one call, and in ASP.NET Core reading the form consumes the body, so the raw bytes PayPal verification needs would arrive empty |
 
 ## A finding in production code, unrelated to the port
 

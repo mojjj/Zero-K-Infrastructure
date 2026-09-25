@@ -111,7 +111,6 @@ namespace ZkData
         public const int MaxDurationForPlanetwars = 60*60*3; // 3 hours
 
 
-        public const int MapBansPerPlayer = 6; // Allow users to enter this many bans in UI
         public const float MaximumPercentageOfBannedMaps = 0.75f; // Do not ban more than 75% of all maps regardless of player or ban count
 
 

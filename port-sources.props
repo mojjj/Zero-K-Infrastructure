@@ -1,4 +1,4 @@
-<Project>
+﻿<Project>
   <!--
     The production sources the .NET 9 port compiles, LINKED rather than copied, so the same file
     serves both stacks and cannot drift. Imported by ZeroKWeb.Core, ZeroKWeb.Host and
@@ -82,6 +82,16 @@
     <Compile Include="..\Zero-K.info\Controllers\NewsController.cs" Link="Linked\Controllers\NewsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\LobbyNewsController.cs" Link="Linked\Controllers\LobbyNewsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\AdminController.cs" Link="Linked\Controllers\AdminController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\PostHistoryController.cs" Link="Linked\Controllers\PostHistoryController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\MapBansController.cs" Link="Linked\Controllers\MapBansController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\AutocompleteController.cs" Link="Linked\Controllers\AutocompleteController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\DownloadController.cs" Link="Linked\Controllers\DownloadController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\GithubController.cs" Link="Linked\Controllers\GithubController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\ImagesController.cs" Link="Linked\Controllers\ImagesController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\PollController.cs" Link="Linked\Controllers\PollController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\ReplaysController.cs" Link="Linked\Controllers\ReplaysController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\StaticController.cs" Link="Linked\Controllers\StaticController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\WikiController.cs" Link="Linked\Controllers\WikiController.cs" />
 
     <!--
       Phase 1's seam, linked on purpose: these projects have no reference to ZkLobbyServer, so a

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -28,6 +28,13 @@ using ZkData;
 /// Deliberately NOT global-namespace-free: the original is in the global namespace, which is
 /// how ModsController and every other controller find it without a using.
 /// </summary>
+// MVC 5's AuthorizeAttribute, which the original derives from, is declared AllowMultiple = true,
+// and MapBansController.Update relies on it - it carries [Auth] twice, once above its doc comment
+// and once below. Without this the port fails with CS0579 on a file MVC 5 compiles happily. The
+// shim mirrors the original rather than the source being cleaned up, because a duplicate filter
+// runs twice and produces the same answer, while a shim that is stricter than the framework it
+// stands in for silently narrows what the port can accept.
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, Inherited = true, AllowMultiple = true)]
 public class AuthAttribute : Attribute, IAuthorizationFilter
 {
     public AdminLevel Role { get; set; }

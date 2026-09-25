@@ -18,12 +18,16 @@ namespace ZeroKWeb.Controllers
         [HttpPost]
         public async Task<ActionResult> Hook()
         {
-            var eventType = Request.Headers["X-Github-Event"];
-            var signature = Request.Headers["X-Hub-Signature"].Substring(5);
+            // Headers[...] is a string in MVC 5 and a StringValues in ASP.NET Core. Both convert
+            // to string implicitly, but StringValues carries neither Substring nor a type `switch`
+            // accepts, so the conversion is named here rather than left to `var`.
+            string eventType = Request.Headers["X-Github-Event"];
+            string signatureHeader = Request.Headers["X-Hub-Signature"];
+            var signature = signatureHeader.Substring(5);
 
 
             var ms = new MemoryStream();
-            Request.InputStream.CopyTo(ms);
+            this.RequestInputStream().CopyTo(ms);
             byte[] data = ms.ToArray();
 
             var secretKey = new Secrets().GetGithubHookKey();

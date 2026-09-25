@@ -591,19 +591,6 @@ namespace PlasmaShared
         }
 
 
-        public static string ToHex(this byte[] array)
-        {
-            var sb = new StringBuilder();
-
-            for (var i = 0; i < array.Length; i++)
-            {
-                var hex = array[i].ToString("X");
-                if (hex.Length != 2) sb.Append("0");
-                sb.Append(hex);
-            }
-            return sb.ToString();
-        }
-
 
         public class FileResponse<T>
         {
