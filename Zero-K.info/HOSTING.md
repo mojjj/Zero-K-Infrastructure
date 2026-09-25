@@ -246,6 +246,29 @@ symlinks to get past it.
 a minute. `test_pullrequest.yml` still does the full Framework build on the self-hosted
 Windows runner, and still has to.
 
+**The lobby server runs, as its own process, on Linux (2026-09-25).**
+
+    ./tools/lobby-container.sh            build it, start it, check it comes up
+    ./tools/lobby-container.sh --serve    leave it running
+
+This is the thing Phase 1 was for, and the line above it in this document - "what remains is
+running it" - was true until now. `ZkLobbyServer.Standalone` runs under mono in a container,
+reads its configuration from the MiscVars in the shared database, initialises the rating
+systems from it, starts the server and answers on its API port. Not ported to .NET 9, which is
+not what Phase 4 asks: `ZkLobbyServer` is .NET Framework 4.8 and EF6, and running it off
+Windows is a different question from porting it.
+
+It builds through `tools/build-website.sh` rather than a Dockerfile of its own, so there is one
+implementation of "compile this .NET Framework project under mono".
+
+**Running it found something nothing else would have.** `LoginChecker` opens the MaxMind GeoIP
+database from whatever directory it is handed as a site path, while the server is being
+constructed - which is *after* a full WHR pass. The website never hit it, because it passes
+`MapPath("~")` and the file sits in that directory. The standalone defaults its site path to
+the working directory, so the first real run died two minutes in with a
+`FileNotFoundException` from inside MaxMind, naming a path nobody had chosen. It now refuses at
+once, naming the file and where the repository keeps it, and the container carries it.
+
 **The ported site runs in a Linux container (2026-09-25).**
 
     ./tools/site-container.sh            build it, run it, check it answers

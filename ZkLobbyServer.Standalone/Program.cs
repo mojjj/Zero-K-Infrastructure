@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Threading;
 using ZkData;
@@ -70,6 +70,26 @@ namespace ZkLobbyServer.Standalone
             }
 
             var sitePath = args.Length > 0 ? args[0] : Environment.CurrentDirectory;
+
+            // The site path is where LoginChecker looks for the MaxMind GeoIP database, and it
+            // opens it while constructing the server - AFTER the rating systems have run a full
+            // WHR pass. Without this check that is a FileNotFoundException from inside MaxMind,
+            // two minutes in, naming a path nobody chose on purpose: the process defaults its
+            // site path to the working directory, which for a container is wherever the binary
+            // happens to live.
+            //
+            // Found by running this for the first time. The website never hit it because it
+            // passes MapPath("~"), and the file sits in the site root it hands over.
+            var geoIP = System.IO.Path.Combine(sitePath, "GeoLite2-Country.mmdb");
+            if (!System.IO.File.Exists(geoIP))
+            {
+                Console.Error.WriteLine(
+                    "refusing to start: no GeoLite2-Country.mmdb at " + geoIP + ". The lobby server "
+                    + "reads it to place logins by country. Pass the site directory as the first "
+                    + "argument, or copy the file next to this executable - it is in the repository "
+                    + "at Zero-K.info/GeoLite2-Country.mmdb.");
+                return 2;
+            }
 
             Trace.TraceInformation("Starting rating systems");
             Ratings.RatingSystems.Init();
