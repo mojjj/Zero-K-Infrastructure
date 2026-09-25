@@ -246,6 +246,29 @@ symlinks to get past it.
 a minute. `test_pullrequest.yml` still does the full Framework build on the self-hosted
 Windows runner, and still has to.
 
+**Both processes run together, against one database, and talk (2026-09-26).**
+
+    ./tools/stack.sh            bring both up, check they are talking, tear down
+    ./tools/stack.sh --serve    bring both up and leave them running
+
+The website is the .NET 9 port on Kestrel; the lobby server is `ZkLobbyServer.Standalone` under
+mono; the switch is the `LobbyApiUrl` MiscVar. **`Global.LobbyApi` now builds a
+`RemoteLobbyServerApi` from it** rather than answering null - the note that used to sit there
+said a switch could not safely be flipped until the shared statics were answered, and they were.
+Unset, it is still null, which is what the fixture leaves it as, so CI is unchanged.
+
+The port links the **client** half of the transport only, never `LobbyApiHost`: linking that
+would put an HttpListener in the website. `DefaultPrefix` moved to `LobbyApiConfiguration` for
+the same reason - a client asking for the default should not drag a listener behind it.
+
+The check that matters is the negative one. `HomeController.Index` asks the lobby server for
+`ConnectedUserCount`, so the front page answers 200 with the server up and **500 with it
+stopped**; a 200 on its own would prove the page rendered, not that it ever asked. The first
+version of this script checked `/Battles`, which never calls the lobby server and answers 200
+with nothing running at all.
+
+**What has still not happened is a player connecting and a game being watched.**
+
 **The lobby server runs, as its own process, on Linux (2026-09-25).**
 
     ./tools/lobby-container.sh            build it, start it, check it comes up
