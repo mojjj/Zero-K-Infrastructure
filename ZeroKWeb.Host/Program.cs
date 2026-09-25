@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -133,6 +133,57 @@ namespace ZeroKWeb.Host
         /// binder that produced a wrapper around an empty stream, which is the failure closest to
         /// the one being guarded against.
         /// </summary>
+        /// <summary>
+        /// The PayPal IPN read, over real HTTP.
+        ///
+        /// This is the check ContributionsController rests on, and it exists because the defect it
+        /// guards against produces no error. ImportIpnPayment takes the parsed fields AND the raw
+        /// bytes, and VerifyRequest posts those bytes back to PayPal - so if reading the form
+        /// consumes the body, as it does in ASP.NET Core, the literal translation of the MVC 5 call
+        /// site records the contribution and then asks PayPal to verify nothing. Every payment would
+        /// be stamped VERIFICATION FAILED on a site that logged no error at all.
+        ///
+        /// So both halves are asserted from ONE request: the exact bytes, and the fields parsed out
+        /// of those same bytes afterwards. Asserting either alone would pass while the other was
+        /// broken, which is the whole shape of this bug.
+        /// </summary>
+        private static async Task<int> CheckIpnBodyRead()
+        {
+            Console.WriteLine();
+            Console.WriteLine("paypal ipn:");
+
+            var failures = 0;
+
+            // A real IPN body shape, including a repeated key and one that needs URL decoding.
+            const string body = "txn_id=8KM12345&payment_status=Completed&item_name=ZK_ID_42_JAR_1&mc_gross=5.00&payer_email=a%40b.c";
+            var expected = string.Concat(Array.ConvertAll(System.Text.Encoding.ASCII.GetBytes(body), b => b.ToString("X2")));
+
+            using (var client = new HttpClient())
+            {
+                var content = new StringContent(body, System.Text.Encoding.ASCII, "application/x-www-form-urlencoded");
+                var response = await client.PostAsync(Url + "/Harness/Ipn?probe=query", content);
+                var read = await response.Content.ReadAsStringAsync();
+
+                failures += Check(response.StatusCode == System.Net.HttpStatusCode.OK,
+                    "  the IPN read was reached (" + (int)response.StatusCode + ")");
+
+                // The one that matters: the bytes are still there AFTER the form was parsed.
+                failures += Check(read.Contains("rawlength=" + body.Length),
+                    "  the raw body is the full length, not consumed by the form read");
+                failures += Check(read.Contains("raw=" + expected),
+                    "  the raw body is byte for byte what PayPal would have to verify");
+
+                failures += Check(read.Contains("txn_id=8KM12345"),
+                    "  the fields parsed out of the same body");
+                failures += Check(read.Contains("payer_email=a@b.c"),
+                    "  percent-encoding was decoded, as Request.Params did");
+                failures += Check(read.Contains("probe=query"),
+                    "  the query string is merged in, as MVC 5's Params did");
+            }
+
+            return failures;
+        }
+
         private static async Task<int> CheckUploadBinding()
         {
             Console.WriteLine();
@@ -383,6 +434,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckItServesAPage(client);
                 failures += await CheckSignIn();
                 failures += await CheckUploadBinding();
+                failures += await CheckIpnBodyRead();
                 failures += await CheckLadders(client);
                 failures += await CheckResumableDownload(client);
                 failures += await CheckSelectHelpers(client);

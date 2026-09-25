@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
@@ -108,6 +108,38 @@ namespace ZeroKWeb
         /// pretending one answered.
         /// </summary>
         public static ZkLobbyServer.ILobbyServerApi LobbyApi => null;
+
+        /// <summary>
+        /// The PayPal IPN handler, which ContributionsController.Ipn hands each notification to.
+        ///
+        /// Constructed here, as the real Global does at application start - the payment still has to
+        /// be recorded and verified, and that half needs nothing but the database and an outbound
+        /// request to PayPal.
+        ///
+        /// **What it cannot do is announce.** The real Global wires Error and NewContribution to
+        /// LobbyApi.GhostSay, and LobbyApi is null here (see above). Rather than attach handlers that
+        /// would throw on a payment - losing the contribution to protect a chat message - both events
+        /// are traced, saying plainly that the announcement did not happen and why. A contribution
+        /// that is recorded but unannounced is a stated gap; one that is dropped is a defect.
+        ///
+        /// This becomes real when the port constructs a RemoteLobbyServerApi - the Phase 1 work in
+        /// Zero-K.info/HOSTING.md - and is one of the things that will say whether that is wired up.
+        /// </summary>
+        public static PayPalInterface PayPalInterface { get; } = CreatePayPalInterface();
+
+        static PayPalInterface CreatePayPalInterface()
+        {
+            var paypal = new PayPalInterface();
+
+            paypal.Error += e => System.Diagnostics.Trace.TraceError(
+                "PayPal error, NOT announced to zkdev because this host has no lobby server: {0}", e);
+
+            paypal.NewContribution += c => System.Diagnostics.Trace.TraceInformation(
+                "New contribution of {0:F2} EUR recorded, NOT announced to zk because this host has no lobby server",
+                c.Euros);
+
+            return paypal;
+        }
 
         /// <summary>
         /// The forum's full-text indexer. The real Global constructs one at application

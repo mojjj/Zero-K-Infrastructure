@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.IO;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -63,6 +64,43 @@ namespace ZeroKWeb
             var borrowed = ActivatorUtilities.CreateInstance<T>(caller.HttpContext.RequestServices);
             borrowed.ControllerContext = caller.ControllerContext;
             return borrowed;
+        }
+
+        /// <summary>
+        /// MVC 5's <c>Request.Params</c> and <c>Request.BinaryRead(Request.ContentLength)</c>, which
+        /// ContributionsController's PayPal IPN handler passes to ImportIpnPayment in one call.
+        ///
+        /// **They have to be one method here, and that is the whole point.** IPN verification posts
+        /// the received bytes straight back to PayPal, so the parsed fields and the raw bytes must
+        /// describe the same request. In ASP.NET Core reading the form consumes the body, and C#
+        /// evaluates arguments left to right - so the MVC 5 call site, translated literally, would
+        /// parse the form and then hand PayPal an EMPTY body to verify. It would compile, the
+        /// contribution would be recorded, and every payment would be flagged VERIFICATION FAILED.
+        ///
+        /// So the body is buffered, read once as bytes, rewound, and only then parsed as a form.
+        ///
+        /// Query string and form only. MVC 5's Params also merged cookies and server variables, and
+        /// leaving them out is deliberate: PayPal sends every IPN field in the body, and a merge that
+        /// lets a caller's own cookie supply one is a worse thing to be faithful to.
+        /// </summary>
+        public static NameValueCollection ReadIpnRequest(this ControllerBase controller, out byte[] raw)
+        {
+            var request = controller.Request;
+
+            // Only if nobody has buffered it already - ZkAuth's middleware does, for exactly this
+            // reason, and wrapping a buffered stream a second time would be the thing to avoid.
+            if (!request.Body.CanSeek) request.EnableBuffering();
+            request.Body.Position = 0;
+            var buffer = new MemoryStream();
+            request.Body.CopyToAsync(buffer).GetAwaiter().GetResult();
+            raw = buffer.ToArray();
+            request.Body.Position = 0;
+
+            var values = new NameValueCollection();
+            foreach (var pair in request.Query) values.Add(pair.Key, pair.Value.ToString());
+            if (request.HasFormContentType)
+                foreach (var pair in request.Form) values.Add(pair.Key, pair.Value.ToString());
+            return values;
         }
 }
 }

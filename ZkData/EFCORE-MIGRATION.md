@@ -3669,7 +3669,46 @@ in any other way while keeping one source.
 | `PlanetwarsController.Imaging.cs` | `Bitmap.SaveJpeg`/`GetResized` and `Server` - System.Drawing imaging, the blocker measured in `Shared/PlasmaShared/IMAGING-MIGRATION.md` |
 | `ContentServiceController` | `AsyncController`, and `NullTempDataProvider` implements `ITempDataProvider`, whose signature differs between the stacks (`ControllerContext` vs `HttpContext`) - a twin, not a shim |
 | `MissionServiceController` | the same two, by construction: it was written to mirror ContentServiceController exactly |
-| `ContributionsController` | `Global.PayPalInterface`, plus an ordering trap worth its own increment - the IPN action passes `Request.Params` and `Request.BinaryRead(...)` in one call, and in ASP.NET Core reading the form consumes the body, so the raw bytes PayPal verification needs would arrive empty |
+| ~~`ContributionsController`~~ | **Linked.** See below - the ordering trap was real, and worse than predicted. |
+
+## Phase 3: ContributionsController, and a defect the compiler could not see
+
+**31 of 34.** The PayPal IPN handler passes `Request.Params` and `Request.BinaryRead(...)` to
+`ImportIpnPayment` in one call, and `VerifyRequest` posts those raw bytes straight back to PayPal -
+so the parsed fields and the raw bytes have to describe the same request. In ASP.NET Core reading
+the form consumes the body, and C# evaluates arguments left to right, so a literal translation
+parses the form and then hands PayPal an empty body to verify. **It compiles. The contribution is
+recorded. Every real payment gets stamped VERIFICATION FAILED by a site that logs nothing.**
+
+So the two became one twin, `ReadIpnRequest(out raw)`, which buffers the body, reads it once as
+bytes, rewinds, and only then parses the form. The MVC 5 half keeps the original evaluation order
+rather than tidying it, because classic ASP.NET buffers the entity body and the two reads interact.
+
+**Then the harness found the same bug one layer further down, in code that was already merged.**
+`ZkAuth.UseZkAccount` looks for a game-client session token, and on every request with a form
+content type it read `Request.Form` to find one - consuming the body before any action ran. The
+careful twin still returned `rawlength=0`. The middleware now buffers and rewinds, which is the
+real fix: it was breaking raw-body access for anything downstream, not just this controller.
+
+**This is why the check exists.** `CheckIpnBodyRead` in `ZeroKWeb.Host` posts a real IPN body over
+HTTP and asserts the raw bytes and the parsed fields **from one request** - either alone passes
+while the other is broken, which is the exact shape of the bug. It caught a defect in the first
+implementation of the twin, written by someone who had just finished describing the trap in a
+commit message.
+
+`Global.PayPalInterface` is constructed in the port's shim, because the payment still has to be
+recorded. What it cannot do is announce: the real Global wires `Error` and `NewContribution` to
+`LobbyApi.GhostSay`, and `LobbyApi` is null here. Both events are traced saying so, rather than
+attached to handlers that would throw on a payment - losing a contribution to protect a chat
+message. It becomes real when the port constructs a `RemoteLobbyServerApi`.
+
+**A harness trap worth recording, since it cost an hour and produced a wrong claim.** A stale
+`ZeroKWeb.Host/Controllers/HomeController.cs` and `ZeroKWeb.Host/Views/_ViewStart.cshtml`, both
+untracked and both superseded once the site's own controllers and views were linked, made the Host
+project glob its own `Views/` directory alongside the linked one. **Every view then failed to
+resolve - 37 checks - and none of it was in git.** A clean worktree at the same commit passed all
+of them. So: when the harness fails wholesale, check `git status` for untracked files in
+`ZeroKWeb.Host` before believing anything about the commit.
 
 ## A finding in production code, unrelated to the port
 

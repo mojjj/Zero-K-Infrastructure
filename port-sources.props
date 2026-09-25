@@ -82,6 +82,7 @@
     <Compile Include="..\Zero-K.info\Controllers\NewsController.cs" Link="Linked\Controllers\NewsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\LobbyNewsController.cs" Link="Linked\Controllers\LobbyNewsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\AdminController.cs" Link="Linked\Controllers\AdminController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\ContributionsController.cs" Link="Linked\Controllers\ContributionsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\PostHistoryController.cs" Link="Linked\Controllers\PostHistoryController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\MapBansController.cs" Link="Linked\Controllers\MapBansController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\AutocompleteController.cs" Link="Linked\Controllers\AutocompleteController.cs" />
