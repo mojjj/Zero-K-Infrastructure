@@ -246,6 +246,32 @@ symlinks to get past it.
 a minute. `test_pullrequest.yml` still does the full Framework build on the self-hosted
 Windows runner, and still has to.
 
+**The ported site runs in a Linux container (2026-09-25).**
+
+    ./tools/site-container.sh            build it, run it, check it answers
+    ./tools/site-container.sh --serve    leave it running on http://127.0.0.1:5200
+
+`Dockerfile` builds `ZeroKWeb.Host` on `dotnet/sdk:9.0` and runs it on `dotnet/aspnet:9.0` -
+no IIS, no .NET Framework, no mono, no System.Drawing anywhere. Every controller and all 123
+views are compiled into the image by the Razor SDK. It needs the database
+`db/docker-compose.yml` starts, which it reaches over the host's loopback the same way
+`tools/dotnet.sh` does.
+
+**What it does not prove** is that this can replace the live site. The entry point is the
+harness host; the lobby server is not in it, the two WCF endpoints have no home here, and the
+unitsync and MonoTorrent tripwires throw rather than work.
+
+**Only `img/`, `Scripts/` and `Styles/` are in the image**, because the Host's web root is the
+site SOURCE tree - serving it wholesale would publish `Web.config` and every `.cs` file. The
+check that the image carries no source replaced an HTTP probe for `/Web.config` that turned out
+to measure nothing: ASP.NET Core's static file middleware refuses unknown content types, so that
+URL answers 404 whether the whole tree is served or none of it is. Serving the entire web root
+on purpose - a positive control - passed, which is how the check was found to be worthless.
+
+`ZK_HOST_URLS` sets the bind address, and is read **only when serving**: honouring it during the
+harness checks would move the server without moving what they ask for.
+
+
 What is still blocked, in the order it has to be unblocked:
 
 1. **EF6.** `ZkDataContext` and 117 migrations. EF Core is a rewrite of the data layer,
