@@ -43,6 +43,18 @@ namespace ZeroKWeb
         /// DependencyResolver does not: a controller resolved this way has none, and SubmitPost -
         /// the only thing this is used for - reads Request. See the note in the Core half.
         /// </summary>
+        /// <summary>
+        /// The MVC 5 half of the Core ReadIpnRequest. Params is read BEFORE BinaryRead, which is the
+        /// order the call site used before it moved in here - ASP.NET buffers the entity body and the
+        /// two reads interact, so the order is preserved rather than tidied.
+        /// </summary>
+        public static NameValueCollection ReadIpnRequest(this Controller controller, out byte[] raw)
+        {
+            var values = controller.Request.Params;
+            raw = controller.Request.BinaryRead(controller.Request.ContentLength);
+            return values;
+        }
+
         public static T BorrowController<T>(this Controller caller) where T : Controller
         {
             var borrowed = (T)DependencyResolver.Current.GetService(typeof(T));

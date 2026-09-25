@@ -17,7 +17,11 @@ namespace ZeroKWeb.Controllers
 
 
         public ActionResult Ipn() {
-             Global.PayPalInterface.ImportIpnPayment(Request.Params, Request.BinaryRead(Request.ContentLength));
+            // One call, because the parsed fields and the raw bytes must describe the same request:
+            // PayPal verification posts the bytes back. See ControllerCompat.ReadIpnRequest.
+            byte[] raw;
+            var values = this.ReadIpnRequest(out raw);
+            Global.PayPalInterface.ImportIpnPayment(values, raw);
             return Content("");
         }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -104,10 +104,25 @@ namespace ZeroKWeb.Compat
             }
 
             // A player arriving from the game client carries a one-use token instead of a cookie.
-            var token = context.Request.Query[GlobalConst.SessionTokenVariable].FirstOrDefault()
-                        ?? (context.Request.HasFormContentType
-                            ? context.Request.Form[GlobalConst.SessionTokenVariable].FirstOrDefault()
-                            : null);
+            var token = context.Request.Query[GlobalConst.SessionTokenVariable].FirstOrDefault();
+
+            if (string.IsNullOrEmpty(token) && context.Request.HasFormContentType)
+            {
+                // EnableBuffering FIRST, and rewind after. Reading Request.Form consumes the body,
+                // and this middleware runs on every request - so without this, any action that needs
+                // the RAW body gets an empty stream, having done nothing wrong itself.
+                //
+                // That is not hypothetical: it is how ContributionsController's PayPal IPN handler
+                // failed, silently. The fields parsed perfectly and the contribution was recorded,
+                // while the bytes sent to PayPal for verification were empty, so every real payment
+                // would have been stamped VERIFICATION FAILED. MVC 5 has no such problem - classic
+                // ASP.NET buffers the entity body, so Request.Params and BinaryRead both work.
+                //
+                // Checked by CheckIpnBodyRead in ZeroKWeb.Host.
+                context.Request.EnableBuffering();
+                token = context.Request.Form[GlobalConst.SessionTokenVariable].FirstOrDefault();
+                context.Request.Body.Position = 0;
+            }
             if (!string.IsNullOrEmpty(token))
             {
                 var accountID = Global.LobbyApi?.RedeemSessionToken(token);

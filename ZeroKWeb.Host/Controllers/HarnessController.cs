@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System;
 using System.Threading.Tasks;
@@ -108,6 +108,27 @@ namespace ZeroKWeb.Host.Controllers
                 var hex = string.Concat(Array.ConvertAll(memory.ToArray(), b => b.ToString("X2")));
                 return Content("name=" + upload.FileName + " length=" + upload.ContentLength + " bytes=" + hex);
             }
+        }
+
+        /// <summary>
+        /// ContributionsController.Ipn's read, exactly as the action performs it, so the one thing
+        /// that cannot be seen by compiling can be asserted: that the raw bytes survive the form
+        /// being parsed.
+        ///
+        /// Reports both halves, because the failure guarded against is not an error. If the form is
+        /// read first, ASP.NET Core hands back a consumed body, the fields parse perfectly, the
+        /// contribution is recorded, and PayPal is asked to verify an empty request - so every real
+        /// payment would be marked VERIFICATION FAILED by a site that looked healthy.
+        /// </summary>
+        [HttpPost]
+        public IActionResult Ipn()
+        {
+            byte[] raw;
+            var values = this.ReadIpnRequest(out raw);
+
+            var hex = string.Concat(Array.ConvertAll(raw, b => b.ToString("X2")));
+            var fields = string.Join(",", Array.ConvertAll(values.AllKeys, k => k + "=" + values[k]));
+            return Content("rawlength=" + raw.Length + " raw=" + hex + " fields=" + fields);
         }
 
         /// <summary>What the site thinks of you, for checking a sign-in worked.</summary>
