@@ -3667,8 +3667,8 @@ in any other way while keeping one source.
 | controller | blocker |
 |---|---|
 | `PlanetwarsController.Imaging.cs` | `Bitmap.SaveJpeg`/`GetResized` and `Server` - System.Drawing imaging, the blocker measured in `Shared/PlasmaShared/IMAGING-MIGRATION.md` |
-| `ContentServiceController` | `AsyncController`, and `NullTempDataProvider` implements `ITempDataProvider`, whose signature differs between the stacks (`ControllerContext` vs `HttpContext`) - a twin, not a shim |
-| `MissionServiceController` | the same two, by construction: it was written to mirror ContentServiceController exactly |
+| `ContentServiceController` | **imaging**, as it turned out - see below |
+| ~~`MissionServiceController`~~ | **Linked.** See below. |
 | ~~`ContributionsController`~~ | **Linked.** See below - the ordering trap was real, and worse than predicted. |
 
 ## Phase 3: ContributionsController, and a defect the compiler could not see
@@ -3709,6 +3709,60 @@ project glob its own `Views/` directory alongside the linked one. **Every view t
 resolve - 37 checks - and none of it was in git.** A clean worktree at the same commit passed all
 of them. So: when the harness fails wholesale, check `git status` for untracked files in
 `ZeroKWeb.Host` before believing anything about the commit.
+
+## Phase 3: the service controllers, and what stopped the other one
+
+**32 of 34.** `MissionServiceController` links; `ContentServiceController` does not, and the reason
+is not the one recorded for it.
+
+Both needed the same two things, and both were straightforward:
+
+- **`AsyncController`** - MVC 5 needed telling that a Task-returning action should be awaited.
+  ASP.NET Core awaits every action, so the port is an empty subclass of `Controller`. It also
+  carries a `TempDataProvider` property, because both controllers set one "to disable session state
+  upkeep": MVC 5 tried to reach TempData through session state and threw when sessions were off,
+  while Core's default provider is cookie-based and needs no session. The property keeps the value
+  and nothing else, which is faithful rather than empty - the problem it works around cannot occur
+  here, and neither controller reads TempData.
+- **`NullTempDataProvider` had to be written twice.** MVC 5's `ITempDataProvider` takes a
+  `ControllerContext` and Core's takes an `HttpContext`. No shim bridges that, so it is a twin.
+- **`[ServiceContract]` and `[OperationContract]`** are supplied as inert attributes in
+  `ZkData.Core/Ef6Compat/ServiceModelCompat.cs`. `ZkData.IMissionService` carries them, nothing in
+  the port reads them, and deleting them from production would break the `.svc` still serving
+  installed editors. They go when it does.
+- **EF6's `DbContext.Configuration`**, three lines of `ProxyCreationEnabled = false`. The shim
+  accepts `false` - which is already true, since this context never calls `UseLazyLoadingProxies` -
+  and **throws on `true`**, because a caller asking for proxies wants lazy loading and silently not
+  providing it is how this port produced null navigations that looked like missing data.
+
+**Then MissionUpdater, and two blockers nobody had written down.** Publishing a mission rewrites the
+mission archive, and to do that `MissionUpdater` needs **unitsync** (the native Spring library, the
+same thing that makes AutoRegistrator a tripwire) and **MonoTorrent** (`Shared/MonoTorrent`, a
+vendored .NET Framework project) to build the mission's torrent. Linking it was tried first and
+meant writing a fake MonoTorrent API surface - `TorrentCreator.Path`, `.Create`, `Hash` - for the
+compiler, which is the "compiles and does nothing" failure at the scale of a library. So the file is
+not linked and `ZkData.Core/Ef6Compat/MissionUpdaterTripwire.cs` stands in its place: five of the
+six operations work, and `SendMission` throws naming both missing pieces.
+
+**`ContentServiceController` is blocked on imaging, not on anything it says.** Its implementation
+calls `PlasmaServer.DownloadFile`, `GetResourceData`, `RegisterResource` and `ToResourceData`, and
+that half of `PlasmaServer` resizes minimaps with `Image.FromStream`, `Bitmap`, `Graphics` and
+`PixelFormat`. So it joins `PlanetwarsController.Imaging.cs` behind
+`Shared/PlasmaShared/IMAGING-MIGRATION.md`, and **one blocker now accounts for both remaining
+controllers** - which is worth knowing when deciding what to do next.
+
+Groundwork for it was written and then reverted rather than left in: splitting
+`EngineDownload.VersionNumberComparer` into a portable half, and moving `Utils.MakePath` and
+`GetAlternativeFileName` out of the GDI+ half. All three are real and will be wanted when imaging
+lands; none of them serves anything today, and an unexplained production edit is worse than
+repeating ten minutes of work.
+
+**`/MissionService` has now been requested on .NET 9.** `CheckMissionServiceJson` posts to it and
+asserts dispatch by request class, the response envelope, and - the one carrying weight - that a
+mission that does not exist comes back as a `DeleteMissionResponse` carrying `Error` rather than a
+500, because WCF turned that exception into a fault and this endpoint turns it into a field. The
+list assertion deliberately claims only that the envelope is right: the fixture holds no missions,
+and an empty list is exactly what it should produce.
 
 ## A finding in production code, unrelated to the port
 
