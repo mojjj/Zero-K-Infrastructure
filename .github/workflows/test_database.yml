@@ -211,3 +211,14 @@ jobs:
       # non-zero on the first failing assertion, and prints each one either way.
       - name: Serve the ported site and check it answers
         run: ./tools/run-host.sh
+
+      # The container, in the same job because the database and the NuGet cache are already
+      # warm here - a second job would pay for both again to check one image.
+      #
+      # It is a different question from the step above, not a slower version of it: that one
+      # runs the site from the build tree on the runner, this one builds an IMAGE and runs the
+      # site inside it, which is what says the Dockerfile still works. It also checks the two
+      # things only the image can get wrong - that static content is served, and that the
+      # source tree is not in it.
+      - name: Build the site container and check it serves
+        run: ./tools/site-container.sh
