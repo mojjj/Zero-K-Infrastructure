@@ -578,17 +578,6 @@ namespace PlasmaShared
             return input.TrimEnd(numbers);
         }
 
-        public static void SafeDelete(string path)
-        {
-            try
-            {
-                if (File.Exists(path))
-                {
-                    File.Delete(path);
-                }
-            }
-            catch { }
-        }
 
 
 

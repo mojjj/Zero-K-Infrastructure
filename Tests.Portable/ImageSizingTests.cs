@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PlasmaShared.Imaging;
 
@@ -122,5 +122,49 @@ namespace Tests.Portable
             // valid bitmap.
             Assert.AreEqual(1, ImageSizing.BoundedByLongestSide(10000, 3, 256).Height);
         }
-    }
+    
+        [TestMethod]
+        public void A_planet_icon_is_centred_on_its_point()
+        {
+            // X and Y are fractions of the canvas. Half an icon's offset in either direction
+            // still looks like a galaxy, which is why this is pinned rather than eyeballed.
+            var placement = ImageSizing.PlanetIconPlacement(0.5, 0.5, new Size(1000, 800), new Size(20, 20), 40, 1);
+
+            Assert.AreEqual(new Rectangle(500 - 20, 400 - 20, 40, 40), placement);
+        }
+
+        [TestMethod]
+        public void A_planet_icon_keeps_the_aspect_ratio_of_the_icon_file()
+        {
+            // Width comes from PlanetWarsIconSize; height follows the icon's own proportions.
+            var tall = ImageSizing.PlanetIconPlacement(0, 0, new Size(100, 100), new Size(10, 20), 30, 1);
+
+            Assert.AreEqual(30, tall.Width);
+            Assert.AreEqual(60, tall.Height);
+        }
+
+        [TestMethod]
+        public void Zoom_scales_the_icon_but_not_its_position()
+        {
+            var placement = ImageSizing.PlanetIconPlacement(0.25, 0.75, new Size(400, 400), new Size(10, 10), 20, 2);
+
+            Assert.AreEqual(40, placement.Width);
+            Assert.AreEqual(40, placement.Height);
+            Assert.AreEqual(100 - 20, placement.X);
+            Assert.AreEqual(300 - 20, placement.Y);
+        }
+
+        [TestMethod]
+        public void Icon_placement_truncates_exactly_where_the_original_did()
+        {
+            // The width truncates first and the height is derived from the TRUNCATED width, then
+            // the halving truncates again. Computing in doubles and rounding once would be
+            // defensible and would move icons by a pixel - this pins the port, not the taste.
+            var placement = ImageSizing.PlanetIconPlacement(0.333, 0.333, new Size(101, 101), new Size(3, 7), 5.9, 1);
+
+            Assert.AreEqual(5, placement.Width);                    // (int)(5.9 * 1)
+            Assert.AreEqual((int)(5 * (7 / 3.0)), placement.Height); // from the truncated width
+            Assert.AreEqual((int)(0.333 * 101) - 2, placement.X);
+        }
+}
 }

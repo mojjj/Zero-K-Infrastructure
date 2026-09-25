@@ -110,6 +110,24 @@ namespace PlasmaShared
             return sb.ToString();
         }
 
+        /// <summary>
+        /// Moved here from Utils.cs, which is 900 lines of GDI+ and cannot compile on .NET 9.
+        /// PlasmaServer deletes a resource's six files through this, so eleven lines that swallow
+        /// an exception were the last thing keeping that file - and ContentServiceController
+        /// behind it - off the port.
+        /// </summary>
+        public static void SafeDelete(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch { }
+        }
+
         public static string EscapePath(this string path)
         {
             if (String.IsNullOrEmpty(path)) return path;

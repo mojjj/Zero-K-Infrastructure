@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Drawing;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PlasmaShared.Imaging;
@@ -39,6 +39,18 @@ namespace Tests.Portable
             {
                 Calls.Add("SaveResized(" + image.Length + " -> " + target.Width + "x" + target.Height + " -> " + path + ")");
             }
+
+            public void SaveResizedJpeg(byte[] image, Size target, string path, int quality)
+            {
+                Calls.Add("SaveResizedJpeg(" + image.Length + " -> " + target.Width + "x" + target.Height +
+                          " -> " + path + " @" + quality + ")");
+            }
+
+            public byte[] ComposeJpeg(byte[] background, IReadOnlyList<ImageOverlay> overlays, int quality)
+            {
+                Calls.Add("ComposeJpeg(" + background.Length + " + " + overlays.Count + " overlays @" + quality + ")");
+                return background;
+            }
         }
 
         [TestMethod]
@@ -50,6 +62,8 @@ namespace Tests.Portable
             var size = processor.Measure(bytes);
             processor.Save(bytes, "/tmp/original.png");
             processor.SaveResized(bytes, new Size(64, 64), "/tmp/small.png");
+            processor.SaveResizedJpeg(bytes, new Size(32, 32), "/tmp/thumb.jpg", 100);
+            processor.ComposeJpeg(bytes, new[] { new ImageOverlay(bytes, new Rectangle(1, 2, 3, 4)) }, 85);
 
             Assert.AreEqual(new Size(800, 600), size);
             CollectionAssert.AreEqual(new[]
@@ -57,6 +71,8 @@ namespace Tests.Portable
                 "Measure(4)",
                 "Save(4 -> /tmp/original.png)",
                 "SaveResized(4 -> 64x64 -> /tmp/small.png)",
+                "SaveResizedJpeg(4 -> 32x32 -> /tmp/thumb.jpg @100)",
+                "ComposeJpeg(4 + 1 overlays @85)",
             }, ((RecordingProcessor)processor).Calls);
         }
 

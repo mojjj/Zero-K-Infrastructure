@@ -19,3 +19,7 @@ namespace ZeroKWeb.SpringieInterface { internal static class DeadUsingMarker { }
 // PostHistoryController's `using System.Web.Services.Description;` - a WSDL type it never names.
 // One dead line, the same shape as the one above, and it was the file's only blocker.
 namespace System.Web.Services.Description { internal static class DeadUsingMarker { } }
+
+
+// ContentServiceController's `using System.Web.Http;` - Web API, which it never names.
+namespace System.Web.Http { internal static class DeadUsingMarker { } }
