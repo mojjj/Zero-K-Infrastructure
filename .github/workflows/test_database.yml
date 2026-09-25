@@ -1,4 +1,4 @@
-# The WHR pipeline tests (Tests.Database), against a real SQL Server and the committed
+﻿# The WHR pipeline tests (Tests.Database), against a real SQL Server and the committed
 # fixture.
 #
 # Slower and heavier than test_portable.yml - it pulls SQL Server and mono, builds the
@@ -164,3 +164,50 @@ jobs:
       - name: Stop SQL Server
         if: always()
         run: docker compose -f db/docker-compose.yml down -v
+
+  # Phase 4. The port's end-to-end evidence, which until now only ever ran on a laptop.
+  #
+  # ZeroKWeb.Host serves the REAL views and controllers on .NET 9 and requests them over HTTP -
+  # signing in with a real password through BCrypt, uploading a file and reading the bytes back,
+  # asking for a byte range, posting a PayPal IPN body, posting to /MissionService. Compiling
+  # proves things about types; this is the only check anywhere that proves a page comes back.
+  #
+  # A separate job rather than a step in the one above, deliberately. That job's name is a
+  # required status check, so a step added to it blocks every pull request the first time this
+  # is flaky in an environment it has never run in. This one can be promoted to required once it
+  # has a record. The cost is a second SQL Server - about a minute.
+  host:
+    name: Host harness (.NET 9 over HTTP, SQL Server 2022)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      DB_NAME: zk_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache NuGet packages for the .NET 9 SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: zk-net9-nuget-${{ hashFiles('**/*.csproj', 'port-sources.props', 'port-views.props') }}
+          restore-keys: zk-net9-nuget-
+
+      - name: Start SQL Server
+        run: |
+          docker compose -f db/docker-compose.yml up -d
+          ./db/wait-for-db.sh
+
+      - name: Create the schema
+        run: ./db/dbsetup.sh latest
+
+      - name: Load the test fixture
+        run: ./db/load-fixture.sh
+
+      # Builds ZeroKWeb.Host - which compiles every linked controller and all 123 views through
+      # the Razor SDK - then starts it, requests the pages and asserts what comes back. Exits
+      # non-zero on the first failing assertion, and prints each one either way.
+      - name: Serve the ported site and check it answers
+        run: ./tools/run-host.sh

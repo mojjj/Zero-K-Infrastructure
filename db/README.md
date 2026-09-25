@@ -152,11 +152,21 @@ committed - unlike anything in `db/dumps/`. About 60 KB, loads in a second:
 
     DB_NAME=zk_test ./db/load-fixture.sh
 
-30 accounts, 67 resources, 150 battles, 375 player rows, 57 ratings. The selection is the
+30 accounts, 67 resources, 150 battles, 375 player rows, 57 ratings, and - from
+`db/fixture/forum-seed.sql`, which is hand-written rather than generated - two forum
+categories. The selection is the
 30 most active accounts since 2024 and the battles in which every non-spectating player is
 one of them, which gives a densely connected set - isolated players never converge, so a
 scattered sample would be useless for rating tests. The result has a real skill spread:
 one account with 85 battles and 59 wins, another with 29 and 4.
+
+**Why a second, hand-written file.** `make-fixture.py` slices the five tables the rating
+pipeline needs, and the forum is not one of them - so a database built from nothing had no
+categories at all, while the site's front page is a forum page. That went unnoticed for as
+long as the host harness only ran on laptops whose test database had collected categories
+from earlier work; its **first run in CI**, against a database built from scratch, threw
+`Sequence contains no elements` on the first query it made. There is nothing real to
+anonymise in two category names, so the seed is written out rather than generated.
 
 **What was removed.** Every identifier is renumbered from 1, so nothing points back at a
 real account, battle or map. Names become `player01`..`player30`, maps `test_map_N`,
