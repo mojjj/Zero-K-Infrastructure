@@ -16,10 +16,16 @@ docker inspect zk-db >/dev/null 2>&1 || {
 docker exec -i zk-db /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$PASS" -C -I -d "$DB" -b \
     < "$HERE/fixture/fixture.sql" >/dev/null
 
+# Hand-written, and separate from the generated fixture on purpose - see its header. The site's
+# front page is a forum page, so a database with no categories cannot serve one.
+docker exec -i zk-db /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$PASS" -C -I -d "$DB" -b \
+    < "$HERE/fixture/forum-seed.sql" >/dev/null
+
 docker exec zk-db /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$PASS" -C -I -d "$DB" -h -1 -W -Q \
   "SET NOCOUNT ON;
    SELECT 'Accounts '            + CAST(COUNT(*) AS varchar) FROM Accounts UNION ALL
    SELECT 'Resources '           + CAST(COUNT(*) AS varchar) FROM Resources UNION ALL
    SELECT 'SpringBattles '       + CAST(COUNT(*) AS varchar) FROM SpringBattles UNION ALL
    SELECT 'SpringBattlePlayers ' + CAST(COUNT(*) AS varchar) FROM SpringBattlePlayers UNION ALL
-   SELECT 'AccountRatings '      + CAST(COUNT(*) AS varchar) FROM AccountRatings;"
+   SELECT 'AccountRatings '      + CAST(COUNT(*) AS varchar) FROM AccountRatings UNION ALL
+   SELECT 'ForumCategories '     + CAST(COUNT(*) AS varchar) FROM ForumCategories;"
