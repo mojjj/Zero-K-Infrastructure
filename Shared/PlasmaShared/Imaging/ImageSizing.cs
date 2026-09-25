@@ -103,5 +103,24 @@ namespace PlasmaShared.Imaging
                 width,
                 height);
         }
+
+        /// <summary>
+        /// unitsync renders every minimap as a SQUARE, whatever shape the map is.
+        /// UnitSync.FixAspectRatio stretched it back to the map's real proportions, and this is
+        /// that arithmetic.
+        ///
+        /// Note it is the correct, single application of the ratio - which is what makes
+        /// <see cref="LegacyToBytesSize"/> a defect rather than a second opinion: that runs
+        /// afterwards, on this already-corrected image, and applies the proportion again.
+        /// </summary>
+        public static Size MinimapAspectCorrection(Size squareMinimap, Size mapSize)
+        {
+            if (mapSize.Height == 0) return squareMinimap;
+            var ratio = (float)mapSize.Width / mapSize.Height;
+
+            return mapSize.Width > mapSize.Height
+                ? new Size(squareMinimap.Width, (int)(squareMinimap.Height / ratio))
+                : new Size((int)(squareMinimap.Width * ratio), squareMinimap.Height);
+        }
 }
 }
