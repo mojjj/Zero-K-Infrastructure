@@ -89,5 +89,28 @@ namespace ZeroKWeb.Controllers
             DynamicConfig.SaveConfig(config);
             return RedirectToAction("EditDynamicConfig");
         }
-    }
+    
+        /// <summary>
+        /// Registers one map again from its archive, regenerating the images stored for it.
+        ///
+        /// **This is the lossless half of the ToBytes backfill**, for maps registered before that
+        /// rule was fixed on 2026-09-25. `ZkData.Core -- minimaps` lists which maps are affected;
+        /// `-- backfill-minimaps` corrects their geometry in place but cannot recover the detail
+        /// the old rule resized away. This can, because unitsync renders the images again.
+        ///
+        /// **One map per call, and SuperAdmin.** It downloads an archive, runs unitsync on it and
+        /// overwrites stored files - and none of that can be exercised by a test in this
+        /// repository, so the unit of work is the one a person can look at the result of before
+        /// doing the next. Doing a whole library in a loop is a decision for whoever watches the
+        /// first few.
+        /// </summary>
+        [Auth(Role = AdminLevel.SuperAdmin)]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult ReregisterResource(string internalName)
+        {
+            Trace.TraceInformation("Admin: {0} asked to re-register {1}", Global.Account.Name, internalName);
+            return Content(Global.AutoRegistrator.ReregisterResource(internalName));
+        }
+}
 }
