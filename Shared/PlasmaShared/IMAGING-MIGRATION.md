@@ -212,7 +212,43 @@ by paths that have not moved.
    clean. Verified by restoring each on both target frameworks.
 3. `ResizedImageCache` - its key is an `Image`, so it changes with whatever type replaces
    it.
-4. `UnitSync.cs` last, on its own, with map files to hand.
+4. **Half done - see below.** `UnitSync.cs`: the arithmetic is out and tested, the Bitmaps remain.
+
+## 2026-09-25: unitsync, as far as it goes without a decision
+
+**What moved:** the arithmetic. `PixelBuffers` unpacks unitsync's raw buffers - 16-bit RGB565 for
+the minimap, 8-bit greyscale for the height and metal maps - into tightly packed RGB24, and
+`ImageSizing.MinimapAspectCorrection` is `FixAspectRatio`'s sizing. Both are pure, both are tested
+on .NET 9 on Linux, and `UnitSync.cs` now calls them instead of doing it inline.
+
+**What did not move:** `UnitSync` still returns `Bitmap`, because `Map` holds `Image` fields,
+`Utils.ToBytes` takes an `Image`, and `AutoRegistrator` passes them along. `GdiPixelBridge` is the
+one remaining piece of System.Drawing in that path, and it is where the next cut goes.
+
+**The interesting part is how it was verified**, because "cannot be tested without unitsync and
+real map files" was true of the old code and is no longer true of this part. Two things could not
+be checked on Linux and both are now checked on the **Windows CI job**, which gained its first
+Windows-only reason to exist:
+
+- **5-6-5 to 8-8-8 scaling.** GDI+ unpacked the minimap by its own rule, and the plausible
+  candidates - `x * 255 / 31` and bit replication `(x << 3) | (x >> 2)` - agree at 0 and 31 and
+  differ in between, which is a shade on every pixel of every minimap. `Tests/UnitSyncPixelTests`
+  compares the two implementations for **all 65,536 values**.
+- **Channel order and row padding.** `Format24bppRgb` is BGR in memory despite the name, and GDI+
+  pads every row to a four-byte boundary. Both mistakes are invisible on the height and metal
+  maps, which are grey - so they are asserted on coloured pixels and at a width (3) where the
+  padding bites.
+
+**Copying rather than wrapping.** The old `new Bitmap(size, size, stride, format, pointer)` handed
+GDI+ a pointer into unitsync's own memory and kept it. The bytes are copied out now, so nothing
+downstream holds a buffer unitsync may free.
+
+**What finishing requires is a decision, not more porting.** `Map.Minimap` would become encoded
+bytes, `Utils.ToBytes` would move onto the imaging seam, and `AutoRegistrator`'s three call sites
+would follow. That is mechanical - but `ToBytes` is where the aspect-ratio and size defects live,
+and porting it means either preserving them deliberately in the new code or fixing them, which is
+the backfill question below and is not the port's to answer.
+
 
 Only step 1 is verifiable in this repository today. Steps 2-4 need either a test
 deployment or the native unitsync library.

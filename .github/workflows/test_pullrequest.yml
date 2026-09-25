@@ -28,11 +28,13 @@ jobs:
     # solution build never reached it. It has since been deleted as a dead end.)
     #
     # WHAT THIS JOB ACTUALLY PROVES: that the whole Windows solution compiles - which is the
-    # valuable half, and which nothing else here does. The VSTest step is thinner than its name
-    # suggests: /TestCaseFilter:TestCategory=Basic and only TestRsa carries that category, so
-    # exactly ONE test runs. The other three in Tests/ reach the network (whois, an engine
-    # download, PayPal), so excluding them is right - but read a green tick here as "it builds",
-    # not "it is tested". The tests that mean something run in test_portable.yml.
+    # valuable half, and which nothing else here does - plus the handful of tests that can only
+    # be answered on Windows. /TestCaseFilter:TestCategory=Basic is the filter; as of 2026-09-25
+    # four tests carry it, TestRsa and three in UnitSyncPixelTests that compare the port's pixel
+    # unpacking against GDI+ itself, which cannot run anywhere else in this repository. The other
+    # tests in Tests/ reach the network (whois, an engine download, PayPal), so excluding them is
+    # right. Most of the suite lives in test_portable.yml; a green tick here is "it builds, and
+    # the Windows-only claims hold".
     #
     # NOTE FOR UPSTREAM: this line is a fork-local change. Upstream has the runner and should keep
     # `runs-on: zk`.
