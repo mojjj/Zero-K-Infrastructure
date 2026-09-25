@@ -19,7 +19,7 @@ namespace ZeroKWeb.Controllers
         [ValidateInput(false)]
         public async Task<ActionResult> Index()
         {
-            var sr = new StreamReader(Request.InputStream);
+            var sr = new StreamReader(this.RequestInputStream());
             var line = await sr.ReadToEndAsync();
             if (string.IsNullOrEmpty(line))
                 return Content("Please send request in POST body in command line format:ClassName JsonSerializedClassContent");

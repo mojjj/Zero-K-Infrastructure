@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 
 namespace PlasmaShared.Imaging
@@ -77,5 +77,31 @@ namespace PlasmaShared.Imaging
                 ? new Size(maxSize, Math.Max(1, (int)Math.Round((double)height * maxSize / width)))
                 : new Size(Math.Max(1, (int)Math.Round((double)width * maxSize / height)), maxSize);
         }
-    }
+    
+        /// <summary>
+        /// Where a planet's icon goes on the galaxy map, and how big.
+        ///
+        /// The planet's X and Y are fractions of the canvas, the icon keeps its own aspect ratio,
+        /// and the result is CENTRED on that point - which is the part worth having in one tested
+        /// place, because getting it wrong shifts every planet by half an icon and still looks
+        /// plausible.
+        ///
+        /// Integer truncation is preserved exactly as the System.Drawing call site had it: the
+        /// width truncates before the height is derived from it, so height follows the truncated
+        /// width, and the halving truncates again. Computing in doubles and rounding once would be
+        /// defensible and would move icons by a pixel, which is not what a port is for.
+        /// </summary>
+        public static Rectangle PlanetIconPlacement(double planetX, double planetY, Size canvas, Size icon, double iconSize, double zoom)
+        {
+            var aspect = icon.Height / (double)icon.Width;
+            var width = (int)(iconSize * zoom);
+            var height = (int)(width * aspect);
+
+            return new Rectangle(
+                (int)(planetX * canvas.Width) - width / 2,
+                (int)(planetY * canvas.Height) - height / 2,
+                width,
+                height);
+        }
+}
 }

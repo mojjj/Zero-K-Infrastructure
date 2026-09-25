@@ -82,6 +82,11 @@
     <Compile Include="..\Zero-K.info\Controllers\NewsController.cs" Link="Linked\Controllers\NewsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\LobbyNewsController.cs" Link="Linked\Controllers\LobbyNewsController.cs" />
     <Compile Include="..\Zero-K.info\Controllers\AdminController.cs" Link="Linked\Controllers\AdminController.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\PlanetwarsController.Imaging.cs" Link="Linked\Controllers\PlanetwarsController.Imaging.cs" />
+    <Compile Include="..\Shared\PlasmaDownloader\EngineDownload.Portable.cs" Link="Linked\EngineDownload.Portable.cs" />
+    <Compile Include="..\Zero-K.info\Controllers\ContentServiceController.cs" Link="Linked\Controllers\ContentServiceController.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\ContentServiceImplementation.cs" Link="Linked\AppCode\ContentServiceImplementation.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\PlasmaServer.cs" Link="Linked\AppCode\PlasmaServer.cs" />
     <Compile Include="..\Zero-K.info\Controllers\MissionServiceController.cs" Link="Linked\Controllers\MissionServiceController.cs" />
     <Compile Include="..\Zero-K.info\AppCode\MissionServiceImplementation.cs" Link="Linked\AppCode\MissionServiceImplementation.cs" />
     <Compile Include="..\Zero-K.info\MissionService.svc.cs" Link="Linked\MissionService.svc.cs" />

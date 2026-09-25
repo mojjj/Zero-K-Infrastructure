@@ -3764,6 +3764,19 @@ mission that does not exist comes back as a `DeleteMissionResponse` carrying `Er
 list assertion deliberately claims only that the envelope is right: the fixture holds no missions,
 and an empty list is exactly what it should produce.
 
+## Phase 3: 34 of 34 controllers
+
+The last two - `PlanetwarsController.Imaging.cs` and `ContentServiceController` - were both
+blocked by System.Drawing, and both are now through the imaging seam. The detail is in
+`Shared/PlasmaShared/IMAGING-MIGRATION.md`; in short, the seam grew a quality-aware JPEG resize
+and a compositing operation, the galaxy renderer returns encoded bytes instead of a `Bitmap`,
+and `PlasmaServer`'s map thumbnail goes through `ImageSizing.ScaledToFit`, which had been
+extracted and tested for exactly that call site.
+
+**Every controller in Zero-K.info now compiles on .NET 9**, with 123 views and every bucket at
+zero. What remains is not "does it compile" but "does it run": the tripwires mark where it
+cannot - unitsync, MonoTorrent, the lobby server - and those are the remaining work.
+
 ## A finding in production code, unrelated to the port
 
 `EnginesController.UploadEngine` carries `[Auth(Role = AdminLevel.SuperAdmin)]`, `[HttpPost]` and

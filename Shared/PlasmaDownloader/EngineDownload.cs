@@ -16,7 +16,7 @@ using ZkData;
 
 namespace PlasmaDownloader
 {
-    public class EngineDownload : Download
+    public partial class EngineDownload : Download
     {
         readonly SpringPaths springPaths;
 
@@ -179,24 +179,6 @@ namespace PlasmaDownloader
             catch (Exception ex)
             {
                 return false;
-            }
-        }
-
-        public class VersionNumberComparer : IComparer<string>
-        {
-            public int Compare(string a, string b)
-            {
-                var pa = a.Split(new char[] { '.', '-' });
-                var pb = b.Split(new char[] { '.', '-' });
-
-                for (var i = 0; i < Math.Min(pa.Length, pb.Length); i++)
-                {
-                    int va;
-                    int vb;
-                    if (int.TryParse(pa[i], out va) && int.TryParse(pb[i], out vb) && va != vb) return va.CompareTo(vb);
-                    else if (pa[i] != pb[i]) return String.Compare(pa[i], pb[i], StringComparison.Ordinal);
-                }
-                return pa.Length.CompareTo(pb.Length);
             }
         }
 

@@ -1,4 +1,4 @@
-# Replacing System.Drawing imaging for .NET 9
+﻿# Replacing System.Drawing imaging for .NET 9
 
 This is the second blocker in the Phase 3 port, after EF6 (`ZkData/EFCORE-MIGRATION.md`).
 
@@ -123,6 +123,54 @@ backfill and a way to tell a corrected image from an uncorrected one. Fixing it 
 only would leave two generations of minimaps side by side with no way to tell them apart,
 which is worse than the known defect.
 
+## 2026-09-25: the last two call sites, and 34 of 34 controllers
+
+**Every controller in Zero-K.info now compiles on .NET 9.** The two that were left were the
+two blocked here, and they needed the seam to grow by two operations.
+
+**`SaveResizedJpeg(bytes, size, path, quality)`.** `PlasmaServer` writes map thumbnails at
+JPEG quality **100** and the galaxy render at **85**, both chosen deliberately; ImageSharp's
+default is 75. Porting those call sites through the quality-less `SaveResized` would have
+compiled, passed every test, and quietly made both worse - so quality is on the interface, and
+a test asserts that quality 100 produces a bigger file than quality 10. Breaking it (dropping
+the encoder argument) fails that test, checked.
+
+**`ComposeJpeg(background, overlays, quality)`.** The galaxy map is a background with a planet
+icon drawn at each planet's position, which is compositing and did not fit a seam built around
+resize-and-save. Overlays carry a `System.Drawing.Rectangle` and are stretched into it, which
+is what `Graphics.DrawImage(image, x, y, w, h)` did.
+
+It returns **bytes rather than writing a file**, and that is what let the call site cross:
+`Index` needs the dimensions as well as the image, and both are now had without naming an
+imaging type. It also makes the operation testable - the tests decode the result and assert
+which colour won at a point inside the overlay and at a point outside it, compared loosely
+because JPEG is lossy. Drawing every overlay at (0,0) instead of its rectangle fails two of
+them, checked.
+
+**The arithmetic went to `ImageSizing.PlanetIconPlacement` first**, with four tests, including
+one that pins the *truncation*: the width truncates before the height is derived from it, and
+the halving truncates again. Computing in doubles and rounding once would be defensible and
+would move every planet by a pixel, which is not what a port is for.
+
+**`PlasmaServer`'s thumbnail sizing was already extracted** - `ImageSizing.ScaledToFit` was
+written from exactly those lines and had been waiting, tested, since step 0.
+
+**One branch was not ported, deliberately.** `GenerateGalaxyImage`'s `antiAliasingFactor`
+composed at a multiple and resized down. It was unreachable: the only caller takes the
+defaults, and the parameter was pinned to 1 by a FIXME saying the Bitmap path had issues. It
+now throws if anything passes something else, rather than being silently ignored or ported
+untested - supersampling is a change to what the galaxy looks like, not a port.
+
+**Two more things were found stranded in the GDI+ half of `Utils.cs`**, which is now a
+familiar shape: `SafeDelete` (eleven lines that swallow an exception, and the last thing
+keeping `PlasmaServer` off the port) and, for `ContentServiceImplementation`,
+`EngineDownload.VersionNumberComparer`, split into a portable half.
+
+**Still not done, and unchanged:** `UnitSync.cs` - the interop rewrite - and `ToBytes`, whose
+aspect-ratio and size defects are a backfill decision rather than an imaging one. `ZeroKLobby`
+keeps System.Drawing either way. `ResizedImageCache` is keyed on an `Image` and is only used
+by paths that have not moved.
+
 ## Suggested order
 
 0. **Done:** the target-size arithmetic is separated into
@@ -149,17 +197,12 @@ which is worse than the known defect.
      the interop rewrite described above, not a call-site change.
    - `GetResized` / `GetResizedWithCache` in `ZeroKLobby`: a WinForms client that is not
      part of this port and keeps System.Drawing either way.
-2. **Half done:** `Imaging/ImageSharpImageProcessor.cs` exists and is tested. It is
-   linked into `Tests.Portable` and exercised on **.NET 9, on Linux**, where
-   System.Drawing.Common cannot run at all - real bytes, real files: dimensions, that the
-   output reads back as an image, and that the file extension still chooses the format,
-   which the news upload path depends on.
+2. **Done.** `Imaging/ImageSharpImageProcessor.cs` is what `Images.Processor` returns, and has
+   been since 2026-09-21. It is linked into `Tests.Portable` and exercised on **.NET 9, on
+   Linux**, where System.Drawing.Common cannot run at all - real bytes, real files.
 
-   It is **not wired up**. `Images.Processor` still defaults to System.Drawing, because
-   switching what the server writes to disk wants comparing on a deployment rather than in
-   a compiler. The two libraries use different resampling kernels, so output will differ
-   slightly by design; whether that difference matters is a question for eyes, not
-   assertions.
+   (This section said "not wired up" for four days after it was. The decision above was the
+   true one; this is why the two halves of a document should not both describe state.)
 
    Version, since it is less obvious than it looks: **ImageSharp 2.1.13**. The 2.x line is
    Apache-2.0 and supports .NET Framework 4.8, so it lives in the codebase *before* the

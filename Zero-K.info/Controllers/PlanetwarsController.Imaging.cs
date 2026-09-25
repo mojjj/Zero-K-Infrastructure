@@ -1,96 +1,80 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Web.Mvc;
 using PlasmaShared;
+using PlasmaShared.Imaging;
 using ZkData;
 
 namespace ZeroKWeb.Controllers
 {
     /// <summary>
-    /// The half of <see cref="PlanetwarsController"/> that draws the galaxy map, split off so
-    /// the rest of the controller can be linked into the .NET 9 port.
+    /// The half of <see cref="PlanetwarsController"/> that draws the galaxy map.
     ///
-    /// Everything here is System.Drawing: Bitmap, Graphics, Image.FromFile. Those types throw
-    /// PlatformNotSupportedException off Windows since .NET 7 and live in a Windows-only
-    /// package, so they cannot cross - see Shared/PlasmaShared/IMAGING-MIGRATION.md, which
-    /// tracks the ImageSharp replacement.
+    /// It used to be split off because it was System.Drawing - Bitmap, Graphics,
+    /// Image.FromFile - which throws PlatformNotSupportedException off Windows since .NET 7.
+    /// It now goes through <see cref="Images.Processor"/> like every other image the server
+    /// writes, so the split is no longer load-bearing; the file stays because the drawing is a
+    /// self-contained job and reads better on its own.
     ///
-    /// This is the same move that let PlanetwarsAdminController be linked: split the seam, link
-    /// the portable half, and let the compiler hold the line. The port has no Index action for
-    /// this controller as a result; Galaxy.cshtml takes a ZkData.Galaxy, not a controller type,
-    /// so the VIEW is unaffected.
-    ///
-    /// When GenerateGalaxyImage is ported to Images.Processor this file and the `partial`
-    /// keyword next door both go away.
+    /// See Shared/PlasmaShared/IMAGING-MIGRATION.md.
     /// </summary>
     public partial class PlanetwarsController
     {
         /// <summary>
         /// Makes an image: galaxy background with planet images drawn on it (cheaper than rendering each planet individually)
+        ///
+        /// Returns encoded JPEG bytes rather than a Bitmap, which is what let this cross: the
+        /// caller needs the bytes and the dimensions, and both are had without naming an imaging
+        /// type. Quality 85 is what the call site used and is passed explicitly, because an
+        /// imaging library's default is not 85.
         /// </summary>
-        // FIXME: having issues with bitmap parameters; setting AA factor to 1 as fallback (was 4)
-        public Bitmap GenerateGalaxyImage(int galaxyID, double zoom = 1, double antiAliasingFactor = 1)
+        public byte[] GenerateGalaxyImage(int galaxyID, double zoom = 1, double antiAliasingFactor = 1)
         {
-            zoom *= antiAliasingFactor;
+            // The old code multiplied zoom by this and then, if it was not 1, resized the result
+            // down again. That branch was unreachable: the only caller takes the defaults, and
+            // the parameter was pinned to 1 by a FIXME saying the Bitmap path had issues. Rather
+            // than port a branch nobody has run, it says so.
+            if (antiAliasingFactor != 1)
+                throw new NotSupportedException(
+                    "antiAliasingFactor is not supported: the System.Drawing version pinned it to 1 " +
+                    "with a FIXME and nothing ever passed anything else. Supersampling here would " +
+                    "mean composing at a multiple and resizing down, which is a change to what the " +
+                    "galaxy looks like, not a port.");
+
             using (var db = new ZkDataContext())
             {
                 Galaxy gal = db.Galaxies.Single(x => x.GalaxyID == galaxyID);
 
-                using (Image background = Image.FromFile(Server.MapPath("/img/galaxies/" + gal.ImageName)))
+                var background = System.IO.File.ReadAllBytes(this.MapPath("/img/galaxies/" + gal.ImageName));
+                var canvas = Images.Processor.Measure(background);
+
+                var overlays = new List<ImageOverlay>();
+                foreach (Planet p in gal.Planets)
                 {
-                    //var im = new Bitmap((int)(background.Width*zoom), (int)(background.Height*zoom));
-                    var im = new Bitmap(background.Width, background.Height);
-                    using (Graphics gr = Graphics.FromImage(im))
+                    string planetIconPath = null;
+                    try
                     {
-                        gr.DrawImage(background, 0, 0, im.Width, im.Height);
+                        planetIconPath = "/img/planets/" + (p.Resource.MapPlanetWarsIcon ?? "1.png"); // backup image is 1.png
+                        var icon = System.IO.File.ReadAllBytes(this.MapPath(planetIconPath));
 
-                        /*
-						using (var pen = new Pen(Color.FromArgb(255, 180, 180, 180), (int)(1*zoom)))
-						{
-							foreach (var l in gal.Links)
-							{
-								gr.DrawLine(pen,
-								            (int)(l.PlanetByPlanetID1.X*im.Width),
-								            (int)(l.PlanetByPlanetID1.Y*im.Height),
-								            (int)(l.PlanetByPlanetID2.X*im.Width),
-								            (int)(l.PlanetByPlanetID2.Y*im.Height));
-							}
-						}*/
-
-                        foreach (Planet p in gal.Planets)
-                        {
-                            string planetIconPath = null;
-                            try
-                            {
-                                planetIconPath = "/img/planets/" + (p.Resource.MapPlanetWarsIcon ?? "1.png"); // backup image is 1.png
-                                using (Image pi = Image.FromFile(Server.MapPath(planetIconPath)))
-                                {
-                                    double aspect = pi.Height / (double)pi.Width;
-                                    var width = (int)(p.Resource.PlanetWarsIconSize * zoom);
-                                    var height = (int)(width * aspect);
-                                    gr.DrawImage(pi, (int)(p.X * im.Width) - width / 2, (int)(p.Y * im.Height) - height / 2, width, height);
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                throw new ApplicationException(
-                                    string.Format("Cannot process planet image {0} for planet {1} map {2}",
-                                                  planetIconPath,
-                                                  p.PlanetID,
-                                                  p.MapResourceID),
-                                    ex);
-                            }
-                        }
-                        if (antiAliasingFactor == 1) return im;
-                        else
-                        {
-                            zoom /= antiAliasingFactor;
-                            return im.GetResized((int)(background.Width * zoom), (int)(background.Height * zoom), InterpolationMode.HighQualityBicubic);
-                        }
+                        overlays.Add(new ImageOverlay(icon,
+                            ImageSizing.PlanetIconPlacement(p.X, p.Y, canvas, Images.Processor.Measure(icon),
+                                                            p.Resource.PlanetWarsIconSize, zoom)));
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new ApplicationException(
+                            string.Format("Cannot process planet image {0} for planet {1} map {2}",
+                                          planetIconPath,
+                                          p.PlanetID,
+                                          p.MapResourceID),
+                            ex);
                     }
                 }
+
+                return Images.Processor.ComposeJpeg(background, overlays, 85);
             }
         }
 
@@ -105,17 +89,17 @@ namespace ZeroKWeb.Controllers
             if (galaxyID != null) gal = db.Galaxies.Single(x => x.GalaxyID == galaxyID);
             else gal = db.Galaxies.Single(x => x.IsDefault);
 
-            string cachePath = Server.MapPath(string.Format("/img/galaxies/render_{0}.jpg", gal.GalaxyID));
+            string cachePath = this.MapPath(string.Format("/img/galaxies/render_{0}.jpg", gal.GalaxyID));
             if (gal.IsDirty || !System.IO.File.Exists(cachePath))
             {
-                using (Bitmap im = GenerateGalaxyImage(gal.GalaxyID))
-                {
-                    im.SaveJpeg(cachePath, 85);
-                    gal.IsDirty = false;
-                    gal.Width = im.Width;
-                    gal.Height = im.Height;
-                    db.SaveChanges();
-                }
+                var rendered = GenerateGalaxyImage(gal.GalaxyID);
+                System.IO.File.WriteAllBytes(cachePath, rendered);
+
+                var size = Images.Processor.Measure(rendered);
+                gal.IsDirty = false;
+                gal.Width = size.Width;
+                gal.Height = size.Height;
+                db.SaveChanges();
             }
             
             return View("Galaxy", gal);

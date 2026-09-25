@@ -1,3 +1,4 @@
+﻿using System.Collections.Generic;
 using System.Drawing;
 
 namespace PlasmaShared.Imaging
@@ -30,5 +31,45 @@ namespace PlasmaShared.Imaging
 
         /// <summary>Resizes and writes in one step, in the format the path's extension implies.</summary>
         void SaveResized(byte[] image, Size target, string path);
+
+        /// <summary>
+        /// Resizes and writes as JPEG at an explicit quality.
+        ///
+        /// Separate from <see cref="SaveResized"/> because quality is not a detail here: the map
+        /// thumbnail in PlasmaServer is written at 100 and the galaxy render at 85, both chosen
+        /// deliberately, and an imaging library's default is neither. Porting those call sites
+        /// through a quality-less method would change what the server stores while every test
+        /// still passed.
+        /// </summary>
+        void SaveResizedJpeg(byte[] image, Size target, string path, int quality);
+
+        /// <summary>
+        /// Draws <paramref name="overlays"/> onto <paramref name="background"/>, in order, and
+        /// returns the result encoded as JPEG at <paramref name="quality"/>.
+        ///
+        /// This is the galaxy map: a background with a planet icon drawn at each planet's
+        /// position. It returns bytes rather than writing a file because the caller needs the
+        /// dimensions too, and because bytes are what a test can look at.
+        ///
+        /// Each overlay is drawn stretched into its rectangle, which is what
+        /// <c>Graphics.DrawImage(image, x, y, w, h)</c> did.
+        /// </summary>
+        byte[] ComposeJpeg(byte[] background, IReadOnlyList<ImageOverlay> overlays, int quality);
+    }
+
+    /// <summary>One image to draw onto another, and where to put it.</summary>
+    public struct ImageOverlay
+    {
+        public ImageOverlay(byte[] image, Rectangle target)
+        {
+            Image = image;
+            Target = target;
+        }
+
+        /// <summary>The encoded image to draw.</summary>
+        public byte[] Image { get; }
+
+        /// <summary>Where it goes on the background, in pixels. The image is stretched to fit.</summary>
+        public Rectangle Target { get; }
     }
 }
