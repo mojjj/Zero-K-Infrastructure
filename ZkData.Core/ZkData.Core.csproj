@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!--
     The .NET 9 port of the data layer, built alongside the running one rather than in
@@ -104,6 +104,8 @@
     <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\ModMissionSlot.cs" Link="Linked\UnitSyncLib\ModMissionSlot.cs" />
     <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\VfsMode.cs" Link="Linked\UnitSyncLib\VfsMode.cs" />
     <Compile Include="..\ZkData\PayPal\PayPalInterface.cs" Link="Linked\PayPalInterface.cs" />
+    <Compile Include="..\ZkData\MissionService\IMissionService.cs" Link="Linked\MissionService\IMissionService.cs" />
+    <Compile Include="..\ZkData\MissionService\MissionServiceApi.cs" Link="Linked\MissionService\MissionServiceApi.cs" />
     <Compile Include="..\ZkLobbyServer\PlanetWarsApi.cs" Link="Linked\PlanetWarsApi.cs" />
     <Compile Include="..\ZkLobbyServer\TourneyApi.cs" Link="Linked\TourneyApi.cs" />
     <Compile Include="..\ZkLobbyServer\RatingApi.cs" Link="Linked\RatingApi.cs" />

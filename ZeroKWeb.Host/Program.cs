@@ -184,6 +184,59 @@ namespace ZeroKWeb.Host
             return failures;
         }
 
+        /// <summary>
+        /// /MissionService, the JSON endpoint that exists so the mission editor can stop needing
+        /// WCF - requested for the first time on .NET 9.
+        ///
+        /// Compiling proved the controller's types; this proves the path. One POST exercises the
+        /// route, the raw body read (the same RequestInputStream the IPN handler uses), dispatch by
+        /// request class name through CommandJsonSerializer, an EF Core query, and serialization of
+        /// the response.
+        ///
+        /// **The fixture has no missions**, so the list assertion deliberately claims only that the
+        /// envelope is right - an empty Missions list is exactly what this database should produce,
+        /// and saying more would be the "empty list behind a 200" this harness exists to distrust.
+        /// The second request is what carries the weight: a mission that does not exist must come
+        /// back as a DeleteMissionResponse carrying Error, because WCF turned that exception into a
+        /// fault and this endpoint turns it into a field. A 500 would mean the difference was lost.
+        /// </summary>
+        private static async Task<int> CheckMissionServiceJson()
+        {
+            Console.WriteLine();
+            Console.WriteLine("/MissionService (json):");
+
+            var failures = 0;
+
+            using (var client = new HttpClient())
+            {
+                var list = await client.PostAsync(Url + "/MissionService",
+                    new StringContent("ListMissionInfosRequest {}", System.Text.Encoding.UTF8, "text/plain"));
+                var listBody = await list.Content.ReadAsStringAsync();
+
+                failures += Check(list.StatusCode == System.Net.HttpStatusCode.OK,
+                    "  the endpoint answered (" + (int)list.StatusCode + ")");
+                failures += Check(listBody.StartsWith("ListMissionInfosResponse"),
+                    "  dispatched by request class, and answered with the matching response");
+                failures += Check(listBody.Contains("Missions"),
+                    "  the response envelope carries its Missions field");
+
+                var missing = await client.PostAsync(Url + "/MissionService",
+                    new StringContent(
+                        "DeleteMissionRequest {\"MissionID\":999999,\"Delete\":true,\"Author\":\"nobody\",\"Password\":\"x\"}",
+                        System.Text.Encoding.UTF8, "text/plain"));
+                var missingBody = await missing.Content.ReadAsStringAsync();
+
+                failures += Check(missing.StatusCode == System.Net.HttpStatusCode.OK,
+                    "  a failing operation is still a 200 (" + (int)missing.StatusCode + ")");
+                failures += Check(missingBody.StartsWith("DeleteMissionResponse"),
+                    "  and answers with its own response type");
+                failures += Check(missingBody.Contains("No such mission found"),
+                    "  the exception came back in Error, as WCF's fault did");
+            }
+
+            return failures;
+        }
+
         private static async Task<int> CheckUploadBinding()
         {
             Console.WriteLine();
@@ -435,6 +488,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckSignIn();
                 failures += await CheckUploadBinding();
                 failures += await CheckIpnBodyRead();
+                failures += await CheckMissionServiceJson();
                 failures += await CheckLadders(client);
                 failures += await CheckResumableDownload(client);
                 failures += await CheckSelectHelpers(client);
