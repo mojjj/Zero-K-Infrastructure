@@ -174,7 +174,7 @@ namespace ZeroKWeb.Controllers
 
             if (Global.Account.Level >= GlobalConst.MinLevelForForumVote)
             {
-                var key = Request.Form.AllKeys.Where(x => !string.IsNullOrEmpty(x)).First(x => x.StartsWith("option"));
+                var key = Request.Form.AllKeysCompat().Where(x => !string.IsNullOrEmpty(x)).First(x => x.StartsWith("option"));
                 var optionID = Convert.ToInt32(key.Substring(6));
 
                 if (!poll.PollOptions.Any(x => x.OptionID == optionID)) return Content("Invalid option");

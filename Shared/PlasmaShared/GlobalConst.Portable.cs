@@ -132,5 +132,10 @@ namespace ZkData
         public const double BomberKillIpAmount = 1;
         public const int PlanetWarsMaxTeamsize = 4;
 
+
+        /// <summary>Moved from GlobalConst.cs so MapBansController can be linked: that half pulls in
+        /// WCF through its IContentServiceClient factory, and this is a bare integer four call sites
+        /// in one controller needed.</summary>
+        public const int MapBansPerPlayer = 6; // Allow users to enter this many bans in UI
 }
 }
