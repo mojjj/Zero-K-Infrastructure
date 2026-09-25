@@ -206,5 +206,38 @@ namespace Tests.Portable
             // Compare with what was stored instead: the ratio applied twice, at full resolution.
             Assert.AreEqual(new Size(1024, 256), ImageSizing.LegacyToBytesSize(1024, 512));
         }
+
+        [TestMethod]
+        public void A_legacy_image_is_stretched_back_along_the_squashed_axis()
+        {
+            // 2:1 map. Correct was 1024x512; the old rule stored 1024x256. The width survived, so
+            // the correction restores the height and keeps every pixel the long axis still has.
+            Assert.AreEqual(new Size(1024, 512), ImageSizing.CorrectedFromLegacy(new Size(1024, 256), 2.0));
+
+            // 1:2 map, squashed horizontally instead.
+            Assert.AreEqual(new Size(512, 1024), ImageSizing.CorrectedFromLegacy(new Size(256, 1024), 0.5));
+        }
+
+        [TestMethod]
+        public void Correcting_a_legacy_image_gives_it_the_maps_own_ratio()
+        {
+            // The property that matters, stated as a property: whatever went in, what comes out
+            // has the map's aspect - and is then no longer recognised as legacy.
+            foreach (var ratio in new[] { 1.25, 1.5, 2.0, 3.0, 0.8, 0.5, 0.333 })
+            {
+                var legacy = ratio > 1
+                    ? new Size(1024, (int)(1024 / (ratio * ratio)))
+                    : new Size((int)(1024 * ratio * ratio), 1024);
+
+                var corrected = ImageSizing.CorrectedFromLegacy(legacy, ratio);
+
+                Assert.IsTrue(ImageSizing.LooksLikeLegacyToBytes(legacy, ratio),
+                    "the fixture for ratio " + ratio + " should look legacy to begin with");
+                Assert.IsFalse(ImageSizing.LooksLikeLegacyToBytes(corrected, ratio),
+                    "after correction it should not, or the backfill would not be idempotent");
+                Assert.AreEqual(ratio, (double)corrected.Width / corrected.Height, 0.02,
+                    "corrected image should carry the map's ratio");
+            }
+        }
 }
 }

@@ -145,5 +145,23 @@ namespace PlasmaShared.Imaging
             var actual = (double)stored.Width / stored.Height;
             return Math.Abs(actual - ratio * ratio) < Math.Abs(actual - ratio);
         }
+
+        /// <summary>
+        /// The size a legacy stored image should be stretched back to.
+        ///
+        /// The old rule squashed the SHORT axis, leaving aspect R squared where it should be R, so
+        /// the long axis still holds whatever resolution was uploaded and only the short one has
+        /// to be restored. Keeping the long axis is deliberate: the detail squashed out cannot be
+        /// recovered by any resize, and throwing away the axis that survived would lose more.
+        ///
+        /// Only <see cref="LooksLikeLegacyToBytes"/> should decide whether to call this - applying
+        /// it to an already-correct image would stretch it a second time.
+        /// </summary>
+        public static Size CorrectedFromLegacy(Size stored, double mapSizeRatio)
+        {
+            if (stored.Width <= 0 || stored.Height <= 0 || mapSizeRatio <= 0) return stored;
+
+            return ScaledToFit(mapSizeRatio, mapSizeRatio > 1 ? stored.Width : stored.Height);
+        }
 }
 }
