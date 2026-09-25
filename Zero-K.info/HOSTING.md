@@ -251,7 +251,9 @@ What is still blocked, in the order it has to be unblocked:
 1. **EF6.** `ZkDataContext` and 117 migrations. EF Core is a rewrite of the data layer,
    not a retarget, and everything else waits behind it. Measured in
    `ZkData/EFCORE-MIGRATION.md`, along with the two blockers already cleared.
-2. **`System.Drawing.Common`** - the imaging types only. `Bitmap`, `Graphics`, `Image`
+2. ~~**`System.Drawing.Common`**~~ - **done for the website** (2026-09-25); what is left is
+   `ZeroKLobby`, which is WinForms and not part of this port. The original note follows.
+   **`System.Drawing.Common`** - the imaging types only. `Bitmap`, `Graphics`, `Image`
    and friends throw `PlatformNotSupportedException` off Windows since .NET 7. The
    geometry types (`Point`, `Size`, `Rectangle`, `Color`) are in
    `System.Drawing.Primitives`, are part of the .NET 9 shared framework and are **not** a
@@ -260,10 +262,12 @@ What is still blocked, in the order it has to be unblocked:
    `Shared/PlasmaShared/IMAGING-MIGRATION.md`.
 3. **Server-side WCF.** The two `.svc` endpoints above. CoreWCF, or replace them and ship
    updated clients first.
-4. **A mono build still needs one workaround**, so it is not CI-able as a Linux check yet:
-   `ZkData.MissionUpdater.UpdateMission` hits a `System.IO.Compression` facade version
-   conflict under mono 6.12. That is a mono artifact rather than a .NET 9 blocker, but it
-   is why there is no Linux compile check of the website in CI.
+4. ~~**A mono build still needs one workaround**, so it is not CI-able as a Linux check.~~
+   **Stale on both counts.** The workaround exists - `tools/build-website.sh` applies it to
+   its copy of the tree, because `ZkData.MissionUpdater.UpdateMission` uses `ZipFile.Open`
+   and trips a `System.IO.Compression` facade version conflict under mono 6.12 - and that
+   script has been running as a Linux compile check of the website in `test_database.yml`
+   for some time. The note simply outlived the work.
 
 ## Related work in progress
 
