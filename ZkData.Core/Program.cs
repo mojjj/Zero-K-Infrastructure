@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using ZkData;
@@ -13,6 +13,7 @@ namespace ZkData.Core
     ///     ZK_CONNECTION_STRING=... dotnet run -- read     read an existing one through it
     ///     ZK_CONNECTION_STRING=... dotnet run -- write    write to one through it (rolled back)
     ///     ZK_CONNECTION_STRING=... dotnet run -- rate     run the rating pipeline, print the result
+    ///     ZK_CONNECTION_STRING=... dotnet run -- minimaps <dir>   report stored images that predate the ToBytes fix
     ///
     /// The comparison is the point: it is how the port knows whether the model is right,
     /// rather than whether it compiles.
@@ -94,6 +95,11 @@ namespace ZkData.Core
 
                         case "rate":
                             return RatingRun.Run(db, args.Skip(1).FirstOrDefault());
+
+                        // Which stored map images predate the 2026-09-25 ToBytes fix. Read-only;
+                        // see LegacyMinimapReport and IMAGING-MIGRATION.md.
+                        case "minimaps":
+                            return LegacyMinimapReport.Run(db, args.Skip(1).FirstOrDefault());
 
                         // A development convenience, and deliberately a thin one: the fixture
                         // stores PasswordBcrypt as NULL for every account, so there is nothing to

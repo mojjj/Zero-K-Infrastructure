@@ -122,5 +122,28 @@ namespace PlasmaShared.Imaging
                 ? new Size(squareMinimap.Width, (int)(squareMinimap.Height / ratio))
                 : new Size((int)(squareMinimap.Width * ratio), squareMinimap.Height);
         }
+
+        /// <summary>
+        /// Whether a stored map image was written by the old <see cref="LegacyToBytesSize"/> rule.
+        ///
+        /// **This is what made fixing the rule affordable.** The objection to fixing it was that
+        /// old and new images would sit side by side with no way to tell them apart - which turns
+        /// out to be false. unitsync's minimap is square; FixAspectRatio stretches it to the map's
+        /// true ratio R; the old ToBytes then applied R a second time, leaving R squared. The
+        /// database knows R, so an image whose aspect is nearer R squared than R is a legacy one.
+        ///
+        /// Square maps are excluded because R and R squared are both 1 there - the defect was a
+        /// no-op for them, which is exactly why it survived this long.
+        /// </summary>
+        public static bool LooksLikeLegacyToBytes(Size stored, double? mapSizeRatio)
+        {
+            if (mapSizeRatio == null || stored.Height == 0 || stored.Width == 0) return false;
+
+            var ratio = mapSizeRatio.Value;
+            if (Math.Abs(ratio - 1) < 0.01) return false;
+
+            var actual = (double)stored.Width / stored.Height;
+            return Math.Abs(actual - ratio * ratio) < Math.Abs(actual - ratio);
+        }
 }
 }

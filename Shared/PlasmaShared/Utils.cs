@@ -546,11 +546,13 @@ namespace PlasmaShared
         {
             var stream = new MemoryStream();
 
-            // NOTE: this rule re-applies the image's own aspect ratio to an image that is
-            // already in proportion, so non-square images come out distorted, and the size
-            // argument is ignored entirely. Both are preserved deliberately - see
-            // ImageSizing.LegacyToBytesSize and IMAGING-MIGRATION.md.
-            var newSize = ImageSizing.LegacyToBytesSize(image.Size.Width, image.Size.Height);
+            // Until 2026-09-25 this applied the image's OWN aspect ratio to an image that was
+            // already in proportion - so a 2:1 minimap was stored 4:1 - and ignored the size
+            // argument entirely, storing full-resolution images where 256 was asked for. Both
+            // are fixed here, for newly registered maps only; images already stored are left
+            // alone and can be found with ImageSizing.LooksLikeLegacyToBytes. The decision and
+            // what it rules out are in IMAGING-MIGRATION.md.
+            var newSize = ImageSizing.BoundedByLongestSide(image.Size.Width, image.Size.Height, size);
             var resizedImage = new Bitmap(newSize.Width, newSize.Height, PixelFormat.Format24bppRgb);
             using (var graphics = Graphics.FromImage(resizedImage))
             {

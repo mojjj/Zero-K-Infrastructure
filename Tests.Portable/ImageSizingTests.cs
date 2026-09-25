@@ -166,5 +166,45 @@ namespace Tests.Portable
             Assert.AreEqual((int)(5 * (7 / 3.0)), placement.Height); // from the truncated width
             Assert.AreEqual((int)(0.333 * 101) - 2, placement.X);
         }
+
+        [TestMethod]
+        public void A_legacy_stored_image_is_recognised_by_its_aspect()
+        {
+            // A 2:1 map: correct is 1024x512, the old rule stored 1024x256.
+            Assert.IsTrue(ImageSizing.LooksLikeLegacyToBytes(new Size(1024, 256), 2.0));
+            Assert.IsFalse(ImageSizing.LooksLikeLegacyToBytes(new Size(1024, 512), 2.0));
+
+            // And the same the other way up, where the squash is horizontal.
+            Assert.IsTrue(ImageSizing.LooksLikeLegacyToBytes(new Size(256, 1024), 0.5));
+            Assert.IsFalse(ImageSizing.LooksLikeLegacyToBytes(new Size(512, 1024), 0.5));
+        }
+
+        [TestMethod]
+        public void A_square_map_is_never_called_legacy()
+        {
+            // R and R squared are both 1, so there is nothing to tell apart - and nothing wrong
+            // with the image either, which is why the defect went unnoticed.
+            Assert.IsFalse(ImageSizing.LooksLikeLegacyToBytes(new Size(1024, 1024), 1.0));
+            Assert.IsFalse(ImageSizing.LooksLikeLegacyToBytes(new Size(512, 512), 1.0));
+        }
+
+        [TestMethod]
+        public void An_unknown_ratio_is_not_guessed_at()
+        {
+            Assert.IsFalse(ImageSizing.LooksLikeLegacyToBytes(new Size(1024, 256), null));
+            Assert.IsFalse(ImageSizing.LooksLikeLegacyToBytes(new Size(0, 0), 2.0));
+        }
+
+        [TestMethod]
+        public void The_fixed_rule_bounds_the_longest_side_and_keeps_proportions()
+        {
+            // What AutoRegistrator asked for all along by passing ImageSize = 256.
+            Assert.AreEqual(new Size(256, 128), ImageSizing.BoundedByLongestSide(1024, 512, 256));
+            Assert.AreEqual(new Size(128, 256), ImageSizing.BoundedByLongestSide(512, 1024, 256));
+            Assert.AreEqual(new Size(256, 256), ImageSizing.BoundedByLongestSide(1024, 1024, 256));
+
+            // Compare with what was stored instead: the ratio applied twice, at full resolution.
+            Assert.AreEqual(new Size(1024, 256), ImageSizing.LegacyToBytesSize(1024, 512));
+        }
 }
 }

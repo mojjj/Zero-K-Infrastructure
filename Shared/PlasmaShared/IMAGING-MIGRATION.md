@@ -115,13 +115,33 @@ ones. Accepted rather than reverted: the alternative is widening `IImageProcesso
 with a resampler argument for one call site, and these icons are small and regenerate
 routinely.
 
-### `ToBytes` — **still open**
+### `ToBytes` — **decided 2026-09-25: fixed for new maps, stored images left alone**
 
-The aspect-ratio and size defects below are unchanged and unwired. The decision is not about
-imaging libraries: it is whether to re-process the minimaps already uploaded, which needs a
-backfill and a way to tell a corrected image from an uncorrected one. Fixing it for new maps
-only would leave two generations of minimaps side by side with no way to tell them apart,
-which is worse than the known defect.
+`ToBytes` now uses `BoundedByLongestSide`, so a newly registered map gets undistorted images
+bounded by the 256 that `AutoRegistrator` has been asking for all along. Images already stored
+are not touched.
+
+**The objection recorded here was wrong, and that is what unblocked it.** It said the two
+generations would sit side by side "with no way to tell them apart". They are trivially
+distinguishable: unitsync's minimap is square, `FixAspectRatio` stretches it to the map's true
+ratio **R**, and the old rule then applied R a second time - so a legacy image has aspect **R
+squared** where a correct one has **R**, and the database knows R. That is
+`ImageSizing.LooksLikeLegacyToBytes`, with tests, and
+
+    ZK_CONNECTION_STRING=... dotnet run --project ZkData.Core -- minimaps /path/to/Resources
+
+reports how many stored images are of each kind, with examples and the size each should have
+been. It only reads.
+
+**So a backfill is now a targeted decision rather than a blocked one**, and it stays open:
+re-stretching stored images fixes the geometry but cannot recover the detail squashed out at
+upload, and only re-registering each map from its archive would be lossless. Neither is this
+change, and both can be decided later on the numbers this report gives.
+
+Note what the defect actually did, since it was never a cosmetic rounding: for a 2:1 map the
+stored minimap, metal map and height map were squashed to 4:1, and the thumbnail
+`PlasmaServer` derives from them was then stretched back to 2:1 - correct dimensions, distorted
+content. In the local fixture 26 of 68 resources are non-square.
 
 ## 2026-09-25: the last two call sites, and 34 of 34 controllers
 
