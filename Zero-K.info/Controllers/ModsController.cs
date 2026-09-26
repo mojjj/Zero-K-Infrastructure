@@ -54,6 +54,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult EditSubmit(GameMode newGameMode)
         {
             if (!Global.IsModerator && newGameMode.MaintainerAccountID != Global.AccountID)

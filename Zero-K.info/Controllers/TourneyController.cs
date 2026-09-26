@@ -46,6 +46,8 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult RemoveMultipleBattles(double gameThreshold)
         {
             if (!Global.IsTourneyController) return DenyAccess();
@@ -82,6 +84,8 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult ForceJoinMultiple()
         {
             if (!Global.IsTourneyController) return DenyAccess();
@@ -107,6 +111,8 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult AddBattle(TourneyModel model)
         {
             if (!Global.IsTourneyController) return DenyAccess();
@@ -139,6 +145,8 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult AddMultipleBattles(string battleList, string modoptStringMult)
         {
             if (!Global.IsTourneyController) return DenyAccess();

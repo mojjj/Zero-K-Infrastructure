@@ -407,6 +407,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [ValidateInput(false)]
         public async Task<ActionResult> ReportToAdminSubmit(int accountID, string text)
         {
@@ -627,6 +629,7 @@ namespace ZeroKWeb.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         [Auth]
         public ActionResult ChangePassword(string oldPassword, string newPassword, string newPassword2)
         {

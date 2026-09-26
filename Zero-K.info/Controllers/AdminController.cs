@@ -62,6 +62,8 @@ namespace ZeroKWeb.Controllers
 
 
         [Auth(Role = AdminLevel.SuperAdmin)]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult SetZklsMaxPlayers(int maxPlayers)
         {
             MiscVar.ZklsMaxUsers = maxPlayers;
@@ -83,6 +85,7 @@ namespace ZeroKWeb.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         [Auth(Role =  AdminLevel.SuperAdmin)]
         public ActionResult EditDynamicConfigSubmit(DynamicConfig config)
         {
