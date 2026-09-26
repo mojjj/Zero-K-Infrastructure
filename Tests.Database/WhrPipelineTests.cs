@@ -240,5 +240,26 @@ namespace Tests.Database
                 "every battle in the fixture is historical, so the ladder is empty - a non-empty "
                 + "answer here is the database ordering, which ignores ladder activity");
         }
+
+        /// <summary>
+        /// A request for more than 200 players does not disturb the ladder.
+        ///
+        /// It is answered from the database ordered by LadderElo whatever the pass has done, and
+        /// it used to write that answer into the same field the ladder is cached in - so the next
+        /// ordinary call found the cache no smaller than the count it wanted and served a database
+        /// ordering instead of the ladder.
+        ///
+        /// Deterministic, unlike the timing-dependent version of this: one call, then the other.
+        /// </summary>
+        [TestMethod]
+        public void A_large_request_does_not_replace_the_ladder()
+        {
+            var large = RatingPipeline.Casual.GetTopPlayers(250);
+            Assert.IsTrue(large.Count > 0, "the fixture has accounts, so the database answer is not empty");
+
+            Assert.AreEqual(0, RatingPipeline.Casual.GetTopPlayers(10).Count,
+                "the ladder is still empty - every battle in the fixture is historical - and the "
+                + "large request above must not have left its database ordering behind");
+        }
     }
 }
