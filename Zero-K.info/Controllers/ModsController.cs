@@ -130,6 +130,7 @@ namespace ZeroKWeb.Controllers
             }
         }
 
+        [WritesOnGetByDesign("the game mode's forum thread is marked read by looking at the page")]
         public ActionResult Detail(int id)
         {
             var db = new ZkDataContext();

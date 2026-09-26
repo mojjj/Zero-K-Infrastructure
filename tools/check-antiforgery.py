@@ -9,9 +9,14 @@ The site already had the pieces - Html.PostLink emits the token itself, [Validat
 rejects a request without it - but nothing checked that the two ends were connected, and a dozen
 forms had neither.
 
-**Html.PostLink and Ajax.BeginForm are not inspected.** PostLink builds the token into the markup
-it generates, and Ajax.BeginForm is MVC's own helper; this looks only at forms written by hand in
-a view, because those are the ones where the token is a thing somebody has to remember.
+**Html.PostLink is not inspected**, because it builds the token into the markup it generates.
+
+**Ajax.BeginForm is not inspected either, and that is a gap.** An earlier version of this comment
+put it beside PostLink as though being MVC's own helper meant it handled the token. It does not:
+it emits a plain <form> with nothing in it. Of the eighteen on the site, three write - PollVote,
+CommanderProfile and PlanetwarsAdmin's Index - and those are reached through the other end,
+tools/check-get-writes.py, which looks at what the ACTION does rather than at the markup. Teaching
+this script to parse a Razor `@using (...)` block would flag fifteen paging forms to no purpose.
 
 Not every POST is a state change. A search or a paging form posts a query and alters nothing, so a
 forged request achieves nothing worth having, and a token there is ceremony. Those say so at the

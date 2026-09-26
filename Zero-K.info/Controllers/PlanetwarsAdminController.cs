@@ -26,6 +26,7 @@ namespace ZeroKWeb.Controllers
         }
 
         // GET: PlanetwarsAdmin
+        [WritesOnGetNotYetFixed("one action is both the page and its form handler; splitting it is a refactor")]
         public ActionResult Index(PlanetwarsAdminModel model, string set, string purge, string futureset)
         {
             var db = new ZkDataContext();

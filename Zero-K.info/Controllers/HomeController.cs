@@ -163,6 +163,7 @@ namespace ZeroKWeb.Controllers
         /// <summary>
         /// Go to home page; also updates news read dates
         /// </summary>
+		[WritesOnGetByDesign("the headlines on the front page are marked read by being shown")]
 		public ActionResult Index()
 		{
 			var db = new ZkDataContext();

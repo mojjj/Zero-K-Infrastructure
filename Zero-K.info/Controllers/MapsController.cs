@@ -219,6 +219,7 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [WritesOnGetNotYetFixed("rated from JavaScript with $.get; needs the token plumbed into the script")]
         public ActionResult Rate(int id, int rating) {
             var db = new ZkDataContext();
             var rat = db.MapRatings.SingleOrDefault(x => x.ResourceID == id && x.AccountID == Global.Account.AccountID);

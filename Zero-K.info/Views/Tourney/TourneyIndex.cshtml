@@ -74,7 +74,7 @@
             </td>
             <td>
                 <span>@b.NonSpectatorCount / @b.MaxPlayers (+@b.SpectatorCount)</span><br />
-                @Html.ActionLink("Join", "JoinBattle", new { battleHost = b.FounderName })
+                @Html.PostLink("Join", "JoinBattle", "Tourney", new { battleHost = b.FounderName })
             </td>
             <td>
                 @foreach (var deb in b.Debriefings)
@@ -90,7 +90,7 @@
 
             <td>
                 @Html.ActionLink("Force join", "ForceJoinPlayers", new { battleID = b.BattleID }) <br />
-                @Html.ActionLink("Delete", "RemoveBattle", new { battleID = b.BattleID }, new { @class = "js_confirm" })
+                @Html.PostLink("Delete", "RemoveBattle", "Tourney", new { battleID = b.BattleID }, "js_confirm")
             </td>
         </tr>
         <tr><td>&nbsp;<br /></td></tr>

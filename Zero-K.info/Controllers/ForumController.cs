@@ -500,6 +500,7 @@ namespace ZeroKWeb.Controllers
         /// <param name="lastSeen">UNUSED</param>
         /// <param name="postID">A specific <see cref="ForumPost" /> ID to go to</param>
         /// <returns></returns>
+        [WritesOnGetByDesign("reading a thread is what marks it read")]
         public ActionResult Thread(int? id, int? postID) {
             if (id == null) {
               if (postID == null)
@@ -558,6 +559,7 @@ namespace ZeroKWeb.Controllers
         /// <param name="delta">+1 or -1</param>
         /// <returns></returns>
         [Auth]
+        [WritesOnGetNotYetFixed("the vote links are raw HTML built inside HtmlHelperExtensions.Portable")]
         public ActionResult VotePost(int forumPostID, int delta) {
             var db = new ZkDataContext();
             var myAcc = Global.Account;
@@ -619,6 +621,7 @@ namespace ZeroKWeb.Controllers
         ///     Removes an existing vote on a post
         /// </summary>
         [Auth]
+        [WritesOnGetNotYetFixed("the vote links are raw HTML built inside HtmlHelperExtensions.Portable")]
         public ActionResult CancelVotePost(int forumPostID) {
             var db = new ZkDataContext();
             var existingVote = db.AccountForumVotes.SingleOrDefault(x => x.ForumPostID == forumPostID && x.AccountID == Global.AccountID);
@@ -689,6 +692,8 @@ namespace ZeroKWeb.Controllers
         ///     subforums; a thread is read if its last post is older than this date
         /// </remarks>
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult MarkAllAsRead(int? categoryID) {
             var db = new ZkDataContext();
             if (categoryID != null)

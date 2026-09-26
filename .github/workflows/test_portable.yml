@@ -69,6 +69,9 @@ jobs:
       - name: Check every POSTing form carries an anti-forgery token
         run: ./tools/check-antiforgery.py
 
+      - name: Check no action writes on a GET
+        run: ./tools/check-get-writes.py
+
       - name: Check the lobby-server seam
         run: dotnet run --project ZkData.Core -- seam --check
 

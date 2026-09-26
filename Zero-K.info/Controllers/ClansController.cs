@@ -56,6 +56,7 @@ namespace ZeroKWeb.Controllers
         /// Shows clan page
         /// </summary>
         /// <returns></returns>
+        [WritesOnGetByDesign("the clan's forum thread is marked read by looking at the page")]
         public ActionResult Detail(int? id)
         {
             if (id == null)

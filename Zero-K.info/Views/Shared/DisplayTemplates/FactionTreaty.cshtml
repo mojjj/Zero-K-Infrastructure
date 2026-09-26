@@ -65,7 +65,7 @@
                 @Html.PostLink("(counter proposal)", "CounterProposal", "Factions", new { id = tr.FactionTreatyID }) @:&nbsp;|&nbsp;
                 if (tr.CanAccept(Global.Account))
                 {
-                    @Html.ActionLink("(accept)", "AcceptTreaty", "Factions", new { id = tr.FactionTreatyID }, new { @class = "delete" })
+                    @Html.PostLink("(accept)", "AcceptTreaty", "Factions", new { id = tr.FactionTreatyID })
 
                 }
             }
