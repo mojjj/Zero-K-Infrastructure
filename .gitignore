@@ -236,3 +236,7 @@ Thumbs.db
 **/.idea/**/indexLayout.xml
 # db/compare-ratings.sh scratch (removed on exit; listed in case of a crash)
 .ratings-compare/
+
+# The asset build output (tools/build-assets.mjs) and its toolchain.
+build/
+node_modules/

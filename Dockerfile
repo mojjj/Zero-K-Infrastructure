@@ -16,6 +16,20 @@
 # unitsync and MonoTorrent throw rather than work. It needs a database - one this does not
 # start, because db/docker-compose.yml already does.
 
+# The asset build. Separate stage because it needs node and the runtime image needs neither node
+# nor the 22 source files it reads - only the two it writes. See tools/build-assets.mjs.
+FROM node:22-slim AS assets
+WORKDIR /src
+RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY tools/ ./tools/
+COPY Zero-K.info/Scripts/ ./Zero-K.info/Scripts/
+COPY Zero-K.info/Styles/ ./Zero-K.info/Styles/
+COPY Zero-K.info/App_Start/ ./Zero-K.info/App_Start/
+COPY ZeroKWeb.Core/Mvc5Compat/BundlingCompat.cs ./ZeroKWeb.Core/Mvc5Compat/
+RUN npm run build
+
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
@@ -39,6 +53,10 @@ COPY --from=build /publish ./bin
 # called Zero-K.info because that is what Program.FindSiteRoot looks for above the binary -
 # the layout reads img/ through Server.MapPath, so an empty web root throws rather than
 # rendering an unstyled page.
+# The built bundles, beside the binary - which is where Program.cs looks for them, and why the
+# container serves one script tag where the build tree serves eleven.
+COPY --from=assets /src/build/assets/bundles ./bin/bundles
+
 COPY Zero-K.info/img     ./Zero-K.info/img
 COPY Zero-K.info/Scripts ./Zero-K.info/Scripts
 COPY Zero-K.info/Styles  ./Zero-K.info/Styles

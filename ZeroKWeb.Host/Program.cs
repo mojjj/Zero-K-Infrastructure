@@ -119,6 +119,30 @@ namespace ZeroKWeb.Host
                 //
                 // Not done for the checks: they assert HTML, and this is the kind of thing that
                 // should differ between "serve it" and "test it" only deliberately.
+                // The built bundles, when tools/build-assets.mjs has produced them. Without them
+                // the page lists eleven scripts individually, which is the developer answer and
+                // what the harness asserts; with them it is one tag per bundle, which is what the
+                // real bundler does and what the container ships.
+                // Next to the binary only, which is the container's layout - NOT the repository's
+                // build/ directory. That fallback was here for one commit and made the harness
+                // non-deterministic: it would serve bundles on a machine that had run the asset
+                // build and individual files on one that had not, so the same check meant
+                // different things in two places. The container is where the bundled path is
+                // exercised; ZK_BUNDLES overrides for anyone who wants it locally.
+                var built = Environment.GetEnvironmentVariable("ZK_BUNDLES")
+                            ?? System.IO.Path.Combine(AppContext.BaseDirectory, "bundles");
+
+                if (System.IO.Directory.Exists(built))
+                {
+                    app.UseStaticFiles(new StaticFileOptions
+                    {
+                        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(built),
+                        RequestPath = "/bundles",
+                    });
+                    System.Web.Optimization.Bundles.BuiltPath = "/bundles";
+                    Console.WriteLine("serving built bundles from " + built);
+                }
+
                 foreach (var assets in new[] { "img", "Scripts", "Styles" })
                 {
                     var directory = System.IO.Path.Combine(FindSiteRoot(), assets);
