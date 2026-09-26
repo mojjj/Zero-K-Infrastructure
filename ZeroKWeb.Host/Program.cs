@@ -608,8 +608,31 @@ namespace ZeroKWeb.Host
                 };
                 using (var client = new HttpClient(handler))
                 {
+                    // The login CSRF, closed. A link carrying somebody else's credentials used to
+                    // sign the visitor in as them; now the GET half refuses to look at them.
+                    var byLink = await client.GetAsync(Url + "/Home/Logon?login=" + Uri.EscapeDataString(name)
+                        + "&password=" + Uri.EscapeDataString(password) + "&zklogin=1");
+                    var byLinkBody = await byLink.Content.ReadAsStringAsync();
+                    failures += Check(byLinkBody.Contains("Sign in by submitting the login form"),
+                        "a GET carrying credentials does not sign anyone in (" + Summarize(byLink, byLinkBody) + ")");
+                    var afterLink = await (await client.GetAsync(Url + "/Harness/Whoami")).Content.ReadAsStringAsync();
+                    failures += Check(afterLink.Contains("not signed in"),
+                        "and left nobody signed in (" + afterLink.Trim() + ")");
+
+                    // POST alone is not the protection: a form on someone else's page can POST.
+                    var untokened = await client.PostAsync(Url + "/Home/Logon", new FormUrlEncodedContent(new[]
+                    {
+                        new KeyValuePair<string, string>("login", name),
+                        new KeyValuePair<string, string>("password", password),
+                        new KeyValuePair<string, string>("zklogin", "1"),
+                    }));
+                    failures += Check(untokened.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                        "a POST without an anti-forgery token is refused (" + (int)untokened.StatusCode + ")");
+
+                    var token = await (await client.GetAsync(Url + "/Harness/Token")).Content.ReadAsStringAsync();
                     var signIn = await client.PostAsync(Url + "/Home/Logon", new FormUrlEncodedContent(new[]
                     {
+                        new KeyValuePair<string, string>("__RequestVerificationToken", token),
                         new KeyValuePair<string, string>("login", name),
                         new KeyValuePair<string, string>("password", password),
                         new KeyValuePair<string, string>("zklogin", "1"),
@@ -623,8 +646,14 @@ namespace ZeroKWeb.Host
 
                     // No zklogin: the Steam branch. A 302 to Steam, built by the port's own
                     // protocol code rather than DotNetOpenAuth.
+                    // A FRESH token. ASP.NET Core binds the anti-forgery token to the identity, so
+                    // the one fetched while anonymous stops validating the moment SignInCompat runs
+                    // - the first version of this check reused it and got a 400 that looked like a
+                    // broken Steam branch.
+                    var signedInToken = await (await client.GetAsync(Url + "/Harness/Token")).Content.ReadAsStringAsync();
                     var steam = await client.PostAsync(Url + "/Home/Logon", new FormUrlEncodedContent(new[]
                     {
+                        new KeyValuePair<string, string>("__RequestVerificationToken", signedInToken),
                         new KeyValuePair<string, string>("login", name),
                     }));
                     var location = steam.Headers.Location?.ToString() ?? "";
