@@ -56,6 +56,13 @@ jobs:
       # a 44 KB jQuery plugin: nothing else in this repository would notice if its merge went
       # wrong, because every page renders either way and only the address bar would be quietly
       # wrong. node is on the runner already.
+      # The bundle list exists twice - BundleConfig.cs for the live site, BundlingCompat.cs for
+      # the port, because the first is written against System.Web.Optimization and cannot be
+      # linked. Drift is silent both ways: a script the port misses, or one it renders a tag for
+      # after the site drops it. The host harness only asserts the bundle renders something.
+      - name: Check the two bundle lists agree
+        run: ./tools/check-bundles.py
+
       - name: Check the site's JavaScript
         run: node tools/check-site-js.js
 
