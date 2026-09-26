@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -155,6 +155,15 @@ namespace Tests.Database
             // broken pipeline to whoever reads this next.
             var id = RatingPipeline.BusiestPlayer;
             var rating = RatingPipeline.Casual.GetPlayerRating(id);
+
+            // Asserted first, and separately, because this test's premise depends on it: until the
+            // pass finishes, GetTopPlayers answers from the database ordered by LadderElo and
+            // ignores ladder activity, so it returns ten players from a historical fixture. That
+            // happened in CI on 2026-09-26, and the message it failed with - "no fixture player is
+            // recent enough to be ranked" - pointed at the data rather than at the race.
+            Assert.IsTrue(RatingPipeline.FullPassFinished(RatingPipeline.Casual),
+                "the WHR pass has not finished, so GetTopPlayers is answering from the database "
+                + "and the assertions below are about the wrong code path");
 
             Assert.IsTrue(rating.LastGameDate > 0, "the busiest player should have a computed rating");
             Assert.IsFalse(rating.Ranked, "a player last seen years ago should not be on the ladder");
