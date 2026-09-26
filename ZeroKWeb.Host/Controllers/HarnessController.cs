@@ -145,6 +145,18 @@ namespace ZeroKWeb.Host.Controllers
             => new VikingErik.Mvc.ResumingActionResults.ResumingFileContentResult(
                 new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }, "application/octet-stream");
 
+        /// <summary>
+        /// An anti-forgery token, so a check can make a POST the site would accept.
+        ///
+        /// The real pages get theirs from @Html.AntiForgeryToken(); this calls the service that
+        /// helper wraps, and the cookie goes out on the same response, so the pair a browser would
+        /// hold is what the caller ends up with. What it exercises is the VALIDATING half -
+        /// [ValidateAntiForgeryToken] on the action. That the views actually emit a token is a
+        /// different question, and tools/check-antiforgery.py is what answers it.
+        /// </summary>
+        public IActionResult Token([FromServices] Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery)
+            => Content(antiforgery.GetAndStoreTokens(HttpContext).RequestToken, "text/plain");
+
         public IActionResult Whoami() => Content(
             ZeroKWeb.Global.Account == null
                 ? "not signed in"

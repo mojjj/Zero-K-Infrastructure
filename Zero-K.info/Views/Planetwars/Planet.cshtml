@@ -40,7 +40,7 @@
 
 @if (Global.IsAccountAuthorized && db.CurrentAccount().CanPlayerPlanetWars() && Global.LobbyApi.PlanetWarsPhase == ZeroKWeb.PwPhase.AttackCollect && Model.OwnerFactionID != Global.FactionID && Model.CanMatchMakerPlay(db.CurrentAccount().Faction))
 {
-    <a href="@Url.Action("MatchMakerAttack", "Planetwars", new { planetID = Model.PlanetID })">ATTACK PLANET</a>
+    @Html.PostLink("ATTACK PLANET", "MatchMakerAttack", "Planetwars", new { planetID = Model.PlanetID })
 }
 
 
@@ -107,6 +107,7 @@
 			if (isAccessible) {
                 var avail = Global.Account.GetDropshipsAvailable();
                 <form action='@Url.Action("SendDropships", "Planetwars", new { planetID = Model.PlanetID })' method="post">
+                    @Html.AntiForgeryToken()
                     Invade planet (@Html.PrintDropships(avail, Global.Account.Faction)):
                     <input type="text" name="count" />
                     <input type="submit" value="send" />
@@ -117,6 +118,7 @@
                 var availD = Global.Account.GetDropshipsAvailable();
                 var availW = Global.Account.GetWarpAvailable();
                 <form action='@Url.Action("SendDropships", "Planetwars", new { planetID = Model.PlanetID, useWarp = true })' method="post">
+                    @Html.AntiForgeryToken()
                     Warp to planet (@Html.PrintDropships(availD, Global.Account.Faction) @Html.PrintWarps(availW)):
                     <input type="text" name="count" />
                     <input type="submit" value="send" />
@@ -141,6 +143,7 @@
 			if (isAccessible) {
                 var avail = Global.Account.GetBombersAvailable();
                 <form action='@Url.Action("BombPlanet", "Planetwars", new { planetID = Model.PlanetID })' method="post">
+                    @Html.AntiForgeryToken()
                     <span>Bomb planet (@Html.PrintBombers(avail)):</span>
                     <input type="text" name="count" />
                     <input type="submit" value="send" />
@@ -151,6 +154,7 @@
                 var availB = Global.Account.GetBombersAvailable();
                 var availW = Global.Account.GetWarpAvailable();
                 <form action='@Url.Action("BombPlanet", "Planetwars", new { planetID = Model.PlanetID, useWarp = true })' method="post">
+                    @Html.AntiForgeryToken()
                     Warp bombers (@Html.PrintBombers(availB) @Html.PrintWarps(availW)):
                     <input type="text" name="count" />
                     <input type="submit" value="send" />
@@ -210,11 +214,14 @@
                 {
                     if (Global.Account.HasFactionRight(x => x.RightMetalQuota > 0))
                     {
-                        <a href="@Url.Action("ConfiscateStructure", "Planetwars", new { planetID = Model.PlanetID, structureTypeID = structure.StructureTypeID })"><span> - confiscate</span></a>
+                        @Html.PostLink(" - confiscate", "ConfiscateStructure", "Planetwars", new { planetID = Model.PlanetID, structureTypeID = structure.StructureTypeID })
                     }
                     else if (Model.Account.GetMetalAvailable() >= structure.StructureType.Cost)
                     {
-                        <a href="@Url.Action("ConfiscateStructure", "Planetwars", new { planetID = Model.PlanetID, structureTypeID = structure.StructureTypeID })"><span> - confiscate (@Html.PrintMetal(structure.StructureType.Cost))</span></a>
+                        <form class="postlink" method="post" action="@Url.Action("ConfiscateStructure", "Planetwars", new { planetID = Model.PlanetID, structureTypeID = structure.StructureTypeID })">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="postlink-button"> - confiscate (@Html.PrintMetal(structure.StructureType.Cost))</button>
+                        </form>
                         
                     }
                     else
@@ -230,6 +237,7 @@
                     {
                         var priority = structure.EnergyPriority;
                         <form method="POST" action="@Url.Action("SetEnergyPriority", new { planetID = Model.PlanetID, structureTypeID = structure.StructureTypeID })">
+                            @Html.AntiForgeryToken()
                             Energy priority: @Html.EditorFor(x => priority, "Enum") <input type="submit" value="change"/>
                         </form>
                     }
@@ -244,9 +252,10 @@
                 {
                     if (structure.CanRush(Global.Account))
                      {
-                         <a href="@Url.Action("RushActivation", "Planetwars", new { planetID = Model.PlanetID, structureTypeID = structure.StructureTypeID })">
-                             <span>Rush activation @structure.StructureType.RushActivationTime turn(s) (@Html.PrintMetal(structure.StructureType.MetalToRushActivation))</span>
-                         </a>
+                         <form class="postlink" method="post" action="@Url.Action("RushActivation", "Planetwars", new { planetID = Model.PlanetID, structureTypeID = structure.StructureTypeID })">
+                             @Html.AntiForgeryToken()
+                             <button type="submit" class="postlink-button">Rush activation @structure.StructureType.RushActivationTime turn(s) (@Html.PrintMetal(structure.StructureType.MetalToRushActivation))</button>
+                         </form>
                      }
                      else
                      {
@@ -262,6 +271,7 @@
                     if (Global.Account != null && Global.Account.CanSetStructureTarget(structure))
                     {
                     <form method="POST" action="@Url.Action("SetStructureTarget", new { planetID = Model.PlanetID, structureTypeID = structure.StructureTypeID })">
+                        @Html.AntiForgeryToken()
                         Target planet: @Html.DropDownList("targetPlanetID", structure.Planet.Galaxy.Planets.OrderBy(x=>x.Name).Select(x => new SelectListItem() { Text = x.Name, Value = x.PlanetID.ToString() }))
                     <input type="submit" value="change"/>
 
@@ -269,8 +279,9 @@
                         if (structure.StructureType.IsSingleUse && structure.IsActive && structure.TargetPlanetID != null)
                         {
                         string question = String.Format("WARNING: {0} will be used once on the specified target {1}, after which it will be removed. Proceed?", structure.StructureType.Name, structure.PlanetByTargetPlanetID);
-                        @Html.ActionLink("Activate", "ActivateTargetedStructure", new { planetID = Model.PlanetID, structureTypeID = structure.StructureTypeID},
-                            new { @onclick = String.Format("return confirm('{0}')", question) })
+                        @Html.PostLink("Activate", "ActivateTargetedStructure", "Planetwars",
+                            new { planetID = Model.PlanetID, structureTypeID = structure.StructureTypeID },
+                            confirmMessage: question)
                         }
                     }
                 }
@@ -295,7 +306,10 @@
               }
               else
               {
-                        <a nicetitle="$structuretype$@structureType.StructureTypeID" href="@Url.Action("BuildStructure", new { planetID = Model.PlanetID, structureTypeID = structureType.StructureTypeID })">Build @structureType.Name (@Html.PrintMetal(structureType.Cost))</a><br />
+                        <form class="postlink" method="post" action="@Url.Action("BuildStructure", new { planetID = Model.PlanetID, structureTypeID = structureType.StructureTypeID })">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="postlink-button" nicetitle="$structuretype$@structureType.StructureTypeID">Build @structureType.Name (@Html.PrintMetal(structureType.Cost))</button>
+                        </form><br />
               }
           }
       }
@@ -306,7 +320,10 @@
       {
           if (planet.PlanetStructures.Any(x => x.StructureTypeID == structureType.StructureTypeID && x.IsActive))
           {
-                    <a nicetitle="$structuretype$@structureType.StructureTypeID" href="@Url.Action("DestroyStructure", new { planetID = Model.PlanetID, structureTypeID = structureType.StructureTypeID })" class="js_confirm">Destroy @structureType.Name (@Html.PrintMetal(structureType.Cost * GlobalConst.SelfDestructRefund))</a><br />
+                    <form class="postlink" method="post" action="@Url.Action("DestroyStructure", new { planetID = Model.PlanetID, structureTypeID = structureType.StructureTypeID })">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="js_confirm postlink-button" nicetitle="$structuretype$@structureType.StructureTypeID">Destroy @structureType.Name (@Html.PrintMetal(structureType.Cost * GlobalConst.SelfDestructRefund))</button>
+                    </form><br />
           }
       }
   }

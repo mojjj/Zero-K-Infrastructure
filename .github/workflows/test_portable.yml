@@ -66,6 +66,9 @@ jobs:
       - name: Check the site's JavaScript
         run: node tools/check-site-js.js
 
+      - name: Check every POSTing form carries an anti-forgery token
+        run: ./tools/check-antiforgery.py
+
       - name: Check the lobby-server seam
         run: dotnet run --project ZkData.Core -- seam --check
 

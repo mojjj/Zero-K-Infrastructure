@@ -93,6 +93,12 @@ public static class Capture
         EmitHtml(routes, "PostLink with cssClass and nicetitle", html =>
             html.PostLink("Delete", "Delete", null, new { id = 3 }, "js_confirm", "Really?").ToString());
 
+        // The attribute lands between "class" and "nicetitle" because TagBuilder sorts, which is
+        // the kind of thing only a capture settles.
+        EmitHtml(routes, "PostLink with a confirm message", html =>
+            html.PostLink("Activate", "Fire", null, new { id = 3 }, null, null,
+                          "WARNING: it's gone after this. Proceed?").ToString());
+
         EmitHtml(routes, "PostLink encodes its text", html =>
             html.PostLink("a < b & c \" d ' e", "Act").ToString());
 

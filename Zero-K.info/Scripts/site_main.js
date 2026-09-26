@@ -208,6 +208,14 @@ function GlobalPageInit(root) {
         return answer;
     });
 
+    // Same idea, with the question spelled out. PostLink's confirmMessage puts the text in an
+    // attribute rather than building an onclick="return confirm('...')" by string concatenation,
+    // which is what the links this replaced did - so a quote in an interpolated planet name can
+    // no longer end the JavaScript string early.
+    s.find("[data-confirm]").click(function() {
+        return confirm($(this).attr("data-confirm"));
+    });
+
     s.find(".js_dialog").dialog(
         {
             autoOpen: true,

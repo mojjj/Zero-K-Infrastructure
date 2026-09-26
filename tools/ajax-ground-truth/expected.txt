@@ -16,6 +16,8 @@
 <form action="" class="postlink" method="post"><button class="postlink-button" type="submit">Select</button></form>
 ### PostLink with cssClass and nicetitle
 <form action="" class="postlink" method="post"><button class="js_confirm postlink-button" nicetitle="Really?" type="submit">Delete</button></form>
+### PostLink with a confirm message
+<form action="" class="postlink" method="post"><button class="postlink-button" data-confirm="WARNING: it&#39;s gone after this. Proceed?" type="submit">Activate</button></form>
 ### PostLink encodes its text
 <form action="" class="postlink" method="post"><button class="postlink-button" type="submit">a &lt; b &amp; c &quot; d &#39; e</button></form>
 ### PostImageLink(src, height, action)

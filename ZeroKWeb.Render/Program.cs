@@ -364,6 +364,10 @@ namespace ZeroKWeb.Render
                 ("PostLink with cssClass and nicetitle",
                  () => System.Web.Mvc.PostLinkExtensions.Tag("form", Form(""), Button("Delete", "js_confirm", "Really?"))),
 
+                ("PostLink with a confirm message",
+                 () => System.Web.Mvc.PostLinkExtensions.Tag("form", Form(""),
+                     Button("Activate", null, null, "WARNING: it's gone after this. Proceed?"))),
+
                 ("PostLink encodes its text",
                  () => System.Web.Mvc.PostLinkExtensions.Tag("form", Form(""),
                      Button(System.Net.WebUtility.HtmlEncode("a < b & c \" d ' e"), null, null))),
@@ -652,7 +656,7 @@ namespace ZeroKWeb.Render
             new SortedDictionary<string, string>(StringComparer.Ordinal)
                 { ["method"] = "post", ["action"] = url, ["class"] = "postlink" };
 
-        private static string Button(string inner, string cssClass, string nicetitle)
+        private static string Button(string inner, string cssClass, string nicetitle, string confirmMessage = null)
         {
             var attributes = new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
@@ -660,6 +664,7 @@ namespace ZeroKWeb.Render
                 ["class"] = string.IsNullOrEmpty(cssClass) ? "postlink-button" : cssClass + " postlink-button",
             };
             if (!string.IsNullOrEmpty(nicetitle)) attributes["nicetitle"] = nicetitle;
+            if (!string.IsNullOrEmpty(confirmMessage)) attributes["data-confirm"] = confirmMessage;
             return System.Web.Mvc.PostLinkExtensions.Tag("button", attributes, inner);
         }
 
