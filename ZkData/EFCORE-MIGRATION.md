@@ -434,9 +434,11 @@ column and the truncated value - so for most columns the database really would c
 Two things it does not catch, and they were measured rather than assumed:
 
 - **A column wider than its annotation.** `Accounts.Name` is `varchar(2000)` while
-  `[StringLength(200)]` says 200; the schema drifted past the model years ago. A
-  201-character name is stored with no error at all. It is one column out of 746, and it is
-  the one holding every player's name.
+  `[StringLength(200)]` says 200. A 201-character name is stored with no error at all. It is
+  one column out of 746, and it is the one holding every player's name. (This is *not* drift
+  worth repairing - see "Accounts.Name: three numbers" below, where a third number turns the
+  gap into defence in depth. It is still a real gap in what the database catches, which is
+  all this bullet claims.)
 - **`[Required]` on a string rejects null *and* the empty string**, where the column's
   `NOT NULL` only rejects null. 39 mapped string properties are `[Required]`.
 
