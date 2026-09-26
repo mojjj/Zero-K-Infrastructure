@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Data.Entity.SqlServer;
 using System.Linq;
+using System.Net;
 using System.Web.Mvc;
 using ZkData;
 
@@ -88,7 +89,18 @@ namespace ZeroKWeb.Controllers
                         x =>
                             new AutocompleteItem
                             {
-                                label = "Mission " + x.Name,
+                                // ENCODED, unlike the label above and below it - and that is the
+                                // point. Every other label here is built by a Print* helper, which
+                                // composes controlled markup around a name whose charset is
+                                // restricted (ValidLobbyNameCharacter allows only letters, digits,
+                                // underscore and brackets). A mission name carries no such
+                                // restriction - the entity has [StringLength(200)] and nothing
+                                // else - and site_main.js renders the label with
+                                // $("<a></a>").html(item.label), which parses it as HTML.
+                                //
+                                // WebUtility rather than HttpUtility so this compiles on .NET 9
+                                // too; the two agree, which Tests.Portable pins.
+                                label = "Mission " + WebUtility.HtmlEncode(x.Name),
                                 id = x.MissionID,
                                 url = Url.Action("Detail", "Missions", new { id = x.MissionID }),
                                 value = x.Name
