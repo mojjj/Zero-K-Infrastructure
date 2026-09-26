@@ -88,6 +88,7 @@ namespace ZeroKWeb.Controllers
         /// <summary>
         /// Go to main Planetwars page
         /// </summary>
+        [WritesOnGetByDesign("writes the galaxy render cache, which is what the page is for")]
         public ActionResult Index(int? galaxyID = null)
         {
             var db = new ZkDataContext();

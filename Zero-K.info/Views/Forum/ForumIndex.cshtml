@@ -78,7 +78,7 @@
 
                 @if (Global.Account != null)
                 {
-                    <span class="textbutton" style="float: right;" id="@grid.PagerSuffixID">@Html.ActionLink("Mark all as read", "MarkAllAsRead", new { categoryID = Model.CurrentCategory?.ForumCategoryID })</span>
+                    <span class="textbutton" style="float: right;" id="@grid.PagerSuffixID">@Html.PostLink("Mark all as read", "MarkAllAsRead", "Forum", new { categoryID = Model.CurrentCategory?.ForumCategoryID })</span>
                 }
             </div>
 

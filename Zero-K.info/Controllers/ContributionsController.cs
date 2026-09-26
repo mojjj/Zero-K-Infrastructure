@@ -27,6 +27,7 @@ namespace ZeroKWeb.Controllers
 
 
         [Auth]
+        [WritesOnGetByDesign("a code is redeemed by following a link, and the redeemer is the beneficiary")]
         public ActionResult Redeem(string code) {
             var db = new ZkDataContext();
             if (string.IsNullOrEmpty(code)) return Content("Code is empty");

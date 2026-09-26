@@ -957,6 +957,15 @@ namespace ZeroKWeb.Host
                 var failures = 0;
                 var url = Url + "/Users/ChangePassword";
 
+                // The link-shaped half. MarkAllAsRead was an ActionLink: a GET that wrote
+                // ForumLastRead rows for every category the visitor could see. It is the one
+                // driven here because it needs no arguments and its write is idempotent, so the
+                // accepted case can run for real instead of stopping at a guard.
+                var markRead = Url + "/Forum/MarkAllAsRead";
+                var markReadByLink = await client.GetAsync(markRead);
+                failures += Check(markReadByLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                    "  MarkAllAsRead is not reachable by GET (" + (int)markReadByLink.StatusCode + ")");
+
                 var asLink = await client.GetAsync(url);
                 failures += Check(asLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
                     "  ChangePassword is not reachable by GET (" + (int)asLink.StatusCode + ")");
@@ -983,6 +992,11 @@ namespace ZeroKWeb.Host
                     "  while a POST that carries one is accepted (" + (int)tokened.StatusCode + ")");
                 failures += Check(body.Contains("New passwords do not match"),
                     "  and reaches the action's own check (" + Summarize(tokened, body) + ")");
+
+                var markReadPosted = await Post(client, markRead, token);
+                failures += Check(markReadPosted.StatusCode == System.Net.HttpStatusCode.Redirect,
+                    "  while MarkAllAsRead still works when posted with one ("
+                    + (int)markReadPosted.StatusCode + ")");
 
                 return failures;
             });

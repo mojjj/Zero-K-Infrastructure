@@ -171,6 +171,7 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [WritesOnGetByDesign("a child action of the layout; marks private chat seen")]
         public ActionResult ChatNotification(ChatModel model)
         {
             model = model ?? new ChatModel();

@@ -32,6 +32,8 @@ namespace ZeroKWeb.Controllers
             return View("TourneyIndex", new TourneyModel() { Battles = tourneyBattles });
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult JoinBattle(string battleHost)
         {
             if (!Global.IsTourneyController) return DenyAccess();
@@ -39,6 +41,8 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult RemoveBattle(int battleid)
         {
             if (!Global.IsTourneyController) return DenyAccess();

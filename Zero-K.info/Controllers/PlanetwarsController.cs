@@ -266,6 +266,7 @@ namespace ZeroKWeb.Controllers
         }
 
 
+        [WritesOnGetByDesign("the planet's forum thread is marked read by looking at the page")]
         public ActionResult Planet(int id)
         {
             var db = new ZkDataContext();

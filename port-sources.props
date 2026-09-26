@@ -32,6 +32,7 @@
     <Compile Include="..\Zero-K.info\AppCode\HtmlHelperExtensions.Portable.cs" Link="Linked\HtmlHelperExtensions.Portable.cs" />
     <Compile Include="..\Zero-K.info\AppCode\GalaxyMapGeometry.cs" Link="Linked\GalaxyMapGeometry.cs" />
     <Compile Include="..\Zero-K.info\AppCode\MemCache.cs" Link="Linked\MemCache.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\WritesOnGet.cs" Link="Linked\WritesOnGet.cs" />
     <Compile Include="..\Zero-K.info\AppCode\PlanetwarsEventCreator.cs" Link="Linked\PlanetwarsEventCreator.cs" />
     <Compile Include="..\Zero-K.info\AppCode\ForumPostIndexer.cs" Link="Linked\ForumPostIndexer.cs" />
     <Compile Include="..\Zero-K.info\AppCode\ForumPostCache.cs" Link="Linked\ForumPostCache.cs" />

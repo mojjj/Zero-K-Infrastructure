@@ -52,6 +52,7 @@ namespace ZeroKWeb.Controllers
         /// <param name="deleteCommander">If not null or empty, delete the <see cref="Commander"/></param>
         /// <returns></returns>
 		[Auth]
+		[WritesOnGetNotYetFixed("called as a child action from Commanders.cshtml as well as posted to")]
 		public ActionResult CommanderProfile(int profileNumber, string name, int? chassis, string deleteCommander)
 		{
 			if (profileNumber < 1 || profileNumber > GlobalConst.CommanderProfileCount) return Content("WTF! get lost");
@@ -268,6 +269,8 @@ namespace ZeroKWeb.Controllers
         /// </summary>
         /// <param name="id">The ID of the <see cref="Unlock"/> to unlock</param>
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult Unlock(int id, bool useKudos = false)
         {
             using (var db = new ZkDataContext())

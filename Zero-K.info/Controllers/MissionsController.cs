@@ -43,6 +43,7 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        [WritesOnGetByDesign("the mission's forum thread is marked read by looking at the page")]
         public ActionResult Detail(int id)
         {
             var db = new ZkDataContext();
@@ -121,6 +122,7 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [WritesOnGetNotYetFixed("rated from JavaScript with $.get; needs the token plumbed into the script")]
         public ActionResult Rate(int id, int? difficulty, int? rating)
         {
             var db = new ZkDataContext();
