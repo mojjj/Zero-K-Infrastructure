@@ -827,6 +827,21 @@ namespace ZeroKWeb.Host
                 inner += Check(galaxyImage.StatusCode == System.Net.HttpStatusCode.NotFound,
                     "  GenerateGalaxyImage is not reachable by URL (" + (int)galaxyImage.StatusCode + ")");
 
+                // MatchMakerJoin was an Ajax.ActionLink, which is a GET: a crafted link signed the
+                // player up to a PlanetWars battle they had not chosen. It writes no rows - it
+                // calls the lobby server - so tools/check-get-writes.py cannot see it, and this is
+                // the only thing that does.
+                var join = Url + "/Planetwars/MatchMakerJoin?planetID=" + seed.SourcePlanetID + "&attackerFaction=HARNO";
+                var joinByLink = await client.GetAsync(join);
+                inner += Check(joinByLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                    "  MatchMakerJoin is not reachable by GET (" + (int)joinByLink.StatusCode + ")");
+
+                var joinUntokened = await client.PostAsync(join, new FormUrlEncodedContent(
+                    new KeyValuePair<string, string>[0]));
+                inner += Check(joinUntokened.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                    "  and a POST without an anti-forgery token is refused ("
+                    + (int)joinUntokened.StatusCode + ")");
+
                 var owners = await client.GetAsync(Url + "/Planetwars/RunSetPlanetOwners");
                 inner += Check(owners.StatusCode == System.Net.HttpStatusCode.Forbidden,
                     "  RunSetPlanetOwners refuses a signed-in player by role (" + (int)owners.StatusCode + ")");
@@ -863,6 +878,18 @@ namespace ZeroKWeb.Host
                     "  while a POST that carries one is accepted (" + (int)tokened.StatusCode + ")");
                 inner += Check(tokenedBody.Contains("Planet not yours"),
                     "  and reaches the action's own check (" + Summarize(tokened, tokenedBody) + ")");
+
+                // Not 400: the token was accepted and the action ran. The NullReferenceException
+                // logged just above this line is that, and it is expected. It cannot SUCCEED here -
+                // MatchMakerJoin calls Global.LobbyApi, and this harness has no lobby server, so
+                // it dies inside the action - but "reached the action" is the half that says the
+                // check is a guard rather than a wall. Asserting the two refusals alone would pass
+                // just as well on an action that had stopped existing.
+                var joinTokenTest = await (await client.GetAsync(Url + "/Harness/Token")).Content.ReadAsStringAsync();
+                var joinTokened = await Post(client, join, joinTokenTest);
+                inner += Check(joinTokened.StatusCode != System.Net.HttpStatusCode.BadRequest,
+                    "  while a POST that carries one gets past the token check ("
+                    + (int)joinTokened.StatusCode + ", no lobby server to finish the job)");
 
                 // The hole. An active structure, aimed, on a planet belonging to a faction this
                 // account is not in, owned by nobody it has any claim through.

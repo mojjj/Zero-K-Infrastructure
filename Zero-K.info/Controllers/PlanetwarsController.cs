@@ -795,6 +795,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult MatchMakerJoin(int planetID, string attackerFaction)
         {
             Global.LobbyApi.RequestJoinPlanet(Global.Account.Name, planetID, attackerFaction);
