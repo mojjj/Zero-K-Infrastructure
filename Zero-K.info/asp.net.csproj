@@ -214,10 +214,8 @@
     <Content Include="Scripts\countDown.js" />
     <Content Include="Scripts\grid.js" />
     <Content Include="Scripts\jquery-ui.min.js" />
-    <Content Include="Scripts\jquery.ba-bbq.js" />
     <Content Include="Scripts\jquery.datetimepicker.full.min.js" />
     <Content Include="Scripts\jquery.expand.js" />
-    <Content Include="Scripts\jquery.history.js" />
     <Content Include="Scripts\jquery.qtip.min.js" />
     <Content Include="Scripts\jquery.ui.stars.js" />
     <Content Include="Scripts\moment.min.js" />
