@@ -30,6 +30,13 @@ namespace ZeroKWeb.Controllers
         /// type. Quality 85 is what the call site used and is passed explicitly, because an
         /// imaging library's default is not 85.
         /// </summary>
+        /// <remarks>
+        /// [NonAction] because public on a controller means routable, not just visible: under
+        /// the default route this was reachable as /Planetwars/GenerateGalaxyImage?galaxyID=N,
+        /// with no login, composing a full galaxy JPEG per request and skipping the render_N.jpg
+        /// cache that Index exists to maintain. Its only caller is Index, one method below.
+        /// </remarks>
+        [NonAction]
         public byte[] GenerateGalaxyImage(int galaxyID, double zoom = 1, double antiAliasingFactor = 1)
         {
             // The old code multiplied zoom by this and then, if it was not 1, resized the result

@@ -548,6 +548,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckMaps(client);
                 failures += await CheckSteamAndRealLogon();
                 failures += await CheckEngines();
+                failures += await CheckPlanetwarsActionSurface();
 
                 Console.WriteLine();
                 if (failures == 0)
@@ -741,6 +742,232 @@ namespace ZeroKWeb.Host
                     "no unprocessed Razor markers survived");
                 return failures;
             });
+        }
+
+        /// <summary>
+        /// What a URL can reach on PlanetwarsController, and what it has to prove to get there.
+        ///
+        /// **Three of these assert a 404, which is the point.** `CreateLink` and
+        /// `GenerateGalaxyImage` were written as helpers - one caller each, nothing in any view or
+        /// script pointing at them, and a comment on CreateLink's caller saying the pair was never
+        /// to be entered from outside. All of that was true and none of it mattered, because they
+        /// were `public`, and under the {controller}/{action}/{id} route both stacks map, a public
+        /// method on a controller is an action. CreateLink checked only that two planets shared a
+        /// galaxy, so anyone logged in could link any two planets and change who can attack whom.
+        ///
+        /// A 404 is a good assertion here precisely because it does not depend on game state: the
+        /// action is gone from the routing table, so no galaxy, planet or structure has to exist
+        /// for the check to mean something.
+        ///
+        /// The last two need state, and they are the interesting pair. ActivateTargetedStructure
+        /// had no authorization check at all - Planet.cshtml drew its Activate link only when
+        /// CanSetStructureTarget said so, and a link the template declines to draw is not a check.
+        /// So a structure is seeded on an enemy faction's planet and a signed-in outsider asks for
+        /// it to be fired. Then the SAME structure is handed to that account and asked for again,
+        /// which must get past the gate - otherwise "refused" would prove nothing, since a check
+        /// that refuses everybody looks identical from outside.
+        /// </summary>
+        private static async Task<int> CheckPlanetwarsActionSurface()
+        {
+            Console.WriteLine();
+            Console.WriteLine("planetwars action surface:");
+            var failures = 0;
+
+            // No cookie at all. RunSetPlanetOwners carried no [Auth] of any kind while running a
+            // turn handler that writes planet ownership and inserts events.
+            using (var anonymous = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }))
+            {
+                var response = await anonymous.GetAsync(Url + "/Planetwars/RunSetPlanetOwners");
+                failures += Check(response.StatusCode == System.Net.HttpStatusCode.Redirect,
+                    "  RunSetPlanetOwners turns an anonymous request away (" + (int)response.StatusCode + ")");
+            }
+
+            failures += await AsPlanetwarsOutsider(async (client, seed) =>
+            {
+                var inner = 0;
+
+                var link = await client.GetAsync(Url + "/Planetwars/CreateLink?planetID="
+                    + seed.SourcePlanetID + "&structureTypeID=" + seed.StructureTypeID
+                    + "&targetID=" + seed.TargetPlanetID);
+                inner += Check(link.StatusCode == System.Net.HttpStatusCode.NotFound,
+                    "  CreateLink is not reachable by URL (" + (int)link.StatusCode + ")");
+
+                var galaxyImage = await client.GetAsync(Url + "/Planetwars/GenerateGalaxyImage?galaxyID=" + seed.GalaxyID);
+                inner += Check(galaxyImage.StatusCode == System.Net.HttpStatusCode.NotFound,
+                    "  GenerateGalaxyImage is not reachable by URL (" + (int)galaxyImage.StatusCode + ")");
+
+                var owners = await client.GetAsync(Url + "/Planetwars/RunSetPlanetOwners");
+                inner += Check(owners.StatusCode == System.Net.HttpStatusCode.Forbidden,
+                    "  RunSetPlanetOwners refuses a signed-in player by role (" + (int)owners.StatusCode + ")");
+
+                // The hole. An active structure, aimed, on a planet belonging to a faction this
+                // account is not in, owned by nobody it has any claim through.
+                var activate = Url + "/Planetwars/ActivateTargetedStructure?planetID="
+                    + seed.SourcePlanetID + "&structureTypeID=" + seed.StructureTypeID;
+                var refused = await client.GetAsync(activate);
+                var refusedBody = await refused.Content.ReadAsStringAsync();
+                inner += Check(refusedBody.Contains("Cannot activate this structure"),
+                    "  an outsider cannot fire someone else's structure ("
+                    + Summarize(refused, refusedBody) + ")");
+
+                // The control. Same URL, same account - the structure is simply theirs now, and
+                // deactivated so that getting past the gate stops at the next guard instead of
+                // running a PlanetWars turn. "inactive" is the reply from AFTER the check, so it
+                // says the gate opened; without this, a check that refused everyone would pass.
+                using (var db = new ZkDataContext())
+                {
+                    var structure = db.PlanetStructures.Single(x => x.PlanetID == seed.SourcePlanetID
+                        && x.StructureTypeID == seed.StructureTypeID);
+                    structure.OwnerAccountID = seed.AccountID;
+                    structure.IsActive = false;
+                    db.SaveChanges();
+                }
+
+                var allowed = await client.GetAsync(activate);
+                var allowedBody = await allowed.Content.ReadAsStringAsync();
+                inner += Check(!allowedBody.Contains("Cannot activate this structure"),
+                    "  and the owner of the same structure is not refused ("
+                    + Summarize(allowed, allowedBody) + ")");
+                inner += Check(allowedBody.Contains("is inactive"),
+                    "  reaching the guard that comes after the check");
+
+                return inner;
+            });
+
+            return failures;
+        }
+
+        private static string Summarize(HttpResponseMessage response, string body)
+        {
+            var text = body.Replace("\r", " ").Replace("\n", " ").Trim();
+            if (text.Length > 60) text = text.Substring(0, 60) + "...";
+            return text.Length > 0 ? text : (int)response.StatusCode + " " + response.Headers.Location;
+        }
+
+        /// <summary>A galaxy the signed-in account has nothing to do with.</summary>
+        private sealed class PlanetwarsSeed
+        {
+            public int AccountID;
+            public int GalaxyID;
+            public int SourcePlanetID;
+            public int TargetPlanetID;
+            public int StructureTypeID;
+        }
+
+        /// <summary>
+        /// Signs in as an ordinary player, in a faction, and builds a two-planet galaxy belonging
+        /// to a different faction with an armed structure on it. Everything is removed afterwards.
+        ///
+        /// The account needs a faction because CanSetStructureTarget's first line refuses anyone
+        /// without one. A factionless account would be turned away for a reason that has nothing to
+        /// do with ownership, and the check would pass while the hole was wide open.
+        /// </summary>
+        private static async Task<int> AsPlanetwarsOutsider(Func<HttpClient, PlanetwarsSeed, Task<int>> body)
+        {
+            const string password = "harness-planetwars-password";
+            string name;
+            string originalHash;
+            AdminLevel originalAdminLevel;
+            int? originalFactionID;
+            var seed = new PlanetwarsSeed();
+            int ourFactionID, theirFactionID;
+
+            using (var db = new ZkDataContext())
+            {
+                var account = db.Accounts.OrderBy(a => a.AccountID).First();
+                name = account.Name;
+                seed.AccountID = account.AccountID;
+                originalHash = account.PasswordBcrypt;
+                originalAdminLevel = account.AdminLevel;
+                originalFactionID = account.FactionID;
+                account.AdminLevel = AdminLevel.None;
+                account.SetPasswordPlain(password);
+
+                var ours = new Faction { Name = "Harness Ours", Shortcut = "HARNO", Color = "#101010" };
+                var theirs = new Faction { Name = "Harness Theirs", Shortcut = "HARNT", Color = "#202020" };
+                db.Factions.Add(ours);
+                db.Factions.Add(theirs);
+                db.SaveChanges();
+                ourFactionID = ours.FactionID;
+                theirFactionID = theirs.FactionID;
+
+                account.FactionID = ourFactionID;
+
+                // IsDefault stays false: Planetwars/Index does Single(x => x.IsDefault), and a
+                // second default galaxy would break an unrelated page for as long as this runs.
+                var galaxy = new Galaxy { ImageName = "harness.jpg", Width = 100, Height = 100, Turn = 1 };
+                db.Galaxies.Add(galaxy);
+                db.SaveChanges();
+                seed.GalaxyID = galaxy.GalaxyID;
+
+                var source = new Planet { Name = "Harness Source", GalaxyID = galaxy.GalaxyID, X = 0.25, Y = 0.25, TeamSize = 2, OwnerFactionID = theirFactionID };
+                var target = new Planet { Name = "Harness Target", GalaxyID = galaxy.GalaxyID, X = 0.75, Y = 0.75, TeamSize = 2, OwnerFactionID = theirFactionID };
+                db.Planets.Add(source);
+                db.Planets.Add(target);
+
+                // Every Effect* left null, so firing this does nothing to the database even if a
+                // regression lets the request through.
+                var structureType = new StructureType { Name = "Harness Emitter", IsSingleUse = false };
+                db.StructureTypes.Add(structureType);
+                db.SaveChanges();
+
+                seed.SourcePlanetID = source.PlanetID;
+                seed.TargetPlanetID = target.PlanetID;
+                seed.StructureTypeID = structureType.StructureTypeID;
+
+                db.PlanetStructures.Add(new PlanetStructure
+                {
+                    PlanetID = source.PlanetID,
+                    StructureTypeID = structureType.StructureTypeID,
+                    IsActive = true,
+                    TargetPlanetID = target.PlanetID,
+                });
+                db.SaveChanges();
+            }
+
+            try
+            {
+                var handler = new HttpClientHandler
+                {
+                    UseCookies = true,
+                    CookieContainer = new System.Net.CookieContainer(),
+                    AllowAutoRedirect = false
+                };
+                using (var client = new HttpClient(handler))
+                {
+                    await client.PostAsync(Url + "/Harness/Login", new FormUrlEncodedContent(
+                        new[] { new KeyValuePair<string, string>("login", name),
+                                new KeyValuePair<string, string>("password", password) }));
+                    return await body(client, seed);
+                }
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var account = db.Accounts.Single(a => a.AccountID == seed.AccountID);
+                    account.PasswordBcrypt = originalHash;
+                    account.AdminLevel = originalAdminLevel;
+                    account.FactionID = originalFactionID;
+                    db.SaveChanges();
+
+                    // Children first: the structure points at both planets, and a planet points at
+                    // the galaxy. Events are swept because a regression that lets the request
+                    // through inserts one, and leaving it behind would make the next run's
+                    // deletions fail on a foreign key instead of reporting the real failure.
+                    db.PlanetStructures.RemoveRange(db.PlanetStructures.Where(x => x.PlanetID == seed.SourcePlanetID));
+                    db.SaveChanges();
+                    db.Events.RemoveRange(db.Events.Where(e => e.Planets.Any(p => p.GalaxyID == seed.GalaxyID)));
+                    db.Links.RemoveRange(db.Links.Where(x => x.GalaxyID == seed.GalaxyID));
+                    db.SaveChanges();
+                    db.Planets.RemoveRange(db.Planets.Where(x => x.GalaxyID == seed.GalaxyID));
+                    db.StructureTypes.RemoveRange(db.StructureTypes.Where(x => x.StructureTypeID == seed.StructureTypeID));
+                    db.SaveChanges();
+                    db.Galaxies.RemoveRange(db.Galaxies.Where(x => x.GalaxyID == seed.GalaxyID));
+                    db.Factions.RemoveRange(db.Factions.Where(x => x.FactionID == ourFactionID || x.FactionID == theirFactionID));
+                    db.SaveChanges();
+                }
+            }
         }
 
         /// <summary>
