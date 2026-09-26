@@ -135,7 +135,25 @@ been. It only reads.
 
 **The backfill exists too**, as the re-stretching option:
 
-    ZK_CONNECTION_STRING=... dotnet run --project ZkData.Core -- backfill-minimaps <dir> [--apply] [--touch]
+    ZK_CONNECTION_STRING=... dotnet run --project ZkData.Core \
+        -- backfill-minimaps <dir> [--apply] [--touch] [--limit=N] [--only=name,name]
+
+**Running it for real, in the order that keeps it reversible.** The directory is the site's
+`Resources` folder, and these are the only copies of those images - the originals are inside map
+archives:
+
+    -- minimaps <dir>                          how many are legacy, and examples
+    -- backfill-minimaps <dir>                 dry run: what would change, nothing written
+    -- backfill-minimaps <dir> --apply --limit=1
+                                               one map. Look at it on the site before going on.
+    -- backfill-minimaps <dir> --apply --limit=20
+                                               a batch, then look again
+    -- backfill-minimaps <dir> --apply         the rest
+    -- backfill-minimaps <dir> --apply --touch the same, and make clients re-sync
+
+`--only=name` targets named maps, for redoing one that came out wrong. Every overwritten file is
+copied to `<name>.legacy` first, so any step is undone with `mv`; a second run corrects nothing it
+has already corrected.
 
 It corrects the minimap, metal map and height map of every legacy resource and regenerates the
 thumbnail from the corrected minimap - the thumbnail being the case where the defect hides best,
