@@ -265,7 +265,17 @@ namespace System.Web.Mvc
 
         public static MvcHtmlString PrintMap(this HtmlHelper helper, string name) {
             var url = Global.UrlHelper();
-            return new MvcHtmlString(string.Format("<a href='{0}' title='$map${1}'>{1}</a>", url.Action("DetailName", "Maps", new { name }), name));
+
+            // Encoded, because a map's InternalName is not restricted. Resource.InternalName has
+            // [Required] and [StringLength(255)] and nothing else, RegisterResource only null-checks
+            // it, and the name comes out of an uploaded map archive - so it is user-supplied text
+            // going into an attribute and into element content. Compare PrintAccount, which does not
+            // encode and does not need to: Account.IsValidLobbyName is enforced server-side at both
+            // registration and rename, so a player name cannot carry markup.
+            //
+            // url.Action encodes the query string itself, so only the two literal positions matter.
+            var encoded = System.Net.WebUtility.HtmlEncode(name);
+            return new MvcHtmlString(string.Format("<a href='{0}' title='$map${1}'>{1}</a>", url.Action("DetailName", "Maps", new { name }), encoded));
         }
 
         /// <summary>
@@ -360,8 +370,15 @@ namespace System.Web.Mvc
 
         public static MvcHtmlString PrintMediaWikiEdit(this HtmlHelper helper, MediaWikiRecentChanges.MediaWikiEdit edit)
         {
-            return new MvcHtmlString(string.Format("<a href=\"//zero-k.info/mediawiki/index.php?title={0}\">{0}</a> by {1} <small>{2}</small>",
-                    edit.Title, edit.Username, edit.AgoString
+            // Title and Username come from the wiki's recent-changes feed - written by whoever
+            // edits the wiki - and went into both an href and the page unencoded. The href needs
+            // URL encoding and the text needs HTML encoding; they are different jobs and the
+            // original did neither.
+            return new MvcHtmlString(string.Format("<a href=\"//zero-k.info/mediawiki/index.php?title={0}\">{1}</a> by {2} <small>{3}</small>",
+                    System.Uri.EscapeDataString(edit.Title ?? ""),
+                    System.Net.WebUtility.HtmlEncode(edit.Title),
+                    System.Net.WebUtility.HtmlEncode(edit.Username),
+                    System.Net.WebUtility.HtmlEncode(edit.AgoString)
                     ));
         }
 
