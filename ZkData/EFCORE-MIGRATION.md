@@ -3777,6 +3777,38 @@ extracted and tested for exactly that call site.
 zero. What remains is not "does it compile" but "does it run": the tripwires mark where it
 cannot - unitsync, MonoTorrent, the lobby server - and those are the remaining work.
 
+## Accounts.Name: three numbers, and the note that overstated them
+
+The write harness recorded this as schema drift "worth acting on independently of the port":
+`Accounts.Name` is `varchar(2000)` while the entity says `[StringLength(200)]`, and EF6 validation
+has been the only thing enforcing 200 - so the live table "may already hold longer names".
+
+**A third number was missing, and it is the one that decides.** `Account.IsValidLobbyName` checks
+`name.Length <= GlobalConst.MaxUsernameLength`, which is **25**, and it is enforced server-side at
+both entry points - registration in `LoginChecker.DoRegister`, rename in `UsersController`. So:
+
+| limit | value | where it applies |
+|---|---|---|
+| `GlobalConst.MaxUsernameLength` | 25 | registration and rename, server-side |
+| `[StringLength]` on `Account.Name` | 200 | EF6 validation at SaveChanges, and `Ef6Compat/EntityValidation.cs` in the port |
+| the column | 2000 | what the migrations built, modelled explicitly in `ColumnFacets` |
+
+Ordered smallest-first, that is defence in depth rather than drift: nothing can reach the database
+that the entry points would refuse. The port is already correct here - the facets say 2000, which
+is why the schema diffs clean.
+
+**So nothing is being changed.** Narrowing the column would be a migration whose only benefit is
+tidiness, against data nobody here can inspect; widening the attribute would remove a net that
+costs nothing.
+
+**What was missing is a guard on the order.** Raise `MaxUsernameLength` past 200 and registration
+starts accepting names that `SaveChanges` then rejects - a failure at the wrong layer, with a
+message about a column rather than about the name somebody typed. `Tests.Database/UsernameLengthTests.cs`
+pins all three, and one of them is written for a run this repository cannot do: pointed at a
+restored copy of the live database, `No_stored_name_is_longer_than_validation_allows` answers the
+question the original note could only speculate about. Against the fixture the longest name is 10
+characters.
+
 ## A finding in production code, unrelated to the port
 
 `EnginesController.UploadEngine` carries `[Auth(Role = AdminLevel.SuperAdmin)]`, `[HttpPost]` and
