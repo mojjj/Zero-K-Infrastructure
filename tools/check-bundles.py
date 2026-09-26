@@ -89,6 +89,14 @@ def main():
     site = site_bundles(strip_comments(read(SITE)))
     port = port_bundles(strip_comments(read(PORT)))
 
+    # The build step needs the same list this check reads. Printing it here rather than parsing
+    # the C# a second time in JavaScript keeps one parser: a second one would drift from this,
+    # and drift between the list and the thing that builds it is exactly what this file is for.
+    if "--print" in sys.argv:
+        import json
+        print(json.dumps(port, indent=2))
+        return 0
+
     if not site:
         print("could not find any bundles in %s - has its shape changed?" % SITE.name, file=sys.stderr)
         return 2

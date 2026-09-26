@@ -16,9 +16,11 @@ namespace System.Web.Optimization
     ///
     /// So this emits the bundle's files individually, unminified, in the order BundleConfig
     /// declares them. That is exactly what the real bundler does in debug mode, so it is a
-    /// faithful development-time answer rather than a stub - and it is deliberately NOT a
-    /// production answer: 13 script tags where the site serves one, uncombined and
-    /// unminified. Whoever picks the build step replaces this.
+    /// faithful development-time answer rather than a stub.
+    ///
+    /// **The build step exists now** - esbuild, via tools/build-assets.mjs. When its output is
+    /// present, <see cref="Bundles.BuiltPath"/> is set and this emits ONE tag per bundle instead,
+    /// which is what the container ships. Unset, the development answer above is unchanged.
     ///
     /// The file list is duplicated from BundleConfig.cs because that file cannot be linked -
     /// it is written against BundleCollection, which does not exist here. Duplicated lists
@@ -67,6 +69,27 @@ namespace System.Web.Optimization
             => Contents.TryGetValue(bundle, out var files) ? files : Enumerable.Empty<string>();
 
         internal static string Href(string tildePath) => tildePath.TrimStart('~');
+
+        /// <summary>
+        /// Where the built bundles are served from, or null when there are none.
+        ///
+        /// **Set, this emits one tag per bundle instead of eleven** - what the real bundler does
+        /// outside debug mode. Unset, nothing changes: the files are listed individually and
+        /// unminified, which is what a developer wants and what the host harness asserts.
+        ///
+        /// The host sets it when tools/build-assets.mjs has produced output. Deliberately a
+        /// property rather than a probe of the file system from here: this library is linked into
+        /// three projects, and which of them has built assets is the host's business.
+        /// </summary>
+        public static string BuiltPath { get; set; }
+
+        /// <summary>The built file for a bundle - "~/bundles/main" becomes "/bundles/main.js".</summary>
+        internal static string Built(string bundle, string extension)
+        {
+            if (string.IsNullOrEmpty(BuiltPath)) return null;
+            var name = bundle.Substring(bundle.LastIndexOf('/') + 1);
+            return BuiltPath.TrimEnd('/') + "/" + name + extension;
+        }
     }
 
     public static class Scripts
@@ -74,8 +97,18 @@ namespace System.Web.Optimization
         public static IHtmlContent Render(params string[] bundles)
         {
             var sb = new StringBuilder();
-            foreach (var file in bundles.SelectMany(Bundles.Files))
-                sb.Append($"<script src=\"{Bundles.Href(file)}\"></script>");
+            foreach (var bundle in bundles)
+            {
+                var built = Bundles.Built(bundle, ".js");
+                if (built != null)
+                {
+                    sb.Append($"<script src=\"{built}\"></script>");
+                    continue;
+                }
+
+                foreach (var file in Bundles.Files(bundle))
+                    sb.Append($"<script src=\"{Bundles.Href(file)}\"></script>");
+            }
             return new HtmlString(sb.ToString());
         }
     }
@@ -85,8 +118,18 @@ namespace System.Web.Optimization
         public static IHtmlContent Render(params string[] bundles)
         {
             var sb = new StringBuilder();
-            foreach (var file in bundles.SelectMany(Bundles.Files))
-                sb.Append($"<link href=\"{Bundles.Href(file)}\" rel=\"stylesheet\"/>");
+            foreach (var bundle in bundles)
+            {
+                var built = Bundles.Built(bundle, ".css");
+                if (built != null)
+                {
+                    sb.Append($"<link href=\"{built}\" rel=\"stylesheet\"/>");
+                    continue;
+                }
+
+                foreach (var file in Bundles.Files(bundle))
+                    sb.Append($"<link href=\"{Bundles.Href(file)}\" rel=\"stylesheet\"/>");
+            }
             return new HtmlString(sb.ToString());
         }
     }

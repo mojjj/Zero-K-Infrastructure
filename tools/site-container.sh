@@ -60,6 +60,16 @@ echo
 echo "the ported site, in a container:"
 
 body=$(curl -fsS "http://127.0.0.1:$PORT/Home/NotLoggedIn")
+
+# The asset build. The image carries bundles built by esbuild, so the page asks for ONE script
+# rather than the eleven the build tree serves - and that file has to actually be there.
+scripts=$(printf '%s' "$body" | grep -oE '<script src="[^"]+"' | wc -l)
+check "$([ "$scripts" = "1" ] && echo 0 || echo 1)" "the page asks for one script bundle, not eleven ($scripts)"
+bundle=$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/bundles/main.js" 2>/dev/null)
+check "$([ "$bundle" = "200" ] && echo 0 || echo 1)" "and the built bundle is served ($bundle)"
+css=$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/bundles/maincss.css" 2>/dev/null)
+check "$([ "$css" = "200" ] && echo 0 || echo 1)" "so is the built stylesheet ($css)"
+
 case "$body" in *"<html"*) check 0 "it serves a whole HTML document" ;; *) check 1 "it serves a whole HTML document" ;; esac
 case "$body" in *"@"*) check 1 "no unprocessed Razor markers survived" ;; *) check 0 "no unprocessed Razor markers survived" ;; esac
 
