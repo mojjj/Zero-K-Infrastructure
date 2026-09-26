@@ -22,7 +22,11 @@ namespace System.Web.Optimization
     ///
     /// The file list is duplicated from BundleConfig.cs because that file cannot be linked -
     /// it is written against BundleCollection, which does not exist here. Duplicated lists
-    /// drift, so the check in ZeroKWeb.Host compares the two.
+    /// drift, so tools/check-bundles.py compares the two and runs in CI.
+    ///
+    /// This comment used to say the check lived in ZeroKWeb.Host. It did not live anywhere: the
+    /// only two files that mentioned ~/bundles/main were this one and BundleConfig.cs. A comment
+    /// promising a guard is worse than no comment, because the next reader stops looking for it.
     /// </summary>
     public static class Bundles
     {
