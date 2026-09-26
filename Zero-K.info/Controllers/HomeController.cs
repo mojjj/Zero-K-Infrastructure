@@ -221,8 +221,52 @@ namespace ZeroKWeb.Controllers
 			return View();
 		}
 
-        [AcceptVerbs("GET", "POST")]
+        /// <summary>
+        /// Sign-in, by GET. Steam and nothing else.
+        ///
+        /// **Logon used to be [AcceptVerbs("GET","POST")] across all three of its paths**, which made
+        /// the password one a login CSRF: a hidden form - or a bare link - submitting the ATTACKER's
+        /// credentials signs the visitor into the attacker's account, and everything they do next
+        /// happens there. It is the one CSRF worth doing to somebody who is not logged in at all.
+        ///
+        /// The password path moved to the POST twin below, where an anti-forgery token is required.
+        /// This half keeps what cannot ask for a token: Steam's OpenID return, which is a redirect
+        /// from Steam and arrives as a GET carrying nothing of ours, and the request that starts it.
+        ///
+        /// **Nothing was signing in by GET.** zklogin comes from one place, the submit button in
+        /// LoginBar.cshtml, and that is a POST. ZeroKLobby/BrowserInterop does fetch
+        /// /Home/Logon?login=&amp;password= at startup, but it sends no zklogin, so it has always taken
+        /// the Steam branch - the lobby client authenticates by planting the session-token cookie
+        /// beside it, not through this.
+        /// </summary>
+        [HttpGet]
         public ActionResult Logon(string login, string password, string referer, string zklogin)
+		{
+            // Refused rather than quietly treated as a Steam request: a GET carrying credentials is
+            // either the old behaviour being relied on somewhere this says it is not, or it is the
+            // attack. Both are worth seeing rather than redirecting away.
+            if (!string.IsNullOrEmpty(zklogin))
+                return Content("Sign in by submitting the login form, not by following a link.");
+
+            return LogonCore(login, password, referer, null);
+		}
+
+        /// <summary>
+        /// The same sign-in by POST, with the anti-forgery token that closes the hole.
+        ///
+        /// [ActionName] so both halves answer on /Home/Logon and the verb chooses between them - the
+        /// form's action, and the return_to handed to Steam, are unchanged.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [ActionName("Logon")]
+        public ActionResult LogonPost(string login, string password, string referer, string zklogin)
+		{
+            return LogonCore(login, password, referer, zklogin);
+		}
+
+        /// <summary>Private: a public method on a controller is an action, which is how CreateLink got out.</summary>
+        private ActionResult LogonCore(string login, string password, string referer, string zklogin)
 		{
 		    // PHASE 1: the login rate limiter counts failures in the LOBBY SERVER's memory, so
 		    // this line is sign-in depending on the two processes being one. The null-conditional
