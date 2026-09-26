@@ -40,9 +40,10 @@ namespace System.Web.Mvc
                                              string controller = null,
                                              object routeValues = null,
                                              string cssClass = null,
-                                             string nicetitle = null)
+                                             string nicetitle = null,
+                                             string confirmMessage = null)
             => BuildPostForm(html, WebUtility.HtmlEncode(linkText ?? ""),
-                             action, controller, routeValues, cssClass, nicetitle);
+                             action, controller, routeValues, cssClass, nicetitle, confirmMessage);
 
         public static MvcHtmlString PostImageLink(this IHtmlHelper html,
                                                   string imageSrc,
@@ -51,7 +52,8 @@ namespace System.Web.Mvc
                                                   string controller = null,
                                                   object routeValues = null,
                                                   string cssClass = null,
-                                                  string nicetitle = null)
+                                                  string nicetitle = null,
+                                                  string confirmMessage = null)
         {
             var img = new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
@@ -60,7 +62,7 @@ namespace System.Web.Mvc
             };
             if (imageHeight > 0) img["height"] = imageHeight.ToString();
             return BuildPostForm(html, Tag("img", img, null, selfClosing: true),
-                                 action, controller, routeValues, cssClass, nicetitle);
+                                 action, controller, routeValues, cssClass, nicetitle, confirmMessage);
         }
 
         private static MvcHtmlString BuildPostForm(IHtmlHelper html,
@@ -69,7 +71,8 @@ namespace System.Web.Mvc
                                                    string controller,
                                                    object routeValues,
                                                    string cssClass,
-                                                   string nicetitle)
+                                                   string nicetitle,
+                                                   string confirmMessage)
         {
             var url = Url(html, action, controller, routeValues) ?? "";
 
@@ -84,6 +87,7 @@ namespace System.Web.Mvc
                 ["class"] = buttonClass,
             };
             if (!string.IsNullOrEmpty(nicetitle)) button["nicetitle"] = nicetitle;
+            if (!string.IsNullOrEmpty(confirmMessage)) button["data-confirm"] = confirmMessage;
 
             var form = new SortedDictionary<string, string>(StringComparer.Ordinal)
             {

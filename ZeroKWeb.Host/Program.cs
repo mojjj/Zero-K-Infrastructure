@@ -800,11 +800,44 @@ namespace ZeroKWeb.Host
                 inner += Check(owners.StatusCode == System.Net.HttpStatusCode.Forbidden,
                     "  RunSetPlanetOwners refuses a signed-in player by role (" + (int)owners.StatusCode + ")");
 
+                // The actions themselves, now that they are POST-only and token-checked.
+                //
+                // ConfiscateStructure is the one driven here because its authorization check is
+                // the first thing in the method and the seeded planet is not this account's, so a
+                // request that gets all the way through answers "Planet not yours" and writes
+                // nothing. That makes the accepted case safe to assert as an ACCEPTED case rather
+                // than merely a non-error.
+                var confiscate = Url + "/Planetwars/ConfiscateStructure?planetID="
+                    + seed.SourcePlanetID + "&structureTypeID=" + seed.StructureTypeID;
+
+                // The crafted link. This is what an <a href> left open: a GET the browser makes
+                // with the player's cookies because someone else's page asked it to.
+                var asLink = await client.GetAsync(confiscate);
+                inner += Check(asLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                    "  a state-changing action is not reachable by GET (" + (int)asLink.StatusCode + ")");
+
+                // The crafted form. POST alone is not the protection - any page can POST.
+                var untokened = await client.PostAsync(confiscate, new FormUrlEncodedContent(
+                    new KeyValuePair<string, string>[0]));
+                inner += Check(untokened.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                    "  and a POST without an anti-forgery token is refused (" + (int)untokened.StatusCode + ")");
+
+                // The site's own form. Without this the two checks above would pass just as well
+                // on an action that had stopped working altogether.
+                var token = await (await client.GetAsync(Url + "/Harness/Token")).Content.ReadAsStringAsync();
+                var tokened = await client.PostAsync(confiscate, new FormUrlEncodedContent(
+                    new[] { new KeyValuePair<string, string>("__RequestVerificationToken", token) }));
+                var tokenedBody = await tokened.Content.ReadAsStringAsync();
+                inner += Check(tokened.StatusCode == System.Net.HttpStatusCode.OK,
+                    "  while a POST that carries one is accepted (" + (int)tokened.StatusCode + ")");
+                inner += Check(tokenedBody.Contains("Planet not yours"),
+                    "  and reaches the action's own check (" + Summarize(tokened, tokenedBody) + ")");
+
                 // The hole. An active structure, aimed, on a planet belonging to a faction this
                 // account is not in, owned by nobody it has any claim through.
                 var activate = Url + "/Planetwars/ActivateTargetedStructure?planetID="
                     + seed.SourcePlanetID + "&structureTypeID=" + seed.StructureTypeID;
-                var refused = await client.GetAsync(activate);
+                var refused = await Post(client, activate, token);
                 var refusedBody = await refused.Content.ReadAsStringAsync();
                 inner += Check(refusedBody.Contains("Cannot activate this structure"),
                     "  an outsider cannot fire someone else's structure ("
@@ -823,7 +856,7 @@ namespace ZeroKWeb.Host
                     db.SaveChanges();
                 }
 
-                var allowed = await client.GetAsync(activate);
+                var allowed = await Post(client, activate, token);
                 var allowedBody = await allowed.Content.ReadAsStringAsync();
                 inner += Check(!allowedBody.Contains("Cannot activate this structure"),
                     "  and the owner of the same structure is not refused ("
@@ -836,6 +869,11 @@ namespace ZeroKWeb.Host
 
             return failures;
         }
+
+        /// <summary>A POST carrying the anti-forgery token, which is what the site's own forms send.</summary>
+        private static Task<HttpResponseMessage> Post(HttpClient client, string url, string token)
+            => client.PostAsync(url, new FormUrlEncodedContent(
+                new[] { new KeyValuePair<string, string>("__RequestVerificationToken", token) }));
 
         private static string Summarize(HttpResponseMessage response, string body)
         {

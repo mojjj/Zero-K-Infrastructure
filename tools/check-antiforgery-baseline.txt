@@ -1,0 +1,22 @@
+# Forms that POST without an anti-forgery token, per file, as of when
+# tools/check-antiforgery.py was written. See that file: this records what
+# was already there so new ones fail, and is not a statement that any of
+# them is fine. Regenerate with --update only when REMOVING entries.
+PortedViews/Forum/NewPost.cshtml 1
+PortedViews/Shared/CommentList.cshtml 1
+PortedViews/Shared/UserDetail.cshtml 2
+Zero-K.info/Views/Admin/DynamicConfigDetail.cshtml 1
+Zero-K.info/Views/Battles/BattleIndex.cshtml 1
+Zero-K.info/Views/Clans/Create.cshtml 1
+Zero-K.info/Views/Clans/JoinClan.cshtml 1
+Zero-K.info/Views/Forum/NewPost.cshtml 1
+Zero-K.info/Views/Forum/Search.cshtml 1
+Zero-K.info/Views/Maps/Index.cshtml 2
+Zero-K.info/Views/Missions/Index.cshtml 1
+Zero-K.info/Views/Mods/GameModeEdit.cshtml 1
+Zero-K.info/Views/Shared/CommentList.cshtml 1
+Zero-K.info/Views/Shared/LoginBar.cshtml 1
+Zero-K.info/Views/Shared/SiteSearch.cshtml 1
+Zero-K.info/Views/Shared/UserDetail.cshtml 2
+Zero-K.info/Views/Tourney/TourneyIndex.cshtml 5
+Zero-K.info/Views/Users/ReportToAdmin.cshtml 1

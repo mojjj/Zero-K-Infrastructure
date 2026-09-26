@@ -18,6 +18,8 @@ namespace ZeroKWeb.Controllers
         // GET: /Planetwars/
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult BombPlanet(int planetID, int count, bool? useWarp)
         {
             var db = new ZkDataContext();
@@ -131,6 +133,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult BuildStructure(int planetID, int structureTypeID)
         {
             using (var db = new ZkDataContext())
@@ -173,6 +177,8 @@ namespace ZeroKWeb.Controllers
         /// Demolish an existing structure (not destroyed from bombing or such)
         /// </summary>
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult DestroyStructure(int planetID, int structureTypeID)
         {
             using (var db = new ZkDataContext())
@@ -274,6 +280,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult SendDropships(int planetID, int count, bool? useWarp)
         {
             var db = new ZkDataContext();
@@ -463,6 +471,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult ConfiscateStructure(int planetID, int structureTypeID)
         {
             using (var db = new ZkDataContext())
@@ -499,6 +509,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult SetEnergyPriority(int planetID, int structuretypeID, EnergyPriority priority)
         {
             var db = new ZkDataContext();
@@ -513,6 +525,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult SetStructureTarget(int planetID, int structureTypeID, int targetPlanetID)
         {
             var db = new ZkDataContext();
@@ -551,6 +565,8 @@ namespace ZeroKWeb.Controllers
         /// owner had aimed it at, spending their single-use planet buster for them.
         /// </summary>
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult ActivateTargetedStructure(int planetID, int structureTypeID)
         {
             var db = new ZkDataContext();
@@ -749,6 +765,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult MatchMakerAttack(int planetID)
         {
             var db = new ZkDataContext();
@@ -784,6 +802,8 @@ namespace ZeroKWeb.Controllers
 
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult RushActivation(int planetID, int structureTypeID)
         {
             using (var db = new ZkDataContext())
