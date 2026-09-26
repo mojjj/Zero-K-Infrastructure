@@ -333,6 +333,18 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Planet", new { id = planetID });
         }
 
+        /// <summary>
+        /// Recomputes planet ownership from influence.
+        ///
+        /// Nothing links to this - no view, no script, no other action - so the only way to reach
+        /// it is to type the URL, which is what an operator's escape hatch looks like. It had no
+        /// [Auth] of any kind, which meant an anonymous request ran a turn handler that writes
+        /// planet ownership and inserts events.
+        ///
+        /// Gated rather than deleted, because "nothing references it" is how a hand-typed ops tool
+        /// looks from inside the repository. If nobody recognizes it as one, it should go.
+        /// </summary>
+        [Auth(Role = AdminLevel.Moderator)]
         public ActionResult RunSetPlanetOwners()
         {
             using (var db = new ZkDataContext()) PlanetWarsTurnHandler.SetPlanetOwners(new PlanetwarsEventCreator(), db);
@@ -524,13 +536,31 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Planet", new { id = planet.PlanetID });
         }
 
+        /// <summary>
+        /// Fires a structure at the target <see cref="SetStructureTarget"/> aimed it at.
+        ///
+        /// The comment that used to stand here said "this call is never to be called
+        /// before/outside of SetStructureTarget". That was the intent, not the behaviour: this is
+        /// a public method on a controller, so the default {controller}/{action} route invokes it
+        /// for anyone who types the URL. The only thing that made it look internal was
+        /// Planet.cshtml, which shows the Activate link only when CanSetStructureTarget says so -
+        /// and a link the template declines to draw is not an authorization check.
+        ///
+        /// So the check the view was already making is made here too. Without it any logged-in
+        /// account could fire a structure it has nothing to do with at the target that structure's
+        /// owner had aimed it at, spending their single-use planet buster for them.
+        /// </summary>
         [Auth]
         public ActionResult ActivateTargetedStructure(int planetID, int structureTypeID)
         {
-            //This call is never to be called before/outside of SetStructureTarget
             var db = new ZkDataContext();
             //Get the pre-set target planet ID
             PlanetStructure structure = db.PlanetStructures.FirstOrDefault(x => x.PlanetID == planetID && x.StructureTypeID == structureTypeID);
+            if (structure == null) return Content("No such structure");
+
+            var acc = db.Accounts.Single(x => x.AccountID == Global.AccountID);
+            if (!acc.CanSetStructureTarget(structure)) return Content("Cannot activate this structure");
+
             int targetID = structure.TargetPlanetID ?? -1;
             if (targetID == -1) return Content("Structure has no target");
 
@@ -565,8 +595,16 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Planet", new { id = planetID });
         }
 
-        [Auth]
-        public ActionResult CreateLink(int planetID, int structureTypeID, int targetID)
+        /// <summary>
+        /// Only ever called from <see cref="ActivateTargetedStructure"/>, which is where the
+        /// authorization check lives.
+        ///
+        /// It was public, and a public method on a controller is an action: under the default
+        /// route any logged-in account could call it directly. It checks only that the two planets
+        /// share a galaxy, so it would link any two planets in that galaxy on request - a
+        /// permanent change to who can attack whom, made by someone who owns neither planet.
+        /// </summary>
+        private ActionResult CreateLink(int planetID, int structureTypeID, int targetID)
         {
             var db = new ZkDataContext();
 
@@ -586,7 +624,10 @@ namespace ZeroKWeb.Controllers
             return null;
         }
 
-        [Auth]
+        // No [Auth] here, and there never was one that did anything: the attribute this method
+        // used to carry was an authorization filter on a private method, which MVC never runs.
+        // An attribute that reads as a check but is not one is how CreateLink stayed unnoticed.
+        // The caller, ActivateTargetedStructure, is what authorizes.
         private ActionResult FirePlanetBuster(int planetID, int structureTypeID, int targetID)
         {
             var db = new ZkDataContext();
