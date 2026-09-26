@@ -7,8 +7,6 @@ PortedViews/Shared/CommentList.cshtml 1
 PortedViews/Shared/UserDetail.cshtml 2
 Zero-K.info/Views/Admin/DynamicConfigDetail.cshtml 1
 Zero-K.info/Views/Battles/BattleIndex.cshtml 1
-Zero-K.info/Views/Clans/Create.cshtml 1
-Zero-K.info/Views/Clans/JoinClan.cshtml 1
 Zero-K.info/Views/Forum/NewPost.cshtml 1
 Zero-K.info/Views/Forum/Search.cshtml 1
 Zero-K.info/Views/Maps/Index.cshtml 2

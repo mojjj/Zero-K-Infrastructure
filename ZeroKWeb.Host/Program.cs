@@ -549,6 +549,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckSteamAndRealLogon();
                 failures += await CheckEngines();
                 failures += await CheckPlanetwarsActionSurface();
+                failures += await CheckClanActionSurface();
 
                 Console.WriteLine();
                 if (failures == 0)
@@ -874,6 +875,64 @@ namespace ZeroKWeb.Host
         private static Task<HttpResponseMessage> Post(HttpClient client, string url, string token)
             => client.PostAsync(url, new FormUrlEncodedContent(
                 new[] { new KeyValuePair<string, string>("__RequestVerificationToken", token) }));
+
+        /// <summary>
+        /// The clan actions, which are the same shape of hole in a different controller.
+        ///
+        /// Their authorization was never in question - KickPlayerFromClan checks clan rights or
+        /// moderator, and JoinClan checks CanJoin. They were simply GETs, so a link was enough to
+        /// make a clan leader expel someone, or to put a player in a clan and, with it, a faction.
+        ///
+        /// KickPlayerFromClan is the one driven here because its first check is "No such person",
+        /// so an accountID nobody has gives an accepted request that changes nothing. The negative
+        /// assertions need a positive one beside them or they would pass on an action that had
+        /// stopped working.
+        /// </summary>
+        private static async Task<int> CheckClanActionSurface()
+        {
+            Console.WriteLine();
+            Console.WriteLine("clan actions:");
+
+            return await AsModerator(async client =>
+            {
+                var failures = 0;
+
+                int unusedAccountID;
+                using (var db = new ZkDataContext()) unusedAccountID = db.Accounts.Max(a => a.AccountID) + 1000;
+                var kick = Url + "/Clans/KickPlayerFromClan?accountID=" + unusedAccountID;
+
+                var asLink = await client.GetAsync(kick);
+                failures += Check(asLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                    "  KickPlayerFromClan is not reachable by GET (" + (int)asLink.StatusCode + ")");
+
+                var untokened = await client.PostAsync(kick, new FormUrlEncodedContent(
+                    new KeyValuePair<string, string>[0]));
+                failures += Check(untokened.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                    "  and a POST without an anti-forgery token is refused (" + (int)untokened.StatusCode + ")");
+
+                var token = await (await client.GetAsync(Url + "/Harness/Token")).Content.ReadAsStringAsync();
+                var tokened = await Post(client, kick, token);
+                var tokenedBody = await tokened.Content.ReadAsStringAsync();
+                failures += Check(tokened.StatusCode == System.Net.HttpStatusCode.OK,
+                    "  while a POST that carries one is accepted (" + (int)tokened.StatusCode + ")");
+                failures += Check(tokenedBody.Contains("No such person"),
+                    "  and reaches the action's own check (" + Summarize(tokened, tokenedBody) + ")");
+
+                // LeaveClan takes no parameters at all, which is what made it the easiest of the
+                // three to fire from someone else's page: a bare href was the whole attack.
+                var leave = await client.GetAsync(Url + "/Clans/LeaveClan");
+                failures += Check(leave.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                    "  LeaveClan is not reachable by GET (" + (int)leave.StatusCode + ")");
+
+                // JoinClan changes the player's FACTION along with their clan, which is why it is
+                // asserted rather than left to the two above.
+                var join = await client.GetAsync(Url + "/Clans/JoinClan?id=1");
+                failures += Check(join.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                    "  JoinClan is not reachable by GET (" + (int)join.StatusCode + ")");
+
+                return failures;
+            });
+        }
 
         private static string Summarize(HttpResponseMessage response, string body)
         {

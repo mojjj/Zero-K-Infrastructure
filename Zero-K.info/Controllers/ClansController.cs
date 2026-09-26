@@ -145,6 +145,8 @@ namespace ZeroKWeb.Controllers
         /// Clan leaving (<see cref="PerformLeaveClan"/>) + redirect
         /// </summary>
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult LeaveClan()
         {
             var clan = PerformLeaveClan(Global.AccountID);
@@ -155,6 +157,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult JoinClan(int id, string password)
         {
             var db = new ZkDataContext();
@@ -187,6 +191,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> KickPlayerFromClan(int accountID)
         {
             var db = new ZkDataContext();
@@ -218,6 +224,8 @@ namespace ZeroKWeb.Controllers
         /// Creates a clan and redirects to the new clan page
         /// </summary>
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> SubmitCreate(Clan clan, HttpPostedFileBase image, HttpPostedFileBase bgimage, bool noFaction = false)
         {
             //using (var scope = new TransactionScope())
