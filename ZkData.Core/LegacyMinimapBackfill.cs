@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -44,9 +44,28 @@ namespace ZkData.Core
             var apply = arguments.Contains("--apply");
             var touch = arguments.Contains("--touch");
 
+            // A first run over a real Resources directory should be a handful of maps that somebody
+            // then looks at on the site. Without these that is not possible: the choice was the
+            // whole library or nothing, which is a bad way to start rewriting images whose
+            // originals only exist inside map archives.
+            var limit = int.MaxValue;
+            var limitArg = arguments.FirstOrDefault(x => x.StartsWith("--limit="));
+            if (limitArg != null && !int.TryParse(limitArg.Substring("--limit=".Length), out limit))
+            {
+                Console.Error.WriteLine("--limit wants a number, as in --limit=5");
+                return 2;
+            }
+
+            var onlyArg = arguments.FirstOrDefault(x => x.StartsWith("--only="));
+            var only = onlyArg == null
+                ? null
+                : new HashSet<string>(
+                    onlyArg.Substring("--only=".Length).Split(',').Select(x => x.Trim()).Where(x => x.Length > 0),
+                    StringComparer.OrdinalIgnoreCase);
+
             if (string.IsNullOrEmpty(path))
             {
-                Console.Error.WriteLine("usage: backfill-minimaps <path to the Resources directory> [--apply] [--touch]");
+                Console.Error.WriteLine("usage: backfill-minimaps <path to the Resources directory> [--apply] [--touch] [--limit=N] [--only=name,name]");
                 return 2;
             }
             if (!Directory.Exists(path))
@@ -57,13 +76,15 @@ namespace ZkData.Core
 
             var resources = db.Resources.Where(x => x.MapSizeRatio != null).ToList();
 
-            int corrected = 0, alreadyRight = 0, missing = 0, failed = 0, touched = 0;
+            int corrected = 0, alreadyRight = 0, missing = 0, failed = 0, touched = 0, correctedResources = 0;
             var examples = new List<string>();
 
             foreach (var resource in resources)
             {
                 var ratio = resource.MapSizeRatio.Value;
                 if (Math.Abs(ratio - 1) < 0.01) continue;   // square: the defect was a no-op
+                if (only != null && !only.Contains(resource.InternalName)) continue;
+                if (correctedResources >= limit) break;
 
                 var changedAny = false;
                 foreach (var kind in Kinds)
@@ -127,6 +148,8 @@ namespace ZkData.Core
                     }
                 }
 
+                if (changedAny) correctedResources++;
+
                 if (changedAny && touch && apply)
                 {
                     resource.LastChange = DateTime.UtcNow;
@@ -142,6 +165,8 @@ namespace ZkData.Core
             Console.WriteLine("  already right  {0}", alreadyRight);
             Console.WriteLine("  file missing   {0}", missing);
             Console.WriteLine("  failed         {0}", failed);
+            if (limit != int.MaxValue) Console.WriteLine("  maps touched   {0} (--limit={1})", correctedResources, limit);
+            if (only != null) Console.WriteLine("  restricted to  {0} map(s) named with --only", only.Count);
             if (touch) Console.WriteLine("  LastChange set {0}", touched);
 
             if (examples.Count > 0)
