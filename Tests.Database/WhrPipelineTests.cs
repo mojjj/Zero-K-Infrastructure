@@ -167,8 +167,24 @@ namespace Tests.Database
 
             Assert.IsTrue(rating.LastGameDate > 0, "the busiest player should have a computed rating");
             Assert.IsFalse(rating.Ranked, "a player last seen years ago should not be on the ladder");
-            Assert.AreEqual(0, RatingPipeline.Casual.GetTopPlayers(10).Count,
-                "no fixture player is recent enough to be ranked");
+            // The claim is "nobody here is ranked", and this asserts exactly that - for every
+            // player the ladder hands back, rather than by counting them.
+            //
+            // Counting was wrong, and wrong in a way that passed most of the time. GetTopPlayers
+            // keeps laddersCache in a FIELD: the branch that runs before the pass finishes fills
+            // it from the database ordered by LadderElo, which ignores ladder activity, and the
+            // top-up guard below it is `laddersCache.Count < count` - false at exactly count. So
+            // one call during the pass leaves ten database rows in the cache permanently, and
+            // asserting zero fails.
+            //
+            // That fallback is deliberate; the comment in WholeHistoryRating defends it, so "the
+            // list is empty" was never something the code promised. What it does promise is that
+            // a player last seen years ago is not ranked, which is path-independent.
+            foreach (var player in RatingPipeline.Casual.GetTopPlayers(10))
+                Assert.IsFalse(RatingPipeline.Casual.GetPlayerRating(player.AccountID).Ranked,
+                    "the ladder returned " + player.Name + ", whose last game is historical - "
+                    + "GetTopPlayers may fall back to a database ordering, but nothing in this "
+                    + "fixture should come back RANKED");
         }
 
         [TestMethod]
