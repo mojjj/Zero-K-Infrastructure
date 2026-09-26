@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Diagnostics;
@@ -104,9 +104,46 @@ namespace Tests.Database
                 WaitFor(() => Casual.GetPlayerRating(BusiestPlayer).LastGameDate > 0, TimeSpan.FromMinutes(3),
                     "the Casual rating system produced no computed ratings");
 
+                // ...and then for the pass to FINISH, which is a different thing and the reason
+                // this wait exists at all.
+                //
+                // WholeHistoryRating.GetTopPlayers reads `count > 200 || !completelyInitialized`
+                // and falls back to a database query ordered by LadderElo - which ignores ladder
+                // activity entirely. So while the pass is still running, GetTopPlayers(10) returns
+                // ten players from a fixture whose battles are all historical, and
+                // Players_who_have_not_played_recently_are_rated_but_not_ranked fails saying "no
+                // fixture player is recent enough to be ranked".
+                //
+                // That is a race, and it failed in CI on 2026-09-26 having passed nine minutes
+                // earlier on the same code. The wait above is satisfied by a PARTIAL pass: one
+                // player having a computed rating says nothing about the other 149 iterations.
+                WaitFor(() => FullPassFinished(Casual), TimeSpan.FromMinutes(3),
+                    "the WHR pass did not finish, so GetTopPlayers would answer from the database "
+                    + "instead of the ladder");
+
                 Console.WriteLine("  pipeline ready in " + clock.Elapsed.TotalSeconds.ToString("0.0") + "s, "
                                   + Casual.GetActivePlayers() + " active players");
             }
+        }
+
+        /// <summary>
+        /// Whether the Newton pass has run to completion.
+        ///
+        /// WholeHistoryRating sets <c>completelyInitialized</c> after runIterations(150) and the
+        /// ranking pass, and exposes no public equivalent - hence the reflection. Sampling until
+        /// the numbers stop moving answers too early: they are perfectly still before the
+        /// background task starts.
+        ///
+        /// Lives here rather than in RatingDump because the pipeline is what every test waits on,
+        /// and a second copy would be a second thing to keep true.
+        /// </summary>
+        internal static bool FullPassFinished(IRatingSystem system)
+        {
+            var whr = system as WholeHistoryRating;
+            if (whr == null) return true;
+            var field = typeof(WholeHistoryRating).GetField("completelyInitialized",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            return field != null && (bool)field.GetValue(whr);
         }
 
         private static void WaitFor(Func<bool> condition, TimeSpan timeout, string message)

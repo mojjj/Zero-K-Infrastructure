@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -62,7 +62,7 @@ namespace Tests.Database
 
             var casual = RatingSystems.GetRatingSystem(RatingCategory.Casual);
 
-            if (!Wait(() => FullPassFinished(casual), TimeSpan.FromMinutes(5)))
+            if (!Wait(() => RatingPipeline.FullPassFinished(casual), TimeSpan.FromMinutes(5)))
             {
                 Console.Error.WriteLine("the rating computation did not finish");
                 return 1;
@@ -87,21 +87,6 @@ namespace Tests.Database
             Console.Error.WriteLine("wrote " + (lines.Count - 1) + " accounts"
                                     + (string.IsNullOrEmpty(outputPath) ? "" : " to " + outputPath));
             return 0;
-        }
-
-        /// <summary>
-        /// WholeHistoryRating sets <c>completelyInitialized</c> after runIterations(150) and
-        /// the ranking pass, and exposes no public equivalent. Sampling until the numbers
-        /// stop moving answers too early: they are perfectly still before the background task
-        /// starts.
-        /// </summary>
-        private static bool FullPassFinished(IRatingSystem system)
-        {
-            var whr = system as WholeHistoryRating;
-            if (whr == null) return true;
-            var field = typeof(WholeHistoryRating).GetField("completelyInitialized",
-                BindingFlags.NonPublic | BindingFlags.Instance);
-            return field != null && (bool)field.GetValue(whr);
         }
 
         private static List<string> Snapshot(IRatingSystem system, IEnumerable<int> accounts)
