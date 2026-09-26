@@ -406,6 +406,7 @@
         <div id="accountMaint" class="collapse width-90">
             <h4>Change password</h4>
             <form method="post" action="@Url.Action("ChangePassword", "Users")">
+            @Html.AntiForgeryToken()
                 Old password: @Html.Password("oldPassword")<br />
                 New password: @Html.Password("newPassword")<br />
                 Reenter new password: @Html.Password("newPassword2")<br />
@@ -426,6 +427,7 @@
         <div class="admin">
             <h3>Admin extras</h3>
             <form action="@Url.Action("SetZklsMaxPlayers", "Admin")" method="post">
+            @Html.AntiForgeryToken()
                 Max lobby server players: @Html.TextBox("maxPlayers", MiscVar.ZklsMaxUsers)
                 <input type="submit" value="set" />
             </form>

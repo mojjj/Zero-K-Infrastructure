@@ -442,6 +442,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult UploadResource(HttpPostedFileBase file, bool specialMap)
         {
             var tmp = Path.Combine(Global.AutoRegistrator.Paths.WritableDirectory, "maps", file.FileName);

@@ -550,6 +550,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckEngines();
                 failures += await CheckPlanetwarsActionSurface();
                 failures += await CheckClanActionSurface();
+                failures += await CheckFormPostsAreGuarded();
 
                 Console.WriteLine();
                 if (failures == 0)
@@ -934,6 +935,59 @@ namespace ZeroKWeb.Host
             });
         }
 
+        /// <summary>
+        /// The forms that were not links: a POST with no token on either end.
+        ///
+        /// Writing tools/check-antiforgery.py turned up 23 of these across the site, and
+        /// ChangePassword is the one worth an end-to-end assertion - a page that can silently
+        /// change someone's password when they visit it is the worst thing on the list.
+        ///
+        /// The accepted case sends the RIGHT old password with two new ones that disagree, so it
+        /// reaches the action's own validation and returns before touching the account. Sending a
+        /// wrong old password would have worked too, and would have called LobbyApi.LogIpFailure
+        /// on the way - which has no server here.
+        /// </summary>
+        private static async Task<int> CheckFormPostsAreGuarded()
+        {
+            Console.WriteLine();
+            Console.WriteLine("form posts:");
+
+            return await AsModerator(async client =>
+            {
+                var failures = 0;
+                var url = Url + "/Users/ChangePassword";
+
+                var asLink = await client.GetAsync(url);
+                failures += Check(asLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                    "  ChangePassword is not reachable by GET (" + (int)asLink.StatusCode + ")");
+
+                var untokened = await client.PostAsync(url, new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("oldPassword", ModeratorPassword),
+                    new KeyValuePair<string, string>("newPassword", "harness-new-password"),
+                    new KeyValuePair<string, string>("newPassword2", "harness-new-password"),
+                }));
+                failures += Check(untokened.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                    "  and a POST without an anti-forgery token is refused (" + (int)untokened.StatusCode + ")");
+
+                var token = await (await client.GetAsync(Url + "/Harness/Token")).Content.ReadAsStringAsync();
+                var tokened = await client.PostAsync(url, new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("__RequestVerificationToken", token),
+                    new KeyValuePair<string, string>("oldPassword", ModeratorPassword),
+                    new KeyValuePair<string, string>("newPassword", "one"),
+                    new KeyValuePair<string, string>("newPassword2", "another"),
+                }));
+                var body = await tokened.Content.ReadAsStringAsync();
+                failures += Check(tokened.StatusCode == System.Net.HttpStatusCode.OK,
+                    "  while a POST that carries one is accepted (" + (int)tokened.StatusCode + ")");
+                failures += Check(body.Contains("New passwords do not match"),
+                    "  and reaches the action's own check (" + Summarize(tokened, body) + ")");
+
+                return failures;
+            });
+        }
+
         private static string Summarize(HttpResponseMessage response, string body)
         {
             var text = body.Replace("\r", " ").Replace("\n", " ").Trim();
@@ -1071,9 +1125,12 @@ namespace ZeroKWeb.Host
         /// Runs a block signed in as a moderator, and puts the account back afterwards.
         /// Same arrangement as CheckSignIn, and for the same reason: the check owns the role.
         /// </summary>
+        /// <summary>The password AsModerator sets, named so a check inside it can send it back.</summary>
+        private const string ModeratorPassword = "harness-moderator-password";
+
         private static async Task<int> AsModerator(Func<HttpClient, Task<int>> body)
         {
-            const string password = "harness-moderator-password";
+            const string password = ModeratorPassword;
             string name;
             string originalHash;
             AdminLevel originalAdminLevel;
