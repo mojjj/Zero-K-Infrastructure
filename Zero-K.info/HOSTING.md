@@ -341,6 +341,33 @@ What is still blocked, in the order it has to be unblocked:
    script has been running as a Linux compile check of the website in `test_database.yml`
    for some time. The note simply outlived the work.
 
+## Engine upload: the attributes now apply (2026-09-26)
+
+`EnginesController.UploadEngine` carried `[Auth(Role = SuperAdmin)]`, `[HttpPost]` and
+`[ValidateAntiForgeryToken]` on a **private** method that `Index` called. MVC only runs filters
+for actions it invokes, so all three were inert: the effective policy was the class-level
+`[Auth(Moderator)]`, any verb, no token. The form made it worse by having no `method="post"` -
+it submitted as GET, with `@Html.AntiForgeryToken()` sitting unread in the query string.
+
+It is a real action now, so the filters apply. **The role is deliberately left at Moderator**
+rather than raised to the SuperAdmin the old attribute named: whoever uploads engines today keeps
+doing so, and what changes is that a link can no longer make a moderator's browser do it.
+
+Checked against the running port, signed in as a moderator:
+
+    GET  /Engines/UploadEngine -> 405
+    POST without a token       -> 400
+    GET  /Engines              -> 200
+
+`uploadName` is also rejected when it contains a path separator or `..`, because it becomes both
+a directory and a file name. Rejected rather than stripped - an engine name is a version like
+`104.0.1-287-gf7b0fcc`, so a separator in it is a mistake or an attempt, and quietly rewriting it
+would put the engine somewhere nobody asked for.
+
+**Not done:** the upload still downloads a caller-supplied URL and runs `7za.exe` over it. That is
+unchanged behaviour and a moderator-level capability by design; narrowing it further is a separate
+decision.
+
 ## Related work in progress
 
 `ILobbyServerApi` (see `ZkLobbyServer/ILobbyServerApi.cs`) is the seam introduced so the

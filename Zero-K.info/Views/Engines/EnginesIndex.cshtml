@@ -32,7 +32,8 @@
         @Model.Message
     </div>
 
-    <form action="@Url.Action("Index", "Engines")">
+    @* method="post" is the point: without it this submitted as GET and the token below rode along in the query string, unread. *@
+    <form action="@Url.Action("UploadEngine", "Engines")" method="post">
         @Html.AntiForgeryToken()
         <div>
             <h3>Upload a new engine</h3>
