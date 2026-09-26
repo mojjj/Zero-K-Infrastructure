@@ -356,6 +356,24 @@ namespace Ratings
                         UpdateRankings(players.Values);
                         completelyInitialized = true;
                         cachedDbRatings.Clear();
+
+                        // ...and the ladder cache, because everything in it was built by the
+                        // degraded path. While this flag is false GetTopPlayers answers from the
+                        // database ordered by LadderElo, which ignores ladder activity - and this
+                        // class calls GetTopPlayers(LadderSize) itself during the update, before
+                        // the flag is set. UpdateRankings above has already cleared the cache, so
+                        // that internal call is the last writer and nothing clears it afterwards
+                        // until the next ladder pass, hours later.
+                        //
+                        // The result was a ladder served from a database ordering long after the
+                        // real one was available. It surfaced as a test that failed intermittently
+                        // in CI, always with a message about the fixture rather than about this.
+                        //
+                        // Note the same cache still serves count > 200, which always takes the
+                        // database path by design. No caller asks for that today - LadderSize is
+                        // 50 - but one that did would leave the same kind of entry behind for the
+                        // small callers that follow.
+                        laddersCache = new List<Account>();
                     });
                 }
                 else if (DateTime.UtcNow.Subtract(lastUpdateTime).TotalHours >= GlobalConst.LadderUpdatePeriod)

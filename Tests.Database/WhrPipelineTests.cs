@@ -210,5 +210,35 @@ namespace Tests.Database
             var second = RatingPipeline.Casual.GetPlayerRating(id).RealElo;
             Assert.AreEqual(first, second, 0f, "the same account gave two different ratings");
         }
+
+        /// <summary>
+        /// The ladder is served from the ladder once the pass has finished, not from the database
+        /// ordering the degraded path produces.
+        ///
+        /// This is the regression test for laddersCache surviving the transition. WholeHistoryRating
+        /// calls GetTopPlayers itself while completelyInitialized is still false, which fills the
+        /// cache from a query ordered by LadderElo that ignores ladder activity; UpdateRankings has
+        /// already cleared the cache by then, so that call was the last writer and nothing cleared
+        /// it again until the next ladder pass.
+        ///
+        /// **How much this test can prove, honestly.** The pipeline calls ForceRatingsUpdate after
+        /// Init, and that second pass runs UpdateRankings again - this time with the flag already
+        /// set - which rebuilds the cache from the ladder and hides the bug. So in the default
+        /// configuration this test passes either way, and it was only shown to catch the defect by
+        /// suppressing that second update: without the fix it then fails with Expected:<0>
+        /// Actual:<10>, the same signature CI produced, and with the fix it passes.
+        ///
+        /// That is also why the fix belongs in the production code rather than in a wait here: what
+        /// heals it today is a second pass that happens to follow, not anything guaranteeing it.
+        /// </summary>
+        [TestMethod]
+        public void The_ladder_is_rebuilt_once_the_pass_has_finished()
+        {
+            var ladder = RatingPipeline.Casual.GetTopPlayers(10);
+
+            Assert.AreEqual(0, ladder.Count,
+                "every battle in the fixture is historical, so the ladder is empty - a non-empty "
+                + "answer here is the database ordering, which ignores ladder activity");
+        }
     }
 }
