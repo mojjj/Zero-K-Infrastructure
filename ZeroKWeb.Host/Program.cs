@@ -1049,6 +1049,57 @@ namespace ZeroKWeb.Host
                 failures += Check(body.Contains("New passwords do not match"),
                     "  and reaches the action's own check (" + Summarize(tokened, body) + ")");
 
+                // Maps/Rate, which the stars called with $.get - so a crafted link set somebody
+                // else's rating of a map. This one can be driven all the way through: the fixture
+                // has Resources, and the row it writes is visible afterwards.
+                int resourceID, accountID;
+                int? ratingSum, ratingCount;
+                using (var db = new ZkDataContext())
+                {
+                    var resource = db.Resources.OrderBy(r => r.ResourceID).First();
+                    resourceID = resource.ResourceID;
+                    ratingSum = resource.MapRatingSum;
+                    ratingCount = resource.MapRatingCount;
+                    accountID = db.Accounts.OrderBy(a => a.AccountID).First().AccountID;
+                }
+                var rate = Url + "/Maps/Rate?id=" + resourceID + "&rating=4";
+
+                var rateByLink = await client.GetAsync(rate);
+                failures += Check(rateByLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                    "  Maps/Rate is not reachable by GET (" + (int)rateByLink.StatusCode + ")");
+
+                var rateUntokened = await client.PostAsync(rate, new FormUrlEncodedContent(
+                    new KeyValuePair<string, string>[0]));
+                failures += Check(rateUntokened.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                    "  and a POST without an anti-forgery token is refused ("
+                    + (int)rateUntokened.StatusCode + ")");
+
+                var rated = await Post(client, rate, token);
+                failures += Check(rated.StatusCode == System.Net.HttpStatusCode.OK,
+                    "  while a POST that carries one is accepted (" + (int)rated.StatusCode + ")");
+                try
+                {
+                    using (var db = new ZkDataContext())
+                    {
+                        var stored = db.MapRatings.SingleOrDefault(
+                            x => x.ResourceID == resourceID && x.AccountID == accountID);
+                        failures += Check(stored != null && stored.Rating == 4,
+                            "  and the rating really was written (" + (stored == null ? "no row" : stored.Rating.ToString()) + ")");
+                    }
+                }
+                finally
+                {
+                    using (var db = new ZkDataContext())
+                    {
+                        db.MapRatings.RemoveRange(db.MapRatings.Where(
+                            x => x.ResourceID == resourceID && x.AccountID == accountID));
+                        var resource = db.Resources.Single(r => r.ResourceID == resourceID);
+                        resource.MapRatingSum = ratingSum;
+                        resource.MapRatingCount = ratingCount;
+                        db.SaveChanges();
+                    }
+                }
+
                 var markReadPosted = await Post(client, markRead, token);
                 failures += Check(markReadPosted.StatusCode == System.Net.HttpStatusCode.Redirect,
                     "  while MarkAllAsRead still works when posted with one ("
