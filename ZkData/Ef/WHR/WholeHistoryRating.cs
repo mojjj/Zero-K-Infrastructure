@@ -212,27 +212,49 @@ namespace Ratings
         /// persisted on AccountRatings, so the query is not an approximation of the in-memory
         /// answer; it is the same ordering from the rows the pass writes.
         /// </summary>
+        /// <summary>
+        /// Accounts ordered by their stored LadderElo. This is the fallback answer: it knows
+        /// nothing about ladder activity, so it will happily return players whose last game was
+        /// years ago - which is why the caller has to decide when it is the right question.
+        /// </summary>
+        private List<Account> TopByLadderElo(int count)
+        {
+            using (ZkDataContext db = new ZkDataContext())
+            {
+                return db.Accounts
+                    .Include(a => a.Clan)
+                    .Include(a => a.Faction)
+                    // DefaultIfEmpty(-1) after a Select over a navigation is not translatable by EF Core 9:
+                    // it hands IQueryable<double?> back to Where<AccountRating> and throws
+                    // ArgumentException while compiling the query. Rewritten to be equivalent BY
+                    // CONSTRUCTION rather than by argument - LadderElo is nullable, so "no rating
+                    // row" and "a row whose LadderElo is NULL" are different cases and a COALESCE
+                    // would have quietly merged them.
+                    .OrderByDescending(x => x.AccountRatings.Any(r => r.RatingCategory == category)
+                        ? x.AccountRatings.Where(r => r.RatingCategory == category).Select(r => r.LadderElo).FirstOrDefault()
+                        : -1)
+                    .Take(count)
+                    .ToList();
+            }
+        }
+
         public List<Account> GetTopPlayers(int count)
         {
-            if (count > 200 || !completelyInitialized)
+            // A request for more than 200 is not a request for the ladder - the ladder is 50 - and
+            // it is answered from the database whatever the pass has done. Returned WITHOUT being
+            // cached, because the cache below is the ladder's: one big call used to leave its
+            // database ordering there, and the next ordinary call found laddersCache.Count no
+            // smaller than the count it wanted and served that instead of the ladder.
+            //
+            // Nothing asks for more than 200 today, so this is closing a door rather than fixing
+            // a symptom.
+            if (count > 200) return TopByLadderElo(count);
+
+            if (!completelyInitialized)
             {
-                using (ZkDataContext db = new ZkDataContext())
-                {
-                    laddersCache = db.Accounts
-                        .Include(a => a.Clan)
-                        .Include(a => a.Faction)
-                        // DefaultIfEmpty(-1) after a Select over a navigation is not translatable by EF Core 9:
-                        // it hands IQueryable<double?> back to Where<AccountRating> and throws
-                        // ArgumentException while compiling the query. Rewritten to be equivalent BY
-                        // CONSTRUCTION rather than by argument - LadderElo is nullable, so "no rating
-                        // row" and "a row whose LadderElo is NULL" are different cases and a COALESCE
-                        // would have quietly merged them.
-                        .OrderByDescending(x => x.AccountRatings.Any(r => r.RatingCategory == category)
-                            ? x.AccountRatings.Where(r => r.RatingCategory == category).Select(r => r.LadderElo).FirstOrDefault()
-                            : -1)
-                        .Take(count)
-                        .ToList();
-                }
+                // The degraded answer, and it IS this process's best answer until the pass ends.
+                // Cached like any other, and cleared where completelyInitialized is set.
+                laddersCache = TopByLadderElo(count);
             }
             // Only worth topping up from topPlayers when there IS a topPlayers - otherwise this
             // overwrites the rows the database branch just produced with an empty list.
@@ -368,11 +390,7 @@ namespace Ratings
                         // The result was a ladder served from a database ordering long after the
                         // real one was available. It surfaced as a test that failed intermittently
                         // in CI, always with a message about the fixture rather than about this.
-                        //
-                        // Note the same cache still serves count > 200, which always takes the
-                        // database path by design. No caller asks for that today - LadderSize is
-                        // 50 - but one that did would leave the same kind of entry behind for the
-                        // small callers that follow.
+
                         laddersCache = new List<Account>();
                     });
                 }
