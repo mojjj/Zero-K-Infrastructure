@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Microsoft.AspNetCore.Html;
@@ -37,8 +37,6 @@ namespace System.Web.Optimization
                     "~/Scripts/jquery-ui.min.js",
                     "~/Scripts/jquery.ui.stars.js",
                     "~/Scripts/jquery.qtip.min.js",
-                    "~/Scripts/jquery.ba-bbq.js",
-                    "~/Scripts/jquery.history.js",
                     "~/Scripts/jquery.expand.js",
                     "~/Scripts/jquery.datetimepicker.full.min.js",
                     "~/Scripts/nicetitle.js",

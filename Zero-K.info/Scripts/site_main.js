@@ -60,14 +60,38 @@ function DynDialog(url, title) {
     });
 }
 
-function ReplaceHistory(params) {
-    // replace # is a hack for IE
-    var res = jQuery.param.querystring(window.location.toString().replace("#", ""), params.replace("#", ""));
-    res = res.replace(/%5B%5D=/g, "="); // hack for bbq adding extra [] to multiplied values
-    window.History.replaceState(params, "", res);
-    //var res = jQuery.param.querystring(window.location.toString(), params);
-    //window.history.replaceState(params, "", res);
+// Merges a query string into a URL, replacing whole keys rather than adding to them: the
+// callers pass "tab=2" or a serialized form, and both mean "this is the state now".
+//
+// Pure, exported for tools/check-site-js.js, and separate from ReplaceHistory for the same
+// reason GalaxyMapGeometry is separate from the view that draws with it - the arithmetic is
+// the part worth testing, and the browser API around it is not.
+//
+// It replaced jQuery.param.querystring from jquery.ba-bbq.js. Two hacks went with it:
+//   - stripping "#" "for IE", which URL parses correctly
+//   - undoing the "[]" bbq appends to repeated keys, which nothing here adds now
+function BuildHistoryUrl(currentUrl, params) {
+    var url = new URL(currentUrl);
+    var incoming = new URLSearchParams(String(params).replace(/^[?#]/, ""));
+
+    // Every key the caller mentions is replaced outright, repeats included; keys it does not
+    // mention are left alone. That is what merging a form's state into the address bar means.
+    var mentioned = [];
+    incoming.forEach(function (value, key) { if (mentioned.indexOf(key) < 0) mentioned.push(key); });
+    mentioned.forEach(function (key) { url.searchParams.delete(key); });
+    incoming.forEach(function (value, key) { url.searchParams.append(key, value); });
+
+    url.hash = "";
+    return url.toString();
 }
+
+function ReplaceHistory(params) {
+    // window.history, not window.History: the capitalised one was History.js, a polyfill for
+    // pushState on IE6-8. Every browser has had this natively since IE10.
+    window.history.replaceState(params, "", BuildHistoryUrl(window.location.toString(), params));
+}
+
+if (typeof module !== "undefined" && module.exports) module.exports = { BuildHistoryUrl: BuildHistoryUrl };
 
 function SendLobbyCommand(link) {
     $.ajax({

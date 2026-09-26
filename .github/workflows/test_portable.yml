@@ -1,4 +1,4 @@
-# The .NET 9 test suite (Tests.Portable), run on Linux.
+﻿# The .NET 9 test suite (Tests.Portable), run on Linux.
 #
 # This is the Phase 3 gate made self-enforcing. Tests.Portable links production sources
 # rather than referencing projects, so a green run means two things: the Whole History
@@ -52,6 +52,13 @@ jobs:
       # ZkLobbyServer, which catches a member naming a SERVER type; this catches the other half,
       # a member passing an EF ENTITY, which compiles on both sides and only works because the
       # two halves share a process. It walks the types transitively and needs no database.
+      # Phase 5. The first JavaScript check here, and it exists because BuildHistoryUrl replaced
+      # a 44 KB jQuery plugin: nothing else in this repository would notice if its merge went
+      # wrong, because every page renders either way and only the address bar would be quietly
+      # wrong. node is on the runner already.
+      - name: Check the site's JavaScript
+        run: node tools/check-site-js.js
+
       - name: Check the lobby-server seam
         run: dotnet run --project ZkData.Core -- seam --check
 
