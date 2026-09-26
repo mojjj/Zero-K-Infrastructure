@@ -97,7 +97,7 @@ namespace ZeroKWeb
         /// The lobby server, through Phase 1's seam - the crossable half of it, which is all
         /// this project can see. Null, because no lobby server is attached to a port harness.
         ///
-        /// Null is the faithful answer rather than a convenient one. The real Global sets this
+        /// Null is the faithful answer when nothing is configured. The real Global sets this
         /// at application start and leaves it null when the server is not running, and the call
         /// sites already handle that: PlanetwarsEventCreator guards with
         /// `if (Global.LobbyApi != null)` before every notification it sends. Those paths skip
@@ -107,7 +107,41 @@ namespace ZeroKWeb
         /// has reached code that genuinely needs a running lobby server, rather than quietly
         /// pretending one answered.
         /// </summary>
-        public static ZkLobbyServer.ILobbyServerApi LobbyApi => null;
+        public static ZkLobbyServer.ILobbyServerApi LobbyApi => lobbyApi.Value;
+
+        /// <summary>
+        /// Built once, on first use, because it reads MiscVars and that is a database call.
+        /// </summary>
+        static readonly Lazy<ZkLobbyServer.ILobbyServerApi> lobbyApi =
+            new Lazy<ZkLobbyServer.ILobbyServerApi>(CreateLobbyApi);
+
+        /// <summary>
+        /// A client for the lobby server when one is configured, and null when none is.
+        ///
+        /// **This is the switch Phase 1 built and nobody had thrown.** The note that used to be
+        /// here said "nothing constructs a RemoteLobbyServerApi", and gave the reason: the shared
+        /// statics had not been answered, so a switch could not safely be flipped. They have been.
+        ///
+        /// Null still means what it meant - no lobby server is reachable, and the call sites that
+        /// guard for it skip their notifications exactly as they do on a site without one. What
+        /// has changed is that setting the LobbyApiUrl MiscVar now makes this a real client
+        /// instead of nothing, which is what lets the website and the server be two processes.
+        ///
+        /// It does NOT start a server of its own, and cannot: this is the .NET 9 build, where
+        /// ZkLobbyServer is not referenced at all. Only the transport is linked - the caller's
+        /// half, not the listener's.
+        /// </summary>
+        static ZkLobbyServer.ILobbyServerApi CreateLobbyApi()
+        {
+            var url = MiscVar.GetValue(ZkLobbyServer.Api.LobbyApiConfiguration.UrlKey);
+            if (!ZkLobbyServer.Api.LobbyApiConfiguration.IsRemote(url)) return null;
+
+            return ZkLobbyServer.Api.LobbyApiConfiguration.CreateClient(
+                url,
+                MiscVar.GetValue(ZkLobbyServer.Api.LobbyApiConfiguration.SecretKey),
+                ZkLobbyServer.Api.LobbyApiConfiguration.AllowInsecureTransport(
+                    MiscVar.GetValue(ZkLobbyServer.Api.LobbyApiProtocol.AllowInsecureKey)));
+        }
 
         /// <summary>
         /// The PayPal IPN handler, which ContributionsController.Ipn hands each notification to.

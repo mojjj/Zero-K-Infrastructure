@@ -25,29 +25,15 @@ case "${ZK_CONNECTION_STRING:-}" in
 esac
 CS="${ZK_CONNECTION_STRING:-$(DB_NAME="${DB_NAME:-zk_test}" ./db/connection-string.sh)}"
 
-echo "building ZkLobbyServer.Standalone under mono..."
-./tools/build-website.sh ZkLobbyServer.Standalone/ZkLobbyServer.Standalone.csproj >/dev/null
+# The server refuses to start without these, and rightly so - but a check script that assumes
+# somebody set them by hand is a check script that passes for a reason it does not contain.
+echo "configuring the switch (MiscVars)..."
+./tools/lobby-config.sh set "$API_PORT"
+trap './tools/lobby-config.sh clear' EXIT
 
-OUT="$BUILD/ZkLobbyServer.Standalone/bin/x64/Debug/net48"
-[ -f "$OUT/ZkLobbyServer.Standalone.exe" ] || { echo "no build output at $OUT" >&2; exit 2; }
+echo "building the lobby image..."
+./tools/lobby-image.sh "$IMAGE"
 
-rm -rf "$CONTEXT" && mkdir -p "$CONTEXT/app"
-cp -r "$OUT/." "$CONTEXT/app/"
-# LoginChecker reads this to place logins by country, from whatever directory it is given as a
-# site path. The website passes its own root, where the file lives; a container has to carry it.
-cp Zero-K.info/GeoLite2-Country.mmdb "$CONTEXT/app/"
-cat > "$CONTEXT/Dockerfile" <<'DOCKER'
-# The lobby server, as its own process, on Linux. mono because ZkLobbyServer is .NET Framework
-# 4.8 and EF6 - porting it is not Phase 4's job, running it off Windows is.
-FROM mono:6.12
-WORKDIR /app
-COPY app/ ./
-# Configuration is MiscVars in the shared database; the connection string is the one thing that
-# has to arrive from outside, and GlobalConst already reads ZK_CONNECTION_STRING.
-ENTRYPOINT ["mono", "ZkLobbyServer.Standalone.exe"]
-DOCKER
-
-docker build -q -t "$IMAGE" "$CONTEXT" >/dev/null
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 
 if [ "${1:-}" = "--serve" ]; then
@@ -55,7 +41,7 @@ if [ "${1:-}" = "--serve" ]; then
 fi
 
 docker run -d --rm --name "$NAME" --network host -e ZK_CONNECTION_STRING="$CS" "$IMAGE" >/dev/null
-trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true' EXIT
+trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true; ./tools/lobby-config.sh clear' EXIT
 
 echo
 echo "the lobby server, in a container:"

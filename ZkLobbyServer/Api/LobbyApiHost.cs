@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -30,7 +30,8 @@ namespace ZkLobbyServer.Api
     /// </summary>
     public class LobbyApiHost : IDisposable
     {
-        public const string DefaultPrefix = "http://127.0.0.1:8200/";
+        /// <summary>Kept as a name callers already use; the value lives in LobbyApiConfiguration.</summary>
+        public const string DefaultPrefix = LobbyApiConfiguration.DefaultPrefix;
 
         private readonly ILobbyServerApi api;
         private readonly string secret;

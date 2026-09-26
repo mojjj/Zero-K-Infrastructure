@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace ZkLobbyServer.Api
 {
@@ -25,6 +25,15 @@ namespace ZkLobbyServer.Api
         public const string UrlKey = "LobbyApiUrl";
         public const string SecretKey = "LobbyApiSecret";
         public const string ListenPrefixKey = "LobbyApiListenPrefix";
+
+        /// <summary>
+        /// Where a standalone lobby server listens unless told otherwise. It lived on LobbyApiHost,
+        /// which is the half that opens an HttpListener - and that made the CLIENT side of this
+        /// file drag the server side behind it. The website's .NET 9 port links the client and has
+        /// no business carrying a listener, so the constant moved to where it is a setting rather
+        /// than an implementation detail.
+        /// </summary>
+        public const string DefaultPrefix = "http://127.0.0.1:8200/";
 
         /// <summary>
         /// <c>LobbyApiAllowInsecureTransport</c> - set to "true" to permit plaintext off loopback.
@@ -63,6 +72,6 @@ namespace ZkLobbyServer.Api
         /// API is privileged and a default that reaches the world is a default nobody chose.
         /// </summary>
         public static string ListenPrefix(string configured) =>
-            string.IsNullOrWhiteSpace(configured) ? LobbyApiHost.DefaultPrefix : configured;
+            string.IsNullOrWhiteSpace(configured) ? DefaultPrefix : configured;
     }
 }

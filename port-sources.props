@@ -111,6 +111,11 @@
       static class the website calls directly, which the seam never modelled. See the file.
     -->
     <Compile Include="..\ZkLobbyServer\ILobbyServerApi.cs" Link="Linked\ILobbyServerApi.cs" />
+    <!-- The transport, so the website can TALK to a lobby server in another process. The host
+         half (LobbyApiHost) is deliberately not here: this is the caller, not the listener. -->
+    <Compile Include="..\ZkLobbyServer\Api\LobbyApiProtocol.cs" Link="Linked\Api\LobbyApiProtocol.cs" />
+    <Compile Include="..\ZkLobbyServer\Api\LobbyApiConfiguration.cs" Link="Linked\Api\LobbyApiConfiguration.cs" />
+    <Compile Include="..\ZkLobbyServer\Api\RemoteLobbyServerApi.cs" Link="Linked\Api\RemoteLobbyServerApi.cs" />
     <Compile Include="..\ZkLobbyServer\TourneyApi.cs" Link="Linked\TourneyApi.cs" />
     <Compile Include="..\ZkLobbyServer\RatingApi.cs" Link="Linked\RatingApi.cs" />
     <Compile Include="..\ZkLobbyServer\PlanetWarsApi.cs" Link="Linked\PlanetWarsApi.cs" />
