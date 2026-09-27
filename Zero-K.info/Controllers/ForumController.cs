@@ -559,7 +559,8 @@ namespace ZeroKWeb.Controllers
         /// <param name="delta">+1 or -1</param>
         /// <returns></returns>
         [Auth]
-        [WritesOnGetNotYetFixed("the vote links are raw HTML built inside HtmlHelperExtensions.Portable")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult VotePost(int forumPostID, int delta) {
             var db = new ZkDataContext();
             var myAcc = Global.Account;
@@ -614,14 +615,18 @@ namespace ZeroKWeb.Controllers
 
             db.SaveChanges();
 
-            return RedirectToAction("Thread", new { id = post.ForumThreadID, postID = forumPostID });
+            // Empty, not a redirect. ZkVote posts this by XHR and reads the reply: "" means the
+            // vote was taken and the page should be redrawn, anything else is a refusal to show
+            // the voter. A redirect tells an XHR nothing it can act on.
+            return Content("");
         }
 
         /// <summary>
         ///     Removes an existing vote on a post
         /// </summary>
         [Auth]
-        [WritesOnGetNotYetFixed("the vote links are raw HTML built inside HtmlHelperExtensions.Portable")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult CancelVotePost(int forumPostID) {
             var db = new ZkDataContext();
             var existingVote = db.AccountForumVotes.SingleOrDefault(x => x.ForumPostID == forumPostID && x.AccountID == Global.AccountID);
@@ -645,7 +650,10 @@ namespace ZeroKWeb.Controllers
 
             db.SaveChanges();
 
-            return RedirectToAction("Thread", new { id = post.ForumThreadID, postID = forumPostID });
+            // Empty, not a redirect. ZkVote posts this by XHR and reads the reply: "" means the
+            // vote was taken and the page should be redrawn, anything else is a refusal to show
+            // the voter. A redirect tells an XHR nothing it can act on.
+            return Content("");
         }
 
         public static int GetPostPage(ForumPost post) {

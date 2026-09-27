@@ -34,7 +34,7 @@ global.jQuery.post = (url, data, done) => { posted.push({ url, data, done }); re
 global.document = { addEventListener: () => {} };
 
 const file = path.join(__dirname, "..", "Zero-K.info", "Scripts", "site_main.js");
-const { BuildHistoryUrl, ZkPost, ZkPrompt } = require(file);
+const { BuildHistoryUrl, ZkPost, ZkPrompt, ZkVote } = require(file);
 
 let failures = 0;
 function check(actual, expected, what) {
@@ -127,6 +127,38 @@ promptAnswer = null;
 form = { fields: {} };
 check(ZkPrompt(form, "text", "q", "s"), false, "a cancelled prompt stops the submit");
 check(Object.keys(form.fields).length, 0, "and writes nothing into the form");
+
+// ZkVote. The +N / -N / cancel controls could not become forms - they render inside PostList's
+// filter form - so they post from script instead, and the server's reply decides what happens.
+let alerted = null;
+let reloaded = 0;
+global.alert = (m) => { alerted = m; };
+global.window.location = { reload: () => { reloaded++; } };
+
+tokenOnPage = "TOKEN-ABC";
+posted.length = 0; alerted = null; reloaded = 0;
+check(ZkVote("/Forum/VotePost?forumPostID=3&delta=1"), false, "ZkVote stops the link navigating");
+check(posted[0].url, "/Forum/VotePost?forumPostID=3&delta=1", "and posts to the vote url");
+check(posted[0].data.__RequestVerificationToken, "TOKEN-ABC", "with the token");
+
+// "" is the server saying the vote was taken; the page has to be redrawn to show the new count.
+posted[0].done("");
+check(reloaded, 1, "an empty reply reloads the page to show the new count");
+check(alerted, null, "and says nothing");
+
+// Anything else is a refusal the voter should see - banned, too low a level, low karma.
+posted.length = 0; alerted = null; reloaded = 0;
+ZkVote("/Forum/VotePost?forumPostID=3&delta=1");
+posted[0].done("Your net karma is too low to vote");
+check(alerted, "Your net karma is too low to vote", "a reply with text is shown to the voter");
+check(reloaded, 0, "and the page is left alone");
+
+// No token means the POST never left, and silence would look like a vote that did nothing.
+tokenOnPage = undefined;
+posted.length = 0; alerted = null; reloaded = 0;
+ZkVote("/Forum/VotePost?forumPostID=3&delta=1");
+check(posted.length, 0, "with no token on the page nothing is sent");
+check(alerted, "Cannot vote: this page carries no anti-forgery token.", "and the voter is told why");
 
 console.log();
 console.log(failures === 0 ? "all checks passed" : failures + " check(s) failed");

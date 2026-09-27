@@ -84,6 +84,24 @@ namespace System.Web.Mvc
         ///     <para>Also includes a link to cancel an existing vote</para>
         ///     <para>The tooltip displays the people who voted for each option</para>
         /// </summary>
+        /// <summary>
+        /// The opening tag of a vote control: an anchor that POSTs through ZkVote instead of
+        /// navigating.
+        ///
+        /// These were plain &lt;a href&gt;, so a crafted link voted on the visitor's behalf. They
+        /// cannot become forms - the widget renders inside PostList's Ajax.BeginForm, which is a
+        /// real filter form with its own inputs, and a form cannot nest inside another - so the
+        /// vote goes out as an XHR carrying the page's anti-forgery token.
+        ///
+        /// The url is attribute-encoded because it holds an ampersand between its two route
+        /// values; the old version wrote it raw into href='...'.
+        /// </summary>
+        private static string VoteControl(string action)
+        {
+            return string.Format("a href='#' onclick='return ZkVote(\"{0}\")'",
+                                 WebUtility.HtmlEncode(action));
+        }
+
         /// <param name="blockPost">Removes the vote links; is true if the viewer's <see cref="Account"/> is banned or has too many net downvotes</param>
         public static MvcHtmlString PrintPostRating(this HtmlHelper helper, ForumPost post, bool blockPost = false) {
             var url = Global.UrlHelper();
@@ -104,7 +122,7 @@ namespace System.Web.Mvc
             */
 
             string upvote = string.Format("<{0} nicetitle='{1}'>{2}{3}{4}{5}",
-                !noLink? string.Format("a href='{0}'", url.Action("VotePost", "Forum", new { forumPostID = post.ForumPostID, delta = 1 })) : "span",
+                !noLink? VoteControl(url.Action("VotePost", "Forum", new { forumPostID = post.ForumPostID, delta = 1 })) : "span",
                 votersVisible? string.Format("$forumVotes${0}", post.ForumPostID) : "Upvote",
                 upvoted ? "<strong>" : "",
                 string.Format("<font {0}>+{1}</font>", post.Upvotes > 0 ? "color='LawnGreen'" : "", post.Upvotes),
@@ -112,7 +130,7 @@ namespace System.Web.Mvc
                 !noLink? "</a>" : "</span>"
             );
             string downvote = string.Format("<{0} nicetitle='{1}'>{2}{3}{4}{5}",
-                !noLink? string.Format("a href='{0}'", url.Action("VotePost", "Forum", new { forumPostID = post.ForumPostID, delta = -1 })) : "span",
+                !noLink? VoteControl(url.Action("VotePost", "Forum", new { forumPostID = post.ForumPostID, delta = -1 })) : "span",
                 votersVisible? string.Format("$forumVotes${0}", post.ForumPostID) : "Downvote",
                 downvoted ? "<strong>" : "",
                 string.Format("<font {0}>-{1}</font>", post.Downvotes > 0 ? "color='Tomato'" : "", post.Downvotes),
@@ -123,7 +141,7 @@ namespace System.Web.Mvc
             return new MvcHtmlString(string.Format("{0} / {1} {2}",
                     upvote,
                     downvote,
-                    previousVote != null ? string.Format("(<a href='{0}'>cancel</a>)", url.Action("CancelVotePost", "Forum", new {forumPostID = post.ForumPostID})) : ""
+                    previousVote != null ? string.Format("(<{0}>cancel</a>)", VoteControl(url.Action("CancelVotePost", "Forum", new { forumPostID = post.ForumPostID }))) : ""
                     ));
         }
 
