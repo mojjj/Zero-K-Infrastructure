@@ -51,9 +51,31 @@ namespace ZeroKWeb.Controllers
         /// <param name="chassis">The <see cref="Unlock"/> ID of the commander chassis to use</param>
         /// <param name="deleteCommander">If not null or empty, delete the <see cref="Commander"/></param>
         /// <returns></returns>
+		/// <summary>
+		/// Renders one commander profile, and only renders it.
+		///
+		/// Commanders.cshtml used to get its markup by calling CommanderProfile itself through
+		/// Html.RenderAction - the same method that deletes commanders and saves modules. That made
+		/// the write reachable by GET, and it ran on every page load: with an existing commander the
+		/// action reached SaveChanges and completed its TransactionScope while merely drawing the
+		/// page.
+		///
+		/// The .NET 9 side already worked this way. MyCommanderProfileViewComponent calls
+		/// BuildCommanderProfileModel and says in its own comment that "the mutating half stays in
+		/// the controller, where a POST reaches it" - this is the MVC 5 half catching up.
+		/// </summary>
 		[Auth]
-		[WritesOnGetNotYetFixed("called as a child action from Commanders.cshtml as well as posted to")]
-		public ActionResult CommanderProfile(int profileNumber, string name, int? chassis, string deleteCommander)
+		[HttpGet]
+		public ActionResult CommanderProfileView(int profileNumber)
+		{
+			if (profileNumber < 1 || profileNumber > GlobalConst.CommanderProfileCount) return Content("WTF! get lost");
+			return GetCommanderProfileView(profileNumber);
+		}
+
+		[Auth]
+		[HttpPost]
+		[ValidateAntiForgeryToken]
+		public ActionResult CommanderProfile(int profileNumber, string name, int? chassis, string deleteCommander)
 		{
 			if (profileNumber < 1 || profileNumber > GlobalConst.CommanderProfileCount) return Content("WTF! get lost");
 

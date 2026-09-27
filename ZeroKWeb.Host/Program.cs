@@ -1284,6 +1284,36 @@ namespace ZeroKWeb.Host
                 failures += Check(NoNestedForms(adminHtml),
                     "  and no form inside another, so the PostLink buttons survive");
 
+                // My/CommanderProfile, the last of them. Commanders.cshtml rendered itself by
+                // calling this action through Html.RenderAction - the same method that deletes
+                // commanders and saves modules - so the write ran on every page load and a link
+                // reached it. The read is its own action now, which is what the view calls.
+                var profile = Url + "/My/CommanderProfile?profileNumber=1";
+
+                var profileByLink = await client.GetAsync(profile);
+                failures += Check(profileByLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                    "  My/CommanderProfile is not reachable by GET (" + (int)profileByLink.StatusCode + ")");
+
+                var profileUntokened = await client.PostAsync(profile, new FormUrlEncodedContent(
+                    new KeyValuePair<string, string>[0]));
+                failures += Check(profileUntokened.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                    "  and a POST without an anti-forgery token is refused ("
+                    + (int)profileUntokened.StatusCode + ")");
+
+                var profilePosted = await Post(client, profile, token);
+                failures += Check(profilePosted.StatusCode == System.Net.HttpStatusCode.OK,
+                    "  while a POST that carries one is accepted (" + (int)profilePosted.StatusCode + ")");
+
+                // The read half, which is what the page renders through. Without it the split
+                // would have taken the page's own markup away with the hole.
+                var profileRead = await client.GetAsync(Url + "/My/CommanderProfileView?profileNumber=1");
+                failures += Check(profileRead.StatusCode == System.Net.HttpStatusCode.OK,
+                    "  and the render-only half still answers a GET (" + (int)profileRead.StatusCode + ")");
+
+                using (var db = new ZkDataContext())
+                    failures += Check(!db.Commanders.Any(x => x.AccountID == accountID),
+                        "  with no commander left behind by either");
+
                 var markReadPosted = await Post(client, markRead, token);
                 failures += Check(markReadPosted.StatusCode == System.Net.HttpStatusCode.Redirect,
                     "  while MarkAllAsRead still works when posted with one ("
