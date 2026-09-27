@@ -106,6 +106,12 @@ namespace ZkData.Core
                         case "backfill-minimaps":
                             return LegacyMinimapBackfill.Run(db, args.Skip(1).ToArray());
 
+                        // Whether the two deprecated WCF endpoints can go yet. Read-only, and
+                        // it refuses to conclude from a window with no instrumented start in
+                        // it - see LegacyCallerReport.
+                        case "legacy-callers":
+                            return LegacyCallerReport.Run(db, args.Skip(1).ToArray());
+
                         // A development convenience, and deliberately a thin one: the fixture
                         // stores PasswordBcrypt as NULL for every account, so there is nothing to
                         // sign in as while testing the site by hand.
