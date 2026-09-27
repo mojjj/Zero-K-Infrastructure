@@ -36,29 +36,44 @@
 <div id="grid">
     <h1>@Page.Title</h1>
 
-    @using (Ajax.BeginForm("Index", Global.GetAjaxOptions("grid", false)))
-    {
-        @Html.HiddenFor(x=>x.LastSelectedGalaxyID)
-        <table>
-            <tr>
-                <td>Master switch</td>
-                <td>
-                    <h3>@MiscVar.PlanetWarsMode</h3>
-                    @Html.EnumDropDownListFor(x => x.PlanetWarsMode)<input type="submit" value="Switch" name="set"/>
-                </td>
-            </tr>
-            <tr>
-                <td>Timed switch</td>
-                <td>
-                    @Html.EnumDropDownListFor(x => x.PlanetWarsNextMode)&nbsp;&nbsp;
+    @*
+        One form per button, not one form with three submit buttons whose NAME chose the action.
+        That shape made the page's own action a write, and it also swallowed the Html.PostLink
+        buttons below: PostLink renders a <form>, a form cannot nest inside another, so the browser
+        dropped them and their buttons submitted here instead of to SetDefault or the map utils.
+    *@
+    <table>
+        <tr>
+            <td>Master switch</td>
+            <td>
+                <h3>@MiscVar.PlanetWarsMode</h3>
+                @using (Ajax.BeginForm("SetMode", Global.GetAjaxOptions("grid", false)))
+                {
+                    @Html.AntiForgeryToken()
+                    @Html.EnumDropDownListFor(x => x.PlanetWarsMode)<input type="submit" value="Switch"/>
+                }
+            </td>
+        </tr>
+        <tr>
+            <td>Timed switch</td>
+            <td>
+                @using (Ajax.BeginForm("SetFutureMode", Global.GetAjaxOptions("grid", false)))
+                {
+                    @Html.AntiForgeryToken()
+                    @Html.EnumDropDownListFor(x => x.PlanetWarsNextMode)<text>&nbsp;&nbsp;</text>
                     @Html.TextBoxFor(x => x.PlanetWarsNextModeDate, new { @class = "js_datetimepicker" })
-                    <input type="submit" value="Set in future" name="futureset" />
-                </td>
+                    <input type="submit" value="Set in future" />
+                }
+            </td>
 
-            </tr>
-            <tr>
-                <td>Purge PlanetWars</td>
-                <td>
+        </tr>
+        <tr>
+            <td>Purge PlanetWars</td>
+            <td>
+                @using (Ajax.BeginForm("Purge", Global.GetAjaxOptions("grid", false)))
+                {
+                    @Html.AntiForgeryToken()
+                    @Html.HiddenFor(x => x.LastSelectedGalaxyID)
                     <label>
                         @Html.CheckBoxFor(x => x.UnassignFactions)
                         Unassign factions
@@ -72,26 +87,26 @@
                         Delete clans
                     </label>
 
-                    <input type="submit" value="Purge" name="purge"/>
-                </td>
-            </tr>
+                    <input type="submit" value="Purge"/>
+                }
+            </td>
+        </tr>
 
-            <tr>
-                <td>
-                    Selected map utils
-                </td>
-                <td>
-                    @Html.PostLink("Randomize maps", "RandomizeMaps", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
-                    @Html.PostLink("Set team sizes", "SetPlanetTeamSizes", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
-                    @Html.PostLink("Start galaxy", "StartGalaxy", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
-                    @Html.PostLink("Add wormholes", "AddWormholes", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
-                    @Html.PostLink("Own planets", "OwnPlanets", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
-                    @Html.ActionLink("Reset all PW player ratings", "ResetRatings")<br />
-                </td>
-            </tr>
+        <tr>
+            <td>
+                Selected map utils
+            </td>
+            <td>
+                @Html.PostLink("Randomize maps", "RandomizeMaps", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
+                @Html.PostLink("Set team sizes", "SetPlanetTeamSizes", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
+                @Html.PostLink("Start galaxy", "StartGalaxy", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
+                @Html.PostLink("Add wormholes", "AddWormholes", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
+                @Html.PostLink("Own planets", "OwnPlanets", null, new { galaxyID = Model.LastSelectedGalaxyID }, "js_confirm")<br />
+                @Html.PostLink("Reset all PW player ratings", "ResetRatings", null, null, "js_confirm")<br />
+            </td>
+        </tr>
 
-        </table>
+    </table>
 
-        @Html.Partial("~/Views/Shared/Grid/RenderTable.cshtml", grid)
-    }
+    @Html.Partial("~/Views/Shared/Grid/RenderTable.cshtml", grid)
 </div>
