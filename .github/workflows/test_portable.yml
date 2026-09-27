@@ -72,6 +72,9 @@ jobs:
       - name: Check no action writes on a GET
         run: ./tools/check-get-writes.py
 
+      - name: Check every C# file is in a project
+        run: ./tools/check-orphaned-sources.py
+
       - name: Check the lobby-server seam
         run: dotnet run --project ZkData.Core -- seam --check
 
