@@ -1240,6 +1240,50 @@ namespace ZeroKWeb.Host
                     }
                 }
 
+                // PlanetwarsAdmin. Its Index was the page AND its form handler, branching on
+                // which submit button had a value - so a link could switch PlanetWars off or purge
+                // a galaxy. The three writes are their own POST actions now.
+                foreach (var write in new[] { "SetMode", "SetFutureMode", "Purge", "ResetRatings" })
+                {
+                    var byLink = await client.GetAsync(Url + "/PlanetwarsAdmin/" + write);
+                    failures += Check(byLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                        "  PlanetwarsAdmin/" + write + " is not reachable by GET (" + (int)byLink.StatusCode + ")");
+                }
+
+                var futureMode = Url + "/PlanetwarsAdmin/SetFutureMode";
+                var futureUntokened = await client.PostAsync(futureMode, new FormUrlEncodedContent(
+                    new KeyValuePair<string, string>[0]));
+                failures += Check(futureUntokened.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                    "  and a POST without an anti-forgery token is refused (" + (int)futureUntokened.StatusCode + ")");
+
+                // SetFutureMode is the one driven here because it writes two MiscVars and nothing
+                // else; Purge is on the same page and deletes a galaxy's worth of rows.
+                var nextMode = MiscVar.PlanetWarsNextMode;
+                var nextModeTime = MiscVar.PlanetWarsNextModeTime;
+                try
+                {
+                    var future = await Post(client, futureMode, token);
+                    failures += Check(future.StatusCode == System.Net.HttpStatusCode.OK,
+                        "  while a POST that carries one is accepted (" + (int)future.StatusCode + ")");
+                }
+                finally
+                {
+                    MiscVar.PlanetWarsNextMode = nextMode;
+                    MiscVar.PlanetWarsNextModeTime = nextModeTime;
+                }
+
+                // The page itself, and the second bug the split fixed: Html.PostLink renders a
+                // <form>, and all of them sat inside the one big form. A form cannot nest inside
+                // another, so the browser dropped them and their buttons submitted to Index.
+                var adminPage = await client.GetAsync(Url + "/PlanetwarsAdmin");
+                var adminHtml = await adminPage.Content.ReadAsStringAsync();
+                failures += Check(adminPage.StatusCode == System.Net.HttpStatusCode.OK,
+                    "  the admin page is served (" + (int)adminPage.StatusCode + ")");
+                failures += Check(adminHtml.Contains("SetMode") && adminHtml.Contains("Purge"),
+                    "  with a form per button rather than one form and three named submits");
+                failures += Check(NoNestedForms(adminHtml),
+                    "  and no form inside another, so the PostLink buttons survive");
+
                 var markReadPosted = await Post(client, markRead, token);
                 failures += Check(markReadPosted.StatusCode == System.Net.HttpStatusCode.Redirect,
                     "  while MarkAllAsRead still works when posted with one ("
@@ -1247,6 +1291,27 @@ namespace ZeroKWeb.Host
 
                 return failures;
             });
+        }
+
+        /// <summary>
+        /// True when no &lt;form&gt; opens while another is still open.
+        ///
+        /// The HTML parser does not nest forms: it drops the inner start tag and leaves its
+        /// children behind, so the inner buttons quietly become the outer form's. Nothing about
+        /// that shows up as an error - the page renders, the button is there, and it posts to the
+        /// wrong action.
+        /// </summary>
+        private static bool NoNestedForms(string html)
+        {
+            var depth = 0;
+            foreach (System.Text.RegularExpressions.Match token in
+                     System.Text.RegularExpressions.Regex.Matches(html, "<form\\b|</form>",
+                         System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                if (token.Value.StartsWith("</")) depth--;
+                else if (++depth > 1) return false;
+            }
+            return depth == 0;
         }
 
         private static string Summarize(HttpResponseMessage response, string body)

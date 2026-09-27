@@ -10,8 +10,12 @@ view: it is an ordinary link, and a third-party page can fire it with the visito
 being loaded.
 
 **What counts as a write is the EF/LINQ-to-SQL call, not a guess**: SaveChanges, SubmitChanges,
-InsertOnSubmit, InsertAllOnSubmit, DeleteOnSubmit, DeleteAllOnSubmit. That is deliberately narrow
-and checkable. It means this does NOT see an action whose only effect is on the lobby server -
+InsertOnSubmit, InsertAllOnSubmit, DeleteOnSubmit, DeleteAllOnSubmit - and EntityFramework
+.Extensions' bulk pair, `.Update(x => new ...)` and `.Delete()`, which issue SQL straight at the
+server and never go near SaveChanges. Those two were missing at first, and what they hid was
+PlanetwarsAdmin's ResetRatings: a GET that rewrote every PlanetWars battle and rating in the
+database. `Update` is matched with a word boundary, so UpdateLastRead and UpdateMission are not
+mistaken for it. That is deliberately narrow and checkable. It means this does NOT see an action whose only effect is on the lobby server -
 Tourney's JoinBattle and RemoveBattle were of that kind, found by reading rather than by this -
 and it does not see writes made through a helper it calls. A check that is honest about its edges
 is worth more than one that guesses at them.
@@ -33,7 +37,7 @@ SIGNATURE = re.compile(
     r"(?:ActionResult|Task<ActionResult>|IActionResult|Task<IActionResult>)[ \t]+(\w+)[ \t]*\(",
     re.MULTILINE)
 WRITE = re.compile(r"\b(?:SaveChanges|SubmitChanges|InsertOnSubmit|InsertAllOnSubmit"
-                   r"|DeleteOnSubmit|DeleteAllOnSubmit)\s*\(")
+                   r"|DeleteOnSubmit|DeleteAllOnSubmit|Update|Delete)\s*\(")
 BY_DESIGN = re.compile(r'\[WritesOnGetByDesign\("([^"]*)"\)\]')
 NOT_YET = re.compile(r'\[WritesOnGetNotYetFixed\("([^"]*)"\)\]')
 
