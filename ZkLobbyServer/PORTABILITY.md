@@ -113,9 +113,20 @@ uses it:
 means either breaking the Framework build or introducing an `#if` into a file that currently needs
 none. It belongs with the move of that project, not before it.
 
-So step 1 is not "port PlasmaShared". It is: decide what `UnitSync`, `ResizedImageCache` and the
-`Diagrams` code should do off Windows. The `Mono.Unix` question is one method in `PlasmaDownloader`,
-and it waits for that project.
+### The Diagrams code is live, and the duplicate was somewhere else
+
+`PlasmaShared/Diagrams` looked at first like dead weight dragging `System.Drawing` into the portable
+subset: `GalaxyDesigner` has its own `Diagram.cs` and `Node.cs`, so the shared copies seemed
+shadowed. **That reading was backwards.** Those two files are in no project at all — orphans on disk
+since 2011 — and `GalaxyDesigner/MainWindow.xaml.cs` does `using Diagrams;` and builds against the
+shared ones. The orphans are deleted; `PlasmaShared/Diagrams` stays.
+
+It is also the least urgent of the three `System.Drawing` users: its only consumer is a WPF desktop
+tool that will not be running on Linux whatever happens to the port.
+
+So step 1 is not "port PlasmaShared". It is: decide what `UnitSync` and `ResizedImageCache` should
+do off Windows — `Diagrams` can stay where it is. The `Mono.Unix` question is one method in
+`PlasmaDownloader`, and it waits for that project.
 
 ## Suggested order
 
