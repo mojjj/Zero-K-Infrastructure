@@ -65,10 +65,37 @@ nothing.
 yet establish that the bodies compile. The next person should resolve the eleven above and re-run
 before claiming a number.
 
+## Step 1, measured: PlasmaShared already compiles
+
+Surveyed the next day, because "PlasmaShared first" deserved a number rather than an ordering.
+
+**All 83 of its source files compile on `net9.0`, with zero errors.** Not a subset, not with files
+excluded — the whole tree, given the package references the existing project already declares.
+38 of them were being linked into `ZkData.Core` individually and 10 more into `Tests.Portable`, so
+roughly half was already known to work; the other half had simply never been tried.
+
+Two packages restore but do not mean what the green build suggests, and they are the whole of the
+remaining work in this tree:
+
+| package | what the compiler says | what Linux would do |
+|---|---|---|
+| `Mono.Posix` | resolves, with **NU1701**: restored as `.NETFramework 4.8` against a `net9.0` project | `SelfUpdater.cs` is the only user. .NET 9 has `File.SetUnixFileMode`, so this is a rewrite of a few lines, not a port |
+| `System.Drawing.Common` | resolves and compiles | Windows-only since .NET 6. Five files construct GDI objects: `ResizedImageCache.cs`, `Utils.cs`, `UnitSyncLib/UnitSync.cs`, `Imaging/GdiPixelBridge.cs`, `Imaging/SystemDrawingImageProcessor.cs` |
+
+**Compiling is not running, and this is the case that shows why.** A build with 0 errors says
+nothing about `System.Drawing.Common` throwing `PlatformNotSupportedException` on the first call off
+Windows. The site already hit this and answered it — `Images.Processor` selects ImageSharp, and
+`SystemDrawingImageProcessor` is kept deliberately as the GDI implementation to compare against, not
+as something the port uses. The remaining GDI users are unitsync and the diagram code, neither of
+which the website needs.
+
+So step 1 is not "port PlasmaShared". It is: decide what `UnitSync`, `ResizedImageCache` and the
+`Diagrams` code should do off Windows, and replace six lines of `Mono.Unix`.
+
 ## Suggested order
 
-1. `Shared/PlasmaShared` first — 38 of the unresolved names came from it, and everything else
-   depends on it.
+1. ~~`Shared/PlasmaShared` first~~ — **done as a measurement**: it compiles. What is left there is
+   the two runtime questions above, not compilation.
 2. `Shared/LobbyClient` and `Shared/MonoTorrent` next.
 3. `Shared/PlasmaDownloader`, which needs the `Mono.Unix` replacement.
 4. `ZkLobbyServer` last, against `ZkData.Core` rather than `ZkData`.
