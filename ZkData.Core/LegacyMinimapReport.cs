@@ -76,9 +76,20 @@ namespace ZkData.Core
                 {
                     legacy++;
                     if (examples.Count < 10)
+                    {
+                        // ImageSizing.CorrectedFromLegacy, not a second copy of the arithmetic.
+                        // The copy that used to be here read `size.Width, size.Width / ratio`,
+                        // which is the LANDSCAPE case written out: it keeps the width and derives
+                        // the height. For a portrait map the backfill keeps the HEIGHT and widens,
+                        // so this line told an operator the image would get shorter when it was
+                        // about to get wider - 455x1024 was reported as "expected about 455x682"
+                        // where the backfill does 682x1024. Found by rehearsing the run against
+                        // real files rather than by reading either file.
+                        var target = ImageSizing.CorrectedFromLegacy(size, ratio);
                         examples.Add(string.Format("  {0}  stored {1}x{2}, map ratio {3:F2}, expected about {4}x{5}",
                             resource.InternalName, size.Width, size.Height, ratio,
-                            size.Width, (int)(size.Width / ratio)));
+                            target.Width, target.Height));
+                    }
                 }
                 else
                 {

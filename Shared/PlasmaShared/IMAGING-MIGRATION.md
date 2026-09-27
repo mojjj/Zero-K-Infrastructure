@@ -170,6 +170,33 @@ Three things about it are deliberate:
   they already have; it is off by default because it is a database write and a first run is
   usually a rehearsal.
 
+**The sequence above has been rehearsed end to end**, against 26 non-square maps whose images were
+generated at the legacy shape (aspect R squared) from the fixture's own `MapSizeRatio` values. It
+has still never been run on the production `Resources` folder - that needs someone with access to
+the box - but every step of the procedure, including the rollback, has now been executed rather
+than only written down:
+
+| step | what happened |
+|---|---|
+| `minimaps <dir>` | `legacy (squashed) 26`, `current 0` |
+| `backfill-minimaps <dir>` | `corrected 78` (26 maps x 3 kinds), nothing written |
+| `--apply --limit=1` | `maps touched 1`; 3 files rewritten, 4 `.legacy` copies made including the thumbnail |
+| the corrected minimap | `1024x455 -> 1024x682`, mean RGB unchanged: the picture was stretched, not replaced |
+| the thumbnail | stayed `96x64` and its content changed, being regenerated from the corrected minimap |
+| the next map | untouched, no `.legacy` - `--limit` really stops |
+| `--apply` | `corrected 75, already right 3`: it resumed where the limited run stopped |
+| `--apply` a third time | `corrected 0, already right 78` - idempotent |
+| `for f in *.legacy; do mv "$f" "${f%.legacy}"; done` | 104 files restored, and the report reads `legacy 26, current 0` again: the exact starting state |
+
+**The rehearsal found one defect, in the report rather than the backfill.** `minimaps` printed its
+"expected about WxH" from its own copy of the arithmetic, which was the landscape case written out
+- keep the width, derive the height. For a portrait map the backfill keeps the *height* and
+widens, so a 455x1024 image was reported as "expected about 455x682" when the backfill would make
+it 682x1024. The operator reading that line before deciding to `--apply` was told the image would
+get shorter when it was about to get wider. It calls `ImageSizing.CorrectedFromLegacy` now, the
+same function the backfill uses, so there is no second copy to drift. Neither file was wrong to
+read; the two only disagreed when run.
+
 **What it cannot do is recover detail.** The old rule resized the short axis away, and no stretch
 brings it back: a corrected 2:1 minimap is geometrically right and softer than one registered
 today. The correction keeps the long axis at its stored resolution for that reason - throwing away
