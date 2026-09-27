@@ -298,6 +298,14 @@ namespace ZeroKWeb.Controllers
                 // update title
                 if (thread != null && !string.IsNullOrEmpty(title))
                 {
+                    // The same rule the new-thread branch below applies. It was missing here, so a
+                    // key that creation refuses - anything outside letters, digits, underscore and
+                    // brackets - could be set by editing instead, and the site would then build
+                    // /Wiki/<that> links from it. Account.IsValidLobbyName is what makes the wiki
+                    // route's segment safe; see Tests.Portable/WikiKeyRouteSafetyTests.cs.
+                    if (!string.IsNullOrEmpty(wikiKey) && !Account.IsValidLobbyName(wikiKey))
+                        return Content("You need to set a valid wiki key");
+
                     currentTitle = thread.Title;
                     thread.Title = title;
                     thread.WikiKey = wikiKey;
