@@ -111,7 +111,30 @@ function ZkPost(url, data, done) {
     return $.post(url, payload, done);
 }
 
-if (typeof module !== "undefined" && module.exports) module.exports = { BuildHistoryUrl: BuildHistoryUrl, ZkPost: ZkPost };
+/*
+    Asks a question, puts the answer in one of the form's fields, and lets the submit go ahead.
+
+    Use as onsubmit="return ZkPrompt(this, 'text', 'What is your slogan?', 'vote me!');".
+
+    It replaces a pattern that did the same thing to a link's own href:
+
+        onclick="var text = prompt(...); if (text != null) $(this).attr('href', $(this).attr('href') + '&text=' + text);"
+
+    which had three faults. The link was a GET, so a crafted one started a poll in the visitor's
+    name. The answer was pasted into a URL unescaped, so a slogan containing & or # was truncated
+    or mangled. And cancelling the prompt left the navigation to happen anyway, because the handler
+    returned undefined - the poll was created with no text at all.
+
+    Returning false cancels the submit, which is the fix for the third.
+*/
+function ZkPrompt(form, field, question, suggestion) {
+    var answer = prompt(question, suggestion);
+    if (answer === null) return false;
+    $(form).find('input[name="' + field + '"]').val(answer);
+    return true;
+}
+
+if (typeof module !== "undefined" && module.exports) module.exports = { BuildHistoryUrl: BuildHistoryUrl, ZkPost: ZkPost, ZkPrompt: ZkPrompt };
 
 function SendLobbyCommand(link) {
     $.ajax({

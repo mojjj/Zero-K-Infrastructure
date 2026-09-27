@@ -1100,6 +1100,60 @@ namespace ZeroKWeb.Host
                     }
                 }
 
+                // Poll/NominateRole, which was a link whose onclick pasted a prompt() answer onto
+                // its own href - so a crafted link started a poll in the visitor's name.
+                //
+                // Driven to a definite answer rather than to success: a RoleType is seeded so the
+                // lookup finds one, and the account's Level is dropped below MinLevelForForumVote
+                // so the action stops at its own message instead of creating a poll.
+                int roleTypeID;
+                int originalLevel;
+                using (var db = new ZkDataContext())
+                {
+                    var roleType = new RoleType { Name = "Harness Role", Description = "for the harness", IsVoteable = true };
+                    db.RoleTypes.Add(roleType);
+                    var account = db.Accounts.Single(a => a.AccountID == accountID);
+                    originalLevel = account.Level;
+                    account.Level = 0;
+                    db.SaveChanges();
+                    roleTypeID = roleType.RoleTypeID;
+                }
+                try
+                {
+                    var nominate = Url + "/Poll/NominateRole?roleTypeID=" + roleTypeID;
+
+                    var nominateByLink = await client.GetAsync(nominate);
+                    failures += Check(nominateByLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                        "  NominateRole is not reachable by GET (" + (int)nominateByLink.StatusCode + ")");
+
+                    var nominateUntokened = await client.PostAsync(nominate, new FormUrlEncodedContent(
+                        new[] { new KeyValuePair<string, string>("text", "vote me") }));
+                    failures += Check(nominateUntokened.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                        "  and a POST without an anti-forgery token is refused ("
+                        + (int)nominateUntokened.StatusCode + ")");
+
+                    var nominated = await client.PostAsync(nominate, new FormUrlEncodedContent(new[]
+                    {
+                        new KeyValuePair<string, string>("__RequestVerificationToken", token),
+                        new KeyValuePair<string, string>("text", "vote me"),
+                    }));
+                    var nominatedBody = await nominated.Content.ReadAsStringAsync();
+                    failures += Check(nominatedBody.Contains("You need to be level"),
+                        "  while a POST that carries one reaches the action's own check ("
+                        + Summarize(nominated, nominatedBody) + ")");
+                }
+                finally
+                {
+                    using (var db = new ZkDataContext())
+                    {
+                        db.Polls.RemoveRange(db.Polls.Where(x => x.RoleTypeID == roleTypeID));
+                        db.SaveChanges();
+                        db.RoleTypes.RemoveRange(db.RoleTypes.Where(x => x.RoleTypeID == roleTypeID));
+                        db.Accounts.Single(a => a.AccountID == accountID).Level = originalLevel;
+                        db.SaveChanges();
+                    }
+                }
+
                 var markReadPosted = await Post(client, markRead, token);
                 failures += Check(markReadPosted.StatusCode == System.Net.HttpStatusCode.Redirect,
                     "  while MarkAllAsRead still works when posted with one ("

@@ -116,7 +116,8 @@ namespace ZeroKWeb.Controllers
         /// Starts a poll to elect someone to a <see cref="RoleType"/>, or remove an existing holder
         /// </summary>
         [Auth()]
-        [WritesOnGetNotYetFixed("the link's onclick appends a prompt() answer to its own href")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult NominateRole(int roleTypeID, string text, bool isRemoval = false, int? removalAccountID = null)
         {
             var db = new ZkDataContext();
