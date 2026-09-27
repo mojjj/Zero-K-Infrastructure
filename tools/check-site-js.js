@@ -17,9 +17,14 @@ global.window = { location: { toString: () => "https://zero-k.info/" }, history:
 // $.post - so the test drives both by hand rather than pretending to be a browser.
 let tokenOnPage = null;
 const posted = [];
+// ZkPrompt is given a form object and looks inside it, so the stub carries the fields it would
+// find and records what gets written to them.
 global.jQuery = global.$ = function (selector) {
     if (selector === 'input[name="__RequestVerificationToken"]') {
         return { first: () => ({ val: () => tokenOnPage }) };
+    }
+    if (selector && selector.fields) {
+        return { find: (what) => ({ val: (v) => { selector.fields[what] = v; } }) };
     }
     return { ready: () => {} };
 };
@@ -29,7 +34,7 @@ global.jQuery.post = (url, data, done) => { posted.push({ url, data, done }); re
 global.document = { addEventListener: () => {} };
 
 const file = path.join(__dirname, "..", "Zero-K.info", "Scripts", "site_main.js");
-const { BuildHistoryUrl, ZkPost } = require(file);
+const { BuildHistoryUrl, ZkPost, ZkPrompt } = require(file);
 
 let failures = 0;
 function check(actual, expected, what) {
@@ -96,6 +101,32 @@ tokenOnPage = undefined;
 posted.length = 0;
 check(ZkPost("/Maps/Rate", { rating: 4 }), null, "ZkPost returns null when the page has no token");
 check(posted.length, 0, "and sends nothing rather than a request that would be refused");
+
+// ZkPrompt. It replaced an onclick that pasted the answer into the link's own href, which sent
+// the poll by GET, mangled a slogan containing & or #, and - if the prompt was cancelled - went
+// ahead anyway and created the poll with no text.
+let asked = null;
+global.prompt = (question, suggestion) => { asked = { question, suggestion }; return promptAnswer; };
+let promptAnswer = "vote me!";
+
+let form = { fields: {} };
+check(ZkPrompt(form, "text", "What is your slogan?", "vote me!"), true, "ZkPrompt allows the submit");
+check(asked.question, "What is your slogan?", "after asking the question it was given");
+check(asked.suggestion, "vote me!", "with the suggested answer");
+check(form.fields['input[name="text"]'], "vote me!", "and putting the answer in the named field");
+
+// The old code built a URL, so these characters ended or corrupted it. In a form field they are
+// just characters, which is the point of moving off the href.
+promptAnswer = "me & my #1 friend";
+form = { fields: {} };
+ZkPrompt(form, "text", "q", "s");
+check(form.fields['input[name="text"]'], "me & my #1 friend", "an answer with & and # survives intact");
+
+// Cancelling. The bug this replaces created the poll anyway, with no text.
+promptAnswer = null;
+form = { fields: {} };
+check(ZkPrompt(form, "text", "q", "s"), false, "a cancelled prompt stops the submit");
+check(Object.keys(form.fields).length, 0, "and writes nothing into the form");
 
 console.log();
 console.log(failures === 0 ? "all checks passed" : failures + " check(s) failed");
