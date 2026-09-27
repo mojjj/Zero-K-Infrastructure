@@ -153,12 +153,44 @@ The `Mono.Unix` question is one method in `PlasmaDownloader`, and it waits for t
 
 1. ~~`Shared/PlasmaShared`~~ — answered: it compiles, and its Windows-only parts are not on the
    server's path.
-2. `Shared/LobbyClient` and `Shared/MonoTorrent`.
-3. `Shared/PlasmaDownloader`, which needs the `Mono.Unix` replacement.
-4. `ZkLobbyServer` itself, against `ZkData.Core` rather than `ZkData`.
+2. ~~`Shared/LobbyClient` and `Shared/MonoTorrent`~~ — both compile.
+3. ~~`Shared/PlasmaDownloader`~~ — compiles; its `Mono.Unix` call is the one runtime item.
+4. `ZkLobbyServer` itself — one EF6 API call left, and the partial-class trap above.
 
-Steps 2–4 have not been probed. The caveat above still applies to all of them: a type error hides
-the member errors behind it, so each needs its own compile before anyone claims a number.
+### Steps 2 and 3, measured: both compile
+
+`Shared/LobbyClient` (23 files) and `Shared/MonoTorrent` (35 files) each compile on `net9.0` with
+**zero errors**, alongside PlasmaShared. Checked by looking for `TasClient`, `Battle` and
+`BEncodedDictionary` in the produced assemblies, because a glob that matches nothing also produces
+zero errors.
+
+### Step 4: one stale using, then one real API
+
+`ZkLobbyServer/ChatRelay.cs` had `using Discord.Rpc;` and nothing from it — Discord.Net dropped that
+package at 3.x, and the import was the only thing keeping the tree from resolving. Removed.
+
+With it gone the compiler finally binds method bodies, and **one error is left that is not an
+artifact of the probe**:
+
+    ZkServerTraceListener.cs: 'DatabaseFacade' does not contain a definition for 'ExecuteSqlCommand'
+
+That is EF6's API; EF Core spells it `ExecuteSqlRaw`. It is the 14-day `LogEntries` prune, so it is
+a one-line change that belongs with the move rather than before it.
+
+### The trap a ZkLobbyServer.Core will hit
+
+**`GlobalConst` and `Utils` are partial classes split across `.cs` and `.Portable.cs`, and
+`ZkData.Core` links only the portable halves.** A probe that *references* `ZkData.Core` and also
+compiles the non-portable halves ends up with two different `GlobalConst` types in two assemblies —
+the source one wins, and it is missing every member that lives in the portable half.
+
+That produced about 150 errors of the form *"'GlobalConst' does not contain a definition for
+`NightwatchName`"*, none of them real: `NightwatchName` is in `GlobalConst.Portable.cs` and
+`HashLobbyPassword` is in `Utils.Enumerable.cs`, both perfectly portable and both already linked.
+
+So a real `ZkLobbyServer.Core` must put the whole chain in **one** assembly — linking what
+`ZkData.Core` links rather than referencing it — or it will spend a long time chasing errors that
+are entirely its own doing. Both of this survey's wrong turns were of that kind.
 
 ## Suggested order
 
