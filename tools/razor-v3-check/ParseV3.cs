@@ -1,3 +1,4 @@
+// not-in-a-project: compiled by tools/razor-v3-check/check.sh under mono, against Razor v3
 // Parses a .cshtml with MVC 5's own Razor, and reports what it rejects.
 //
 // This repository has said from the beginning that nothing here can check an MVC 5 view - mono

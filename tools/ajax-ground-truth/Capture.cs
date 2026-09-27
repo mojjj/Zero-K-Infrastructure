@@ -1,3 +1,4 @@
+// not-in-a-project: compiled by tools/ajax-ground-truth/capture.sh under mono, against MVC 5
 // Prints the HTML that MVC 5's AjaxHelper actually emits, for the exact call shapes
 // Zero-K.info uses. Run under mono against the real System.Web.Mvc 5.2.3 - see capture.sh.
 //
