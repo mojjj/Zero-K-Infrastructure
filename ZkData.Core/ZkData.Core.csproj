@@ -76,13 +76,13 @@
     <Compile Include="..\Shared\PlasmaShared\Imaging\ImageSharpImageProcessor.cs" Link="Linked\ImageSharpImageProcessor.cs" />
     <Compile Include="..\Shared\PlasmaShared\IContentService\ClientMissionInfo.cs" Link="Linked\ClientMissionInfo.cs" />
     <Compile Include="..\Shared\PlasmaShared\CommandJsonSerializer.cs" Link="Linked\CommandJsonSerializer.cs" />
-    <!-- PlasmaShared's ResourceType, not Shared/ZkData/ResourceType.cs, which this used to
-         link. There are two files in the repository declaring ZkData.ResourceType, and the
-         Shared/ZkData one is in NO project - production compiles this one. They differ:
-         production has Helper = 2 and the dead file stops at Mod = 1.
+    <!-- PlasmaShared's ResourceType. This used to link Shared/ZkData/ResourceType.cs instead -
+         a second file declaring ZkData.ResourceType, in no project, which stopped at Mod = 1
+         where production has Helper = 2.
          Nothing broke, because the column is an int either way and the two agree on Map and
          Mod, so the schema diff and every read still passed. It surfaced only when
-         ResourceInfo.cs - which says `= ResourceType.Helper` - was linked for MapsController. -->
+         ResourceInfo.cs - which says `= ResourceType.Helper` - was linked for MapsController.
+         The tree that held it is deleted now, so there is only one of these again. -->
     <Compile Include="..\Shared\PlasmaShared\IContentService\ResourceType.cs" Link="Linked\ResourceType.cs" />
     <Compile Include="..\ZkData\Ef\WHR\PlayerRating.cs" Link="Linked\WHR\PlayerRating.cs" />
     <Compile Include="..\ZkData\Ef\WHR\MapRatings.cs" Link="Linked\WHR\MapRatings.cs" />
