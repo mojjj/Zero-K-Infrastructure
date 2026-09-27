@@ -391,6 +391,73 @@ would put the engine somewhere nobody asked for.
 unchanged behaviour and a moderator-level capability by design; narrowing it further is a separate
 decision.
 
+## The two Web.config settings that turn off platform input filtering (2026-09-27)
+
+    <httpRuntime targetFramework="4.5" requestPathInvalidCharacters="" requestValidationMode="2.0" ... />
+
+Both have been on the security list since the first assessment and left alone twice, on the
+assumption that restoring the defaults would reject legitimate map, replay and wiki names in route
+segments. **That assumption had never been measured.** This is what measuring it found. Neither
+setting is changed here - the measurement narrows what would have to be true, and one of the two
+unknowns is now closed.
+
+### Which routes actually carry free text
+
+Six, from `Global.asax.cs`. What matters is not that the segment exists but whether the site ever
+*generates* a URL with a risky value in it:
+
+| route | what fills it | generated anywhere in this repository? |
+|---|---|---|
+| `Wiki/{node}` | `ForumThread.WikiKey` | **yes** - Forum/Thread, Forum/NewPost, the `[WikiKey]` forum tag, Autocomplete |
+| `Missions/File/{name}` | a MissionID **or** a mission name | yes, and always with the numeric `MissionID` |
+| `Missions/Img/{name}` | same | no link anywhere |
+| `Replays/{name}` | `SpringBattle.ReplayFileName`, which is `Path.GetFileName` of the engine's demo file | no link anywhere |
+| `Static/{name}` | a static page name | no link anywhere |
+| `{controller}/{action}/{id}` | ids, numeric at every call site checked | n/a |
+
+So the only segment the site builds from free text is the wiki key.
+
+### `requestPathInvalidCharacters`: the wiki route is now provably safe
+
+Its default is ``<>*%&:\?``, and it is checked against the **decoded** path, so percent-encoding a
+name does not get it past the filter.
+
+Wiki keys are validated with `Account.IsValidLobbyName`, whose charset is letters, digits,
+underscore and brackets - none of the default invalid characters, and no slash.
+`Tests.Portable/WikiKeyRouteSafetyTests.cs` asserts exactly that link, so widening the charset
+fails a test rather than producing a 400 in production.
+
+**One gap had to be closed to say that.** `ForumController.SubmitPost` validated the key when
+creating a thread and **not** when editing one, so a key creation refuses could be set by editing
+instead. Both paths run the check now.
+
+### `requestValidationMode`: the reason for `2.0` is the seven actions that accept markup
+
+`SubmitPost`, `Preview`, both `PostNews`, `ReportToAdminSubmit` and the two service endpoints carry
+`[ValidateInput(false)]` because forum posts and news legitimately contain `<`. Under
+`requestValidationMode="4.0"` that attribute does not help: validation runs at `BeginRequest`,
+before any action filter. `2.0` makes it work, which is almost certainly why it is set.
+
+All seven are POST-only. The modern equivalent of what this setting is buying is **deferred**
+validation - drop the attribute entirely and `httpRuntime` inherits `targetFramework="4.5"`, under
+which `[ValidateInput(false)]` and `[AllowHtml]` apply as written while everything else stays
+validated.
+
+**That last paragraph is reasoning, not a measurement, and nothing here can raise it to one.**
+Request validation is .NET Framework behaviour in IIS; mono does not exercise it and the .NET 9
+port does not have it at all. It needs trying on a Windows staging site.
+
+### What production data would settle the rest
+
+- **`Replays/{name}`** - whether any `SpringBattles.ReplayFileName` contains one of ``<>*%&:\?``.
+  The committed fixture stores that column as NULL for every row, so it cannot be asked here.
+- **Wiki keys that predate the fix above** - the edit path never validated, so a key already in the
+  database may contain anything. `SELECT WikiKey FROM ForumThreads WHERE WikiKey IS NOT NULL` and
+  check it against the same charset.
+
+Both are one query each against the live database, and both have to come back empty before
+`requestPathInvalidCharacters` is worth touching.
+
 ## Related work in progress
 
 `ILobbyServerApi` (see `ZkLobbyServer/ILobbyServerApi.cs`) is the seam introduced so the
