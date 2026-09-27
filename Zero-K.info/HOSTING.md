@@ -188,10 +188,33 @@ risk a typo in each one; it is cosmetic debt and is left alone deliberately.
     FROM Missions GROUP BY MissionEditorVersion ORDER BY 3 DESC;
   ```
 
-  When the first query comes back empty for a while, `MissionService.svc`,
-  `MissionService.svc.cs`'s `MissionService` class and `IMissionService`'s WCF attributes can
-  go in one commit - the operations live in `MissionServiceLogic`, which the JSON endpoint
-  uses and which stays.
+  **Do not read an empty result as "nobody calls it".** That query returns nothing just as
+  readily when the deployed build has no instrumentation in it, or the trace listener is not
+  attached, or the site has not been restarted since the change - and those lead to the
+  opposite decision. Deleting the endpoint on that reading breaks publishing for every mission
+  editor that has not updated, and the log looks identical either way.
+
+  So a build that carries the reporting says so when it starts, and there is a command that
+  refuses to conclude without it:
+
+      ZK_CONNECTION_STRING=... dotnet run --project ZkData.Core -- legacy-callers [--days=N]
+
+  Three answers, and only the middle one is permission to delete anything:
+
+      MissionService.svc: CANNOT TELL. No "legacy WCF watch active" in the last 14 days, so
+      nothing says an instrumented build was running. Silence here is not evidence - deploy
+      and wait.
+
+      ContentService.svc: no calls since 2026-09-17 07:48 UTC, when a watched build last
+      started. That is the evidence the retirement needs.
+
+      MissionService.svc: STILL CALLED - 2 report line(s), most recently 2026-09-26 07:48 UTC.
+      Mission editor versions seen: 1.2.3, 1.4.0.
+
+  It reports the two endpoints separately, because they are retired separately. When it says
+  "no calls since" for `MissionService.svc`, that file, `MissionService.svc.cs`'s
+  `MissionService` class and `IMissionService`'s WCF attributes can go in one commit - the
+  operations live in `MissionServiceLogic`, which the JSON endpoint uses and which stays.
 
   This is the difference between this endpoint and `ContentService.svc`: that one serves
   clients the repository cannot see, so it needs production access logs; this one reports

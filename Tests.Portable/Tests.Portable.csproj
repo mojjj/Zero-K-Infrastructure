@@ -59,6 +59,7 @@
   <!-- The counting behind ContentService.svc's deprecation notice (Phase 2) -->
   <ItemGroup>
     <Compile Include="..\Zero-K.info\AppCode\LegacyCallReporter.cs" Link="Linked\LegacyCallReporter.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\LegacyCallAudit.cs" Link="Linked\LegacyCallAudit.cs" />
   </ItemGroup>
 
   <!-- Diagrams vector math. Uses System.Drawing.Point, which lives in

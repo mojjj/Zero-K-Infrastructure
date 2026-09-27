@@ -154,6 +154,17 @@ namespace ZeroKWeb
             Trace.Listeners.Add(listener);
             Trace.TraceInformation("Starting Zero-K.info web and application");
 
+            // Says that THIS build reports who calls the two deprecated WCF endpoints.
+            //
+            // Without it their silence in LogEntries means either "nobody calls them" or "this
+            // build never reported", and those lead to opposite decisions - the second one to
+            // deleting an endpoint that mission editors still publish through. The line above
+            // cannot serve: it predates the instrumentation and an old build writes it too.
+            //
+            // ZkData.Core -- legacy-callers reads it back and refuses to conclude without it.
+            Trace.TraceInformation(
+                LegacyCallAudit.WatchMarker + ": MissionService.svc and ContentService.svc report their callers");
+
             GlobalConst.SiteDiskPath = MapPath("~");
             
             AwardCalculator = new AwardCalculator();
