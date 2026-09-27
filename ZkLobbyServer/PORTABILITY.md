@@ -79,7 +79,7 @@ remaining work in this tree:
 
 | package | what the compiler says | what Linux would do |
 |---|---|---|
-| `Mono.Posix` | resolves, with **NU1701**: restored as `.NETFramework 4.8` against a `net9.0` project | `SelfUpdater.cs` is the only user. .NET 9 has `File.SetUnixFileMode`, so this is a rewrite of a few lines, not a port |
+| `Mono.Posix` | resolves, with **NU1701**: restored as `.NETFramework 4.8` against a `net9.0` project | one real user, and it is **not** in this tree — see below |
 | `System.Drawing.Common` | resolves and compiles | Windows-only since .NET 6. Five files construct GDI objects: `ResizedImageCache.cs`, `Utils.cs`, `UnitSyncLib/UnitSync.cs`, `Imaging/GdiPixelBridge.cs`, `Imaging/SystemDrawingImageProcessor.cs` |
 
 **Compiling is not running, and this is the case that shows why.** A build with 0 errors says
@@ -89,8 +89,33 @@ Windows. The site already hit this and answered it — `Images.Processor` select
 as something the port uses. The remaining GDI users are unitsync and the diagram code, neither of
 which the website needs.
 
+### Mono.Unix is one method, in the other tree
+
+The first survey said two files used `Mono.Unix` and put both in the same sentence. Only one of them
+uses it:
+
+- `PlasmaShared/SelfUpdater.cs` had `using Mono.Unix.Native;` and **nothing from it** — a stale
+  import, removed. (The file itself is very much alive: `SelfChecker` is what `ZeroKLobby` and
+  `ChobbyLauncher` call to find out whether there is an update.)
+- `PlasmaDownloader/EngineDownload.cs` is the real user, in one method:
+
+      private static void FixPermissions(string targetDir)
+      {
+          if (Environment.OSVersion.Platform == PlatformID.Unix)
+              Syscall.chmod(tpath, FilePermissions.S_IRWXU | ... );
+      }
+
+  making a downloaded engine executable. .NET 7 added `File.SetUnixFileMode`, which does exactly
+  this.
+
+**It cannot be swapped yet**, and the reason is the port's own discipline rather than difficulty:
+`PlasmaDownloader` still targets 4.8, where `File.SetUnixFileMode` does not exist. Changing it now
+means either breaking the Framework build or introducing an `#if` into a file that currently needs
+none. It belongs with the move of that project, not before it.
+
 So step 1 is not "port PlasmaShared". It is: decide what `UnitSync`, `ResizedImageCache` and the
-`Diagrams` code should do off Windows, and replace six lines of `Mono.Unix`.
+`Diagrams` code should do off Windows. The `Mono.Unix` question is one method in `PlasmaDownloader`,
+and it waits for that project.
 
 ## Suggested order
 
