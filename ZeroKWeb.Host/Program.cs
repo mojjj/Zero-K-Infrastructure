@@ -1154,6 +1154,92 @@ namespace ZeroKWeb.Host
                     }
                 }
 
+                // Forum/VotePost. The +N / -N controls were <a href>, so a crafted link voted on
+                // the visitor's behalf.
+                //
+                // Driven all the way through, because this PR changed what the action RETURNS -
+                // it used to redirect, and now answers "" so ZkVote can tell a taken vote from a
+                // refusal. If that contract broke, jQuery would follow a redirect and hand the JS
+                // a whole HTML page, which it would show the voter in an alert box. Asserting the
+                // 405 and the 400 alone would not notice.
+                int threadID, postID, authorID;
+                int authorUpvotes;
+                int? voterVotesAvailable;
+                using (var db = new ZkDataContext())
+                {
+                    var category = db.ForumCategories.OrderBy(c => c.ForumCategoryID).First();
+                    var author = db.Accounts.Where(a => a.AccountID != accountID).OrderBy(a => a.AccountID).First();
+                    authorID = author.AccountID;
+
+                    // A vote is not only a row: it moves the author's karma and spends one of the
+                    // voter's votes. Both are put back below, or the fixture drifts a little on
+                    // every run of this harness.
+                    authorUpvotes = author.ForumTotalUpvotes;
+                    voterVotesAvailable = db.Accounts.Single(a => a.AccountID == accountID).VotesAvailable;
+                    var thread = new ForumThread
+                    {
+                        Title = "Harness thread",
+                        ForumCategoryID = category.ForumCategoryID,
+                        CreatedAccountID = authorID,
+                        Created = DateTime.UtcNow,
+                        LastPost = DateTime.UtcNow,
+                        PostCount = 1,
+                    };
+                    db.ForumThreads.Add(thread);
+                    db.SaveChanges();
+                    threadID = thread.ForumThreadID;
+
+                    var post = new ForumPost
+                    {
+                        ForumThreadID = threadID,
+                        AuthorAccountID = authorID,
+                        Text = "harness post",
+                        Created = DateTime.UtcNow,
+                    };
+                    db.ForumPosts.Add(post);
+                    db.SaveChanges();
+                    postID = post.ForumPostID;
+                }
+                try
+                {
+                    var vote = Url + "/Forum/VotePost?forumPostID=" + postID + "&delta=1";
+
+                    var voteByLink = await client.GetAsync(vote);
+                    failures += Check(voteByLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                        "  VotePost is not reachable by GET (" + (int)voteByLink.StatusCode + ")");
+
+                    var voteUntokened = await client.PostAsync(vote, new FormUrlEncodedContent(
+                        new KeyValuePair<string, string>[0]));
+                    failures += Check(voteUntokened.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                        "  and a POST without an anti-forgery token is refused ("
+                        + (int)voteUntokened.StatusCode + ")");
+
+                    var voted = await Post(client, vote, token);
+                    var votedBody = await voted.Content.ReadAsStringAsync();
+                    failures += Check(voted.StatusCode == System.Net.HttpStatusCode.OK && votedBody == "",
+                        "  while a POST that carries one answers empty, which is ZkVote's \"it worked\" ("
+                        + (int)voted.StatusCode + ", " + votedBody.Length + " bytes)");
+
+                    using (var db = new ZkDataContext())
+                        failures += Check(db.ForumPosts.Single(x => x.ForumPostID == postID).Upvotes == 1,
+                            "  and the vote really was counted");
+                }
+                finally
+                {
+                    using (var db = new ZkDataContext())
+                    {
+                        db.AccountForumVotes.RemoveRange(db.AccountForumVotes.Where(x => x.ForumPostID == postID));
+                        db.SaveChanges();
+                        db.ForumPosts.RemoveRange(db.ForumPosts.Where(x => x.ForumThreadID == threadID));
+                        db.SaveChanges();
+                        db.ForumLastReads.RemoveRange(db.ForumLastReads.Where(x => x.ForumCategoryID == null));
+                        db.ForumThreads.RemoveRange(db.ForumThreads.Where(x => x.ForumThreadID == threadID));
+                        db.Accounts.Single(a => a.AccountID == authorID).ForumTotalUpvotes = authorUpvotes;
+                        db.Accounts.Single(a => a.AccountID == accountID).VotesAvailable = voterVotesAvailable;
+                        db.SaveChanges();
+                    }
+                }
+
                 var markReadPosted = await Post(client, markRead, token);
                 failures += Check(markReadPosted.StatusCode == System.Net.HttpStatusCode.Redirect,
                     "  while MarkAllAsRead still works when posted with one ("

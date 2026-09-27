@@ -134,7 +134,28 @@ function ZkPrompt(form, field, question, suggestion) {
     return true;
 }
 
-if (typeof module !== "undefined" && module.exports) module.exports = { BuildHistoryUrl: BuildHistoryUrl, ZkPost: ZkPost, ZkPrompt: ZkPrompt };
+/*
+    Casts a forum vote, from the onclick of the +N / -N / cancel controls.
+
+    They were <a href> - GETs - so a crafted link voted on the visitor's behalf, and they could not
+    become forms: the vote widget renders inside PostList's Ajax.BeginForm, which is a real filter
+    form with its own inputs, and a form cannot nest inside another.
+
+    The server answers "" when the vote was taken and a sentence when it was refused - banned from
+    the forum, too low a level, not enough karma - so an empty reply means reload to show the new
+    count, and anything else is a message for the voter. That is why VotePost stopped redirecting:
+    a redirect tells an XHR nothing it can act on.
+*/
+function ZkVote(url) {
+    var sent = ZkPost(url, {}, function (reply) {
+        if (reply) alert(reply);
+        else window.location.reload();
+    });
+    if (!sent) alert("Cannot vote: this page carries no anti-forgery token.");
+    return false;
+}
+
+if (typeof module !== "undefined" && module.exports) module.exports = { BuildHistoryUrl: BuildHistoryUrl, ZkPost: ZkPost, ZkPrompt: ZkPrompt, ZkVote: ZkVote };
 
 function SendLobbyCommand(link) {
     $.ajax({

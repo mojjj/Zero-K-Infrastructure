@@ -68,6 +68,10 @@
     @RenderSection("head", false)
 </head>
 <body class="">
+@* One token per page, so anything posting from script - ZkPost - can always find one.
+   Before this it depended on whichever form the page happened to render, which is the kind of
+   thing that works until somebody edits an unrelated view. *@
+@Html.AntiForgeryToken()
     <div id='busy' class="border">Loading...<img src='/img/Loader.gif' class="vcenter" /></div>
     @if (ViewBag.Error != null)
     {
