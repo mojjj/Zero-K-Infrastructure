@@ -391,6 +391,14 @@ would put the engine somewhere nobody asked for.
 unchanged behaviour and a moderator-level capability by design; narrowing it further is a separate
 decision.
 
+## Secrets
+
+`Shared/PlasmaShared/SECRETS.md` covers how secrets are handled here - `MiscVar` through
+`ZkData/Secrets.cs` - and the one credential that is not, a GitHub token compiled into
+`GlobalConst`. The short version: it cannot be fixed from this repository, and **deleting the line
+is not a fix** - it leaves the token valid and published while removing the only thing prompting
+anyone to rotate it.
+
 ## The two Web.config settings that turn off platform input filtering (2026-09-27)
 
     <httpRuntime targetFramework="4.5" requestPathInvalidCharacters="" requestValidationMode="2.0" ... />
