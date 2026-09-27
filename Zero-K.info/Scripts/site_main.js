@@ -91,7 +91,27 @@ function ReplaceHistory(params) {
     window.history.replaceState(params, "", BuildHistoryUrl(window.location.toString(), params));
 }
 
-if (typeof module !== "undefined" && module.exports) module.exports = { BuildHistoryUrl: BuildHistoryUrl };
+/*
+    A POST from script, carrying the anti-forgery token the page was rendered with.
+
+    The rating stars used $.get, which made rating a map or a mission a GET: a crafted link set
+    somebody else's rating, and [ValidateAntiForgeryToken] could not be used because there was no
+    token anywhere in the request. Use this instead of $.post so the token cannot be forgotten.
+
+    The token is read from any @Html.AntiForgeryToken() on the page - they are all equivalent for a
+    given visitor and request, so the first one will do. Returns null and does NOT send when the
+    page has none, because a POST that silently 400s is worse than one that never leaves: the
+    caller can say so.
+*/
+function ZkPost(url, data, done) {
+    var token = $('input[name="__RequestVerificationToken"]').first().val();
+    if (!token) return null;
+    var payload = $.extend({}, data || {});
+    payload.__RequestVerificationToken = token;
+    return $.post(url, payload, done);
+}
+
+if (typeof module !== "undefined" && module.exports) module.exports = { BuildHistoryUrl: BuildHistoryUrl, ZkPost: ZkPost };
 
 function SendLobbyCommand(link) {
     $.ajax({

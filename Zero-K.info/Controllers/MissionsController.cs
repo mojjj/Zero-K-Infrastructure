@@ -122,7 +122,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
-        [WritesOnGetNotYetFixed("rated from JavaScript with $.get; needs the token plumbed into the script")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult Rate(int id, int? difficulty, int? rating)
         {
             var db = new ZkDataContext();
