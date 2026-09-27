@@ -124,14 +124,46 @@ shared ones. The orphans are deleted; `PlasmaShared/Diagrams` stays.
 It is also the least urgent of the three `System.Drawing` users: its only consumer is a WPF desktop
 tool that will not be running on Linux whatever happens to the port.
 
-So step 1 is not "port PlasmaShared". It is: decide what `UnitSync` and `ResizedImageCache` should
-do off Windows — `Diagrams` can stay where it is. The `Mono.Unix` question is one method in
-`PlasmaDownloader`, and it waits for that project.
+### Step 1 is closed: none of the System.Drawing users is in the server's path
+
+The question was what `UnitSync`, `ResizedImageCache` and `Diagrams` should do off Windows. Asked
+the other way round — *who calls them* — it stops being a question:
+
+| | called by | in the lobby server's path? |
+|---|---|---|
+| `Diagrams` | `GalaxyDesigner`, a WPF tool | no |
+| `ResizedImageCache`, and the `GetResized*` helpers in `Utils.cs` | `ZeroKLobby` and `ChobbyLauncher` UI chrome, `AutoRegistrator`, and PlasmaShared's own GDI image processor | no |
+| `UnitSync` | `new UnitSync(` appears in **nine** places: AutoRegistrator, ChobbyLauncher, MissionEditor, ZeroKLobby, `UnitsyncResourcePresenceChecker`, `MissionUpdater`. **`ZkLobbyServer` is not one of them** | no |
+
+`ZkLobbyServer` does use `ZkData.UnitSyncLib` — but only `Map` and `Mod`, which are plain data
+classes that happen to live in the same namespace as the native wrapper. Worth stating because the
+namespace makes it look otherwise: `PlasmaShared/UnitSyncLib/*.cs` declares `namespace
+ZkData.UnitSyncLib`, so a `using` in the server reads as if it pulls the whole thing in.
+
+`ZkData.Core` already demonstrates the shape: it links twelve unitsync **data** files and neither
+`UnitSync.cs` nor `MissionUpdater.cs`.
+
+**So PlasmaShared does not need to be split or rewritten for the port.** It needs to be linked
+selectively, which is what the port has done since `ZkData.Core` — 38 of its 84 files, chosen. The
+Windows-only code keeps compiling for the Framework applications that actually want it.
+
+The `Mono.Unix` question is one method in `PlasmaDownloader`, and it waits for that project.
+
+## What is actually left
+
+1. ~~`Shared/PlasmaShared`~~ — answered: it compiles, and its Windows-only parts are not on the
+   server's path.
+2. `Shared/LobbyClient` and `Shared/MonoTorrent`.
+3. `Shared/PlasmaDownloader`, which needs the `Mono.Unix` replacement.
+4. `ZkLobbyServer` itself, against `ZkData.Core` rather than `ZkData`.
+
+Steps 2–4 have not been probed. The caveat above still applies to all of them: a type error hides
+the member errors behind it, so each needs its own compile before anyone claims a number.
 
 ## Suggested order
 
-1. ~~`Shared/PlasmaShared` first~~ — **done as a measurement**: it compiles. What is left there is
-   the two runtime questions above, not compilation.
+1. ~~`Shared/PlasmaShared` first~~ — **done**: it compiles, and the runtime questions turned out
+   not to be on the server's path. See "Step 1 is closed" above.
 2. `Shared/LobbyClient` and `Shared/MonoTorrent` next.
 3. `Shared/PlasmaDownloader`, which needs the `Mono.Unix` replacement.
 4. `ZkLobbyServer` last, against `ZkData.Core` rather than `ZkData`.
