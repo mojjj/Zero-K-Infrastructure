@@ -249,14 +249,28 @@ namespace ZkData
         [NotMapped]
         public int KudosSpent { get { return KudosPurchases.Sum(x => (int?)x.KudosValue) ?? 0; } }
         
+        /// <summary>
+        ///     The case-insensitive fallback used string.Equals(..., StringComparison
+        ///     .CurrentCultureIgnoreCase), which EF Core cannot translate. Because it sits behind a
+        ///     ??, it only ran when the exact-match query found nothing - so this threw
+        ///     InvalidOperationException for precisely the "no such account" case every caller
+        ///     detects by testing the result for null. Every test that came before used a name that
+        ///     existed, and so never reached it.
+        ///
+        ///     ToLower() translates on both stacks, which is what this file needs.
+        /// </summary>
         public static Account AccountByName(ZkDataContext db, string name)
         {
-            return db.Accounts.FirstOrDefault(x => x.Name == name) ?? db.Accounts.FirstOrDefault(x => x.Name.Equals(name, StringComparison.CurrentCultureIgnoreCase));
+            var lowered = name?.ToLower();
+            return db.Accounts.FirstOrDefault(x => x.Name == name) ?? db.Accounts.FirstOrDefault(x => x.Name.ToLower() == lowered);
         }
 
         public static Account AccountVerify(ZkDataContext db, string login, string passwordHash)
         {
-            var acc = db.Accounts.FirstOrDefault(x => x.Name == login && !x.IsDeleted) ?? db.Accounts.FirstOrDefault(x => x.Name.Equals(login, StringComparison.CurrentCultureIgnoreCase) && !x.IsDeleted);
+            // Same untranslatable fallback as AccountByName above, and the same consequence: an
+            // unknown login threw instead of failing the sign-in.
+            var lowered = login?.ToLower();
+            var acc = db.Accounts.FirstOrDefault(x => x.Name == login && !x.IsDeleted) ?? db.Accounts.FirstOrDefault(x => x.Name.ToLower() == lowered && !x.IsDeleted);
             if (acc != null && acc.VerifyPassword(passwordHash)) return acc;
             return null;
         }

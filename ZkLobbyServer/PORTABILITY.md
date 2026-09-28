@@ -506,13 +506,50 @@ this runs it.
 attribute placed there reaches the Framework assembly and silently misses the .NET 9 one, which
 looked exactly like `InternalsVisibleTo` not working.
 
+### The two ends join
+
+~~The context the writer stores is built rather than captured.~~ The dedicated probe now writes its
+finished `SpringBattleContext` out, and the storing probe reads it back:
+
+```
+   ok    the captured context deserialised
+         captured from a real engine: founder=probe, map=Bluescreen fields v2, game=Probe Game 1.0
+   ok    the captured battle was stored (155)
+   ok    every player the engine reported was written (1 of 1)
+   ok    the engine's own game id was stored
+```
+
+The founder, map and game are the ones that game was played with, and the fixture has never heard
+of them - so the probe creates those rows inside the same rolled-back transaction. That is not a
+workaround: a real deployment has them because the account registered and the registrar published
+the map, and a battle cannot be stored without them. Creating them states the prerequisite out loud.
+
+### The sixth defect, and the one that hid best
+
+Feeding a real context in is what found it. `Account.AccountByName` is:
+
+```csharp
+db.Accounts.FirstOrDefault(x => x.Name == name)
+    ?? db.Accounts.FirstOrDefault(x => x.Name.Equals(name, StringComparison.CurrentCultureIgnoreCase));
+```
+
+The first query translates. **The fallback does not** - EF Core cannot translate `string.Equals`
+with a `StringComparison`, and throws `InvalidOperationException`. Because it sits behind a `??`,
+it only runs when the exact match finds nothing: so `AccountByName` threw for precisely the
+**"no such account"** answer that every caller detects by testing the result for null.
+`AccountVerify`, which signs players in, had the same line.
+
+Every check written before this one used a name that already existed - registration, login, the
+battle rows - so the working half was exercised again and again and the broken half never was. The
+fix is `ToLower()`, which translates on both stacks. `tools/battle-result-probe` now asks about a
+name that does not exist, first, before anything else.
+
 ### Still not done
 
-**Nothing has finished a game by itself, and nothing has rated one.** The two ends meet in the
-middle only by hand: the engine's `GAMEOVER` is synthesised, and the context the writer stores is
-built rather than captured. What sits between them - `SubmitSpringBattleResult`'s rating pass,
-award calculation, replay upload and Planetwars - needs a live `ZkLobbyServer`, and none of it has
-run on .NET&nbsp;9.
+**Nothing has finished a game by itself, and nothing has rated one.** The engine's `GAMEOVER` is
+still synthesised, because a headless client never readies up. And `SubmitSpringBattleResult`'s
+rating pass, award calculation, replay upload and Planetwars all need a live `ZkLobbyServer`; none
+of it has run on .NET&nbsp;9.
 
 `LogIP` is only half-covered: it skips private addresses, so a probe connecting from `127.0.0.1`
 never reaches it. The EF6 test covers that half; nothing on .NET 9 does yet.

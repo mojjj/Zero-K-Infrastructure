@@ -9,6 +9,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using LobbyClient;
+using Newtonsoft.Json;
 using PlasmaShared;
 using ZkData;
 
@@ -222,6 +223,15 @@ namespace DedicatedProbe
                     return 1;
                 }
                 Console.WriteLine("   ok    the battle context is complete - this is what BattleResultHandler is handed");
+
+                // Captured, so the other end of the chain can be fed something a real engine
+                // produced rather than something a test wrote. tools/battle-result-probe reads it.
+                var capture = Environment.GetEnvironmentVariable("ZK_BATTLE_CONTEXT_OUT");
+                if (!string.IsNullOrEmpty(capture))
+                {
+                    File.WriteAllText(capture, JsonConvert.SerializeObject(server.Context, Formatting.Indented));
+                    Console.WriteLine("   ok    captured the context to " + capture + " for the storing end");
+                }
                 return 0;
             }
             finally
