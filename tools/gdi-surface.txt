@@ -1,0 +1,14 @@
+# Files ZkLobbyServer.Core compiles that still use System.Drawing.Common, which is Windows-only on
+# .NET 9. Checked by tools/check-gdi-surface.py, which fails if this set changes either way.
+#
+#   <path>  <why it is still here>
+#
+# The surface was 7 files; everything the server compiled but could not reach was removed rather
+# than ported. What is left is the native-buffer-to-Bitmap interop, which cannot be tested without
+# unitsync and real map files. See Shared/PlasmaShared/IMAGING-MIGRATION.md.
+#
+# Adding a file here is a decision: the call will compile everywhere and throw on Linux.
+
+Shared/PlasmaShared/UnitSyncLib/UnitSync.cs        Wraps raw pixel buffers from the native unitsync library in Bitmap - GetHeightMap, GetMetalMap, GetMinimap, FixAspectRatio. Interop marshalling, not a library swap.
+Shared/PlasmaShared/UnitSyncLib/Map.cs             Map metadata carrying the images UnitSync produces. The lobby server uses the metadata; the Bitmap members come with it.
+Shared/PlasmaShared/Imaging/GdiPixelBridge.cs      Turns those buffers into a Bitmap. Only UnitSync.cs and the net48 Tests project call it.
