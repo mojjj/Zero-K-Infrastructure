@@ -155,8 +155,49 @@ The `Mono.Unix` question is one method in `PlasmaDownloader`, and it waits for t
    server's path.
 2. ~~`Shared/LobbyClient` and `Shared/MonoTorrent`~~ — both compile.
 3. ~~`Shared/PlasmaDownloader`~~ — compiles; its `Mono.Unix` call is the one runtime item.
-4. `ZkLobbyServer` itself — no source-level blocker is known. What remains is building a real
-   `ZkLobbyServer.Core`, in **one** assembly, avoiding the partial-class trap above.
+4. ~~`ZkLobbyServer` itself~~ — **`ZkLobbyServer.Core` exists and builds**, in one assembly, and
+   CI builds it on every pull request.
+
+## ZkLobbyServer.Core
+
+`ZkLobbyServer.Core/ZkLobbyServer.Core.csproj` compiles the whole chain on `net9.0` — PlasmaShared,
+LobbyClient, MonoTorrent, PlasmaDownloader and ZkLobbyServer, plus everything `ZkData.Core` links —
+as a **single assembly**, linking production sources rather than copying them. 1.8 MB of output
+containing `ZkLobbyServer`, `ServerBattle`, `MatchMaker`, `LoginChecker`, `TasClient`,
+`ZkDataContext` and `BEncodedDictionary`, which is how the build is checked to have compiled
+something rather than nothing.
+
+It does **not** reference `ZkData.Core`, and the header says why at length: referencing it splits
+`GlobalConst` and `Utils`, whose portable halves live there, and the resulting errors name members
+that were present all along.
+
+Two of `ZkData.Core`'s own files are excluded, because they are stand-ins its tooling wants and the
+server does not: `GlobalConstMode.cs` hard-codes `Mode` and `BaseSiteUrl` to a dev value, and
+`Ef6Compat/ImagesDefault.cs` is a minimal `Images`. The real PlasmaShared versions compile on .NET 9
+and carry what the server reads.
+
+### Two BCL collisions, which only compiling could find
+
+Both are PlasmaShared back-filling something the Framework lacks and .NET 9 has:
+
+- **`DistinctBy`** — `System.Linq` grew it in .NET 6. Two equally applicable extension methods are an
+  *ambiguity error*, not a silent winner. Moved to `Utils.Polyfills.cs`, which the Framework projects
+  compile and this one excludes; the semantics are identical, which is what makes the swap safe.
+- **`Stream.ReadExactly`** — .NET 7 grew it, returning `void` where PlasmaShared's extension returns
+  `bool`. An instance method beats an extension, so the call sites stopped compiling. Renamed to
+  `TryReadExactly`, which is also what it does.
+
+Neither was visible from reading. Both appeared the first time the chain was compiled as one
+assembly.
+
+### What this does not mean
+
+It compiles. It has not been run, nothing calls it, and it is not in `Zero-K.sln`. The runtime
+questions the survey listed are unchanged: `Mono.Posix` restores as a Framework package,
+`System.Drawing.Common` is Windows-only, and neither matters until something actually starts this
+assembly. Starting it is the next piece of work, and it needs the same treatment
+`ZkLobbyServer.Standalone` got - a host, a configuration path, and a check that proves it served
+somebody.
 
 ### Steps 2 and 3, measured: both compile
 
