@@ -42,6 +42,8 @@ exec docker run --rm -i ${ZK_DOTNET_NAME:+--name "$ZK_DOTNET_NAME"} \
     -e DOTNET_NOLOGO=1 \
     -e DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1 \
     -e ZK_CONNECTION_STRING="${ZK_CONNECTION_STRING:-}" \
+    -e ZK_BATTLE_CONTEXT_OUT="${ZK_BATTLE_CONTEXT_OUT:-}" \
+    -e ZK_BATTLE_CONTEXT_IN="${ZK_BATTLE_CONTEXT_IN:-}" \
     -w /repo \
     mcr.microsoft.com/dotnet/sdk:9.0 \
     dotnet "$@"

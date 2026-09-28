@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using LobbyClient;
+using Microsoft.EntityFrameworkCore.Storage;
+using Newtonsoft.Json;
 using PlasmaShared;
 using ZkData;
 using ZeroKWeb.SpringieInterface;
@@ -34,9 +37,41 @@ namespace BattleResultProbe
 
             Console.WriteLine("a finished battle, stored through the real handler:");
 
+            // Before anything else, the lookup everything here depends on - asked about a name that
+            // does NOT exist, which is the case that was broken. AccountByName falls back to a
+            // case-insensitive query only when the exact match finds nothing, and that fallback used
+            // string.Equals with a StringComparison, which EF Core cannot translate. So it threw
+            // InvalidOperationException for exactly the "no such account" answer its callers test
+            // for. Every check written before this one used a name that existed.
+            using (var db = new ZkDataContext())
+            {
+                Account missing = null;
+                var threw = false;
+                try
+                {
+                    missing = Account.AccountByName(db, "no-such-account-" + Guid.NewGuid().ToString("N"));
+                }
+                catch (Exception ex)
+                {
+                    threw = true;
+                    Console.WriteLine("         " + ex.GetType().Name + ": " + ex.Message.Split('\n')[0]);
+                }
+                Check(!threw, "AccountByName answers about a name that does not exist instead of throwing");
+                Check(missing == null, "and the answer is null, which is what every caller tests for");
+            }
+
+
             using (var db = new ZkDataContext())
             using (var transaction = db.Database.BeginTransaction())
             {
+                // A context CAPTURED from a real engine, when one was handed over. Without it the
+                // probe builds its own, which answers "does a context become rows" but not "is the
+                // context a real game produces one this writer accepts" - and those are different
+                // questions. tools/dedicated-server-check.sh writes the file; see ZK_BATTLE_CONTEXT_IN.
+                var capturePath = Environment.GetEnvironmentVariable("ZK_BATTLE_CONTEXT_IN");
+                if (!string.IsNullOrEmpty(capturePath) && File.Exists(capturePath))
+                    return StoreCaptured(db, transaction, capturePath, Check, () => failures);
+
                 // Fixture names, not the engine's: this asks whether a context BECOMES ROWS, and the
                 // handler resolves the founder, the map and the game out of the database by name.
                 var founder = db.Accounts.OrderBy(x => x.AccountID).First();
@@ -105,6 +140,63 @@ namespace BattleResultProbe
             Console.WriteLine();
             if (failures > 0) { Console.WriteLine(failures + " check(s) failed"); return 1; }
             Console.WriteLine("a battle context becomes rows, through the real handler, on .NET 9");
+            return 0;
+        }
+
+        /// <summary>
+        ///     Stores a context a real engine produced.
+        ///
+        ///     Its founder, map and game are the ones that game was played with, and the fixture has
+        ///     never heard of them - so they are created here, inside the same transaction that is
+        ///     rolled back. That is not a workaround: a real deployment has these rows because the
+        ///     account registered and the registrar published the map, and a battle cannot be stored
+        ///     without them. Creating them is stating that prerequisite out loud.
+        /// </summary>
+        private static int StoreCaptured(ZkDataContext db, IDbContextTransaction transaction, string path,
+            Action<bool, string> check, Func<int> failures)
+        {
+            var context = JsonConvert.DeserializeObject<SpringBattleContext>(File.ReadAllText(path));
+            check(context?.LobbyStartContext != null, "the captured context deserialised");
+            if (context?.LobbyStartContext == null) { transaction.Rollback(); return 1; }
+
+            Console.WriteLine("         captured from a real engine: founder=" + context.LobbyStartContext.FounderName
+                              + ", map=" + context.LobbyStartContext.Map + ", game=" + context.LobbyStartContext.Mod);
+
+            foreach (var name in context.ActualPlayers.Select(x => x.Name)
+                         .Concat(new[] { context.LobbyStartContext.FounderName }).Distinct())
+                if (Account.AccountByName(db, name) == null)
+                {
+                    var account = new Account { Name = name };
+                    account.SetName(name);
+                    account.SetPasswordHashed("not-a-real-hash");
+                    account.SetAvatar();
+                    db.Accounts.Add(account);
+                }
+
+            foreach (var pair in new[]
+                     {
+                         new { Name = context.LobbyStartContext.Map, Type = ResourceType.Map },
+                         new { Name = context.LobbyStartContext.Mod, Type = ResourceType.Mod },
+                     })
+                if (!db.Resources.Any(x => x.InternalName == pair.Name))
+                    db.Resources.Add(new Resource { InternalName = pair.Name, TypeID = pair.Type });
+            db.SaveChanges();
+
+            var battle = BattleResultHandler.SaveSpringBattle(context, db);
+            check(battle != null && battle.SpringBattleID != 0, "the captured battle was stored (" + battle?.SpringBattleID + ")");
+            if (battle == null) { transaction.Rollback(); return 1; }
+
+            var players = db.SpringBattlePlayers.Where(x => x.SpringBattleID == battle.SpringBattleID).ToList();
+            check(players.Count == context.ActualPlayers.Count,
+                "every player the engine reported was written (" + players.Count + " of " + context.ActualPlayers.Count + ")");
+            check(battle.EngineGameID == context.EngineBattleID, "the engine's own game id was stored");
+            check(battle.Duration == context.Duration, "the duration the engine reported was stored");
+
+            transaction.Rollback();
+
+            Console.WriteLine();
+            if (failures() > 0) { Console.WriteLine(failures() + " check(s) failed"); return 1; }
+            Console.WriteLine("a context a REAL ENGINE produced becomes rows, through the real handler, on .NET 9");
             return 0;
         }
     }

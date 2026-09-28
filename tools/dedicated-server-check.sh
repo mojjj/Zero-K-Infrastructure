@@ -62,5 +62,20 @@ cp -n "$ENGINE/maps/"*.sd7 "$TARGET/maps/" 2>/dev/null || true
 echo "the ported code, hosting a game:"
 ./tools/dotnet.sh build tools/dedicated-probe -v q --nologo >/dev/null
 # RW: the engine makes a cache and a demos directory, and will not start without them.
-ZK_DOTNET_MOUNT="$WRITABLE" ZK_DOTNET_MOUNT_RW=1 ./tools/dotnet.sh run --project tools/dedicated-probe --no-build -- \
+# ZK_BATTLE_CONTEXT_OUT: where to leave the finished battle for tools/battle-result-probe, so the
+# storing end can be fed a context a real engine produced rather than one a test wrote. It lands in
+# the mounted directory because that is what both sides can see.
+ZK_DOTNET_MOUNT="$WRITABLE" ZK_DOTNET_MOUNT_RW=1 ZK_BATTLE_CONTEXT_OUT=/mnt/extra/battle-context.json \
+    ./tools/dotnet.sh run --project tools/dedicated-probe --no-build -- \
     /mnt/extra "$VERSION" "$MAP" "$GAME" "$PORT"
+
+echo
+echo "and that context, stored:"
+if [ -n "${ZK_CONNECTION_STRING:-}" ] || [ -f db/connection-string.sh ]; then
+    export ZK_CONNECTION_STRING="${ZK_CONNECTION_STRING:-$(DB_NAME="${DB_NAME:-zk_test}" ./db/connection-string.sh)}"
+    ./tools/dotnet.sh build tools/battle-result-probe -v q --nologo >/dev/null
+    ZK_DOTNET_MOUNT="$WRITABLE" ZK_BATTLE_CONTEXT_IN=/mnt/extra/battle-context.json \
+        ./tools/dotnet.sh run --project tools/battle-result-probe --no-build
+else
+    echo "skipped: no database to store it in"
+fi
