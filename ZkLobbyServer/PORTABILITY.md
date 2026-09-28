@@ -155,8 +155,8 @@ The `Mono.Unix` question is one method in `PlasmaDownloader`, and it waits for t
    server's path.
 2. ~~`Shared/LobbyClient` and `Shared/MonoTorrent`~~ — both compile.
 3. ~~`Shared/PlasmaDownloader`~~ — compiles; its `Mono.Unix` call is the one runtime item.
-4. `ZkLobbyServer` itself — the EF6 API call is fixed; `EntityState` in `ForumListManager` is the
-   last one, and the partial-class trap above is what a real probe has to avoid.
+4. `ZkLobbyServer` itself — no source-level blocker is known. What remains is building a real
+   `ZkLobbyServer.Core`, in **one** assembly, avoiding the partial-class trap above.
 
 ### Steps 2 and 3, measured: both compile
 
@@ -186,12 +186,37 @@ That is EF6's API; EF Core spells it `ExecuteSqlRaw`. **Fixed**, and it needed n
 `ForumListManager` imports `System.Data.Entity` for `EntityState.Added` / `Deleted` / `Unchanged`.
 EF Core has the same enum with the same members, in `Microsoft.EntityFrameworkCore`.
 
-**This one is a different shape from the others and does not fit the existing pattern.** `DbCompat`
-works because C# lets a method move behind one name; a *type* referenced by name in four
-comparisons cannot be aliased the same way without either a `using` alias per file — which is one
-more thing for each stack to get right — or moving the four comparisons behind helpers. It is a
-design choice, small but real, and it belongs to whoever builds `ZkLobbyServer.Core` rather than
-being pre-empted here.
+**Fixed, and the answer was already half-built.** `entityEntry` is not EF's entry type — it is
+`ZkDataContext.EntityEntry`, a wrapper the port already maintains in both twins so that
+`IEntityAfterChange` implementations compile unchanged. Its `State` property was the only thing
+leaking EF's namespace to a caller.
+
+So the comparison moved into the wrapper, where each twin already imports its own EF:
+
+    public bool IsAdded     => State == EntityState.Added;
+    public bool IsDeleted   => State == EntityState.Deleted;
+    public bool IsUnchanged => State == EntityState.Unchanged;
+
+`ForumListManager` asks `entityEntry.IsAdded` and no longer imports `System.Data.Entity` at all.
+This is `DbCompat`'s philosophy applied to a type instead of a method: a *type* cannot move behind
+one name, so the **comparison** moves to where the type is already unambiguous.
+
+### Where that leaves the chain
+
+Nothing in `ZkLobbyServer` or its dependencies now fails to compile on `net9.0` for a reason that
+belongs to the source. Every error the probe still reports — 270 of them — is one of five classes
+that only duplicate types produce:
+
+    CS0121  ambiguous between 'Utils.EscapePath(string)' and 'Utils.EscapePath(string)'
+    CS0019  Operator '==' cannot be applied to 'ResourceType' and 'ResourceType'
+    CS1503 / CS0266 / CS0029  conversions between a type and itself
+
+— because the probe globs PlasmaShared *and* references `ZkData.Core`, which contains it too.
+
+**That is not the same as "it compiles".** A single-assembly probe would settle it, and this survey
+has not produced one that is clean, for the reasons in the trap above. What can be said is narrower
+and still worth having: after four one-line changes — three stale `using`s and one compat call —
+no source-level blocker is known.
 
 Everything else the probe reports is the duplicate-type artifact described above: roughly 150
 errors of the form *"Operator '==' cannot be applied to operands of type 'ResourceType' and
