@@ -324,9 +324,52 @@ running game touches - not on the path to the listener.
 - Left set, those MiscVars make every later host-harness run find a lobby server configured and
   none running. `lobby-core-start.sh` clears them on the way out; by hand, `clear` yourself.
 
+## A client connects, registers and logs in
+
+~~No player has connected through it~~ - one does now, every time the check runs.
+`tools/lobby-client-probe` drives **LobbyClient's `TasClient`**, the same type the real lobby uses,
+through a connect, a `Register` and a `Login`. Not a reimplementation of the protocol: if the
+protocol changes, the probe follows it.
+
+### What that found: registration linked its rows by an accident of EF6
+
+The first client to try it got no answer at all. Server-side:
+
+```
+error processing line Register {"Name":"LobbyProbe",...}
+System.InvalidOperationException: The value of 'AccountUserID.AccountID' is unknown when
+attempting to save changes. This is because the property is also part of a foreign key for
+which the principal entity in the relationship is not known.
+   at ZkLobbyServer.LoginChecker.DoRegister(...) LoginChecker.cs:line 246
+```
+
+`DoRegister` builds the `Account`, calls `LogIP` and `LogUserID`, and **then** adds the account.
+Both helpers do `new AccountUserID { AccountID = acc.AccountID, ... }` - and at that moment
+`acc.AccountID` is `0`, because nothing has saved it. The navigation property is never set, so on
+paper nothing connects the dependent row to the account.
+
+It works under EF6 because **EF6 leaves an unsaved store-generated int key at `0`**, so the Added
+account's key is also `0` and relationship fixup matches the two. The rows are related by which
+sentinel value EF6 happened to pick. EF Core uses negative temporary keys, `0` matches nothing,
+and `SaveChanges` throws.
+
+The fix is one line in each helper - add the row to `acc.AccountIPs` / `acc.AccountUserIDs`, which
+is how both stacks are actually meant to be told. `Tests.Database/RegistrationFixupTests` measures
+both halves under EF6: that the foreign-key-only form works there (with an assertion on
+`new Account().AccountID == 0`, so the explanation fails if the mechanism ever changes), and that
+the navigation form works there too - the fix cannot break the stack still serving players.
+
+This is the third defect the port has found by *running* something it had only ever compiled, and
+the second that no amount of reading would have produced.
+
 ### Still not done
 
-**No player has connected through it.** Opening the port is not serving a game: the protocol
-handshake, the Spring process the server spawns, and Planetwars are all untested on .NET 9. And it
-is still not in `Zero-K.sln`, which is correct - the Framework solution cannot build a `net9.0`
-project.
+**No game has been served.** A login is not a battle: the Spring process the server spawns,
+Planetwars, and the map and mod downloads (`PlasmaDownloader`, which is where `Mono.Posix` and
+`System.Drawing.Common` actually sit) are all still untested on .NET 9.
+
+`LogIP` is only half-covered: it skips private addresses, so a probe connecting from `127.0.0.1`
+never reaches it. The EF6 test covers that half; nothing on .NET 9 does yet.
+
+And it is still not in `Zero-K.sln`, which is correct - the Framework solution cannot build a
+`net9.0` project.

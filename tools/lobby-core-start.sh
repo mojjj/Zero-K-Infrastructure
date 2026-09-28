@@ -29,6 +29,8 @@ export ZK_CONNECTION_STRING="${ZK_CONNECTION_STRING:-$(DB_NAME="$DB_NAME" ./db/c
 API_PORT=8300
 PLAYER_PORT=8200
 LOG="$(mktemp)"
+PROBE_USER="${ZK_PROBE_USER:-LobbyProbe}"
+PROBE_PASS="${ZK_PROBE_PASS:-probe-pass-not-a-real-one}"
 CONTAINER=zk-lobby-core
 BOOT_TIMEOUT="${ZK_LOBBY_BOOT_TIMEOUT:-360}"
 
@@ -54,6 +56,7 @@ grep -q "GeoLite2-Country.mmdb" <<<"$out" \
 
 # The real start. Built first, so the build's own minutes do not eat the boot timeout.
 ./tools/dotnet.sh build ZkLobbyServer.Standalone.Core -v q --nologo >/dev/null
+./tools/dotnet.sh build tools/lobby-client-probe -v q --nologo >/dev/null
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 ZK_DOTNET_NAME="$CONTAINER" ./tools/dotnet.sh run --project ZkLobbyServer.Standalone.Core --no-build -- /repo/Zero-K.info >"$LOG" 2>&1 &
 
@@ -74,6 +77,22 @@ connects "$PLAYER_PORT" \
 connects "$API_PORT" \
     && check 0 "a client can connect to the API port ($API_PORT)" \
     || check 1 "a client can connect to the API port ($API_PORT)"
+# The handshake. Opening a port is not serving anybody: this drives LobbyClient's TasClient - the
+# same type the real lobby uses - through a register and a login, and the register writes an
+# Account through EF Core on the way.
+if [ "$listening" = "0" ]; then
+    # errexit off around the pipeline: pipefail makes a failing probe abort the script before
+    # check() can report it, which is how a real failure once printed no verdict at all.
+    set +e
+    ./tools/dotnet.sh run --project tools/lobby-client-probe --no-build -- \
+        127.0.0.1 "$PLAYER_PORT" "$PROBE_USER" "$PROBE_PASS" 2>&1 | sed 's/^/  /'
+    probe_status="${PIPESTATUS[0]}"
+    set -e
+    check "$probe_status" "a client registers and logs in through the .NET 9 server"
+else
+    check 1 "a client registers and logs in through the .NET 9 server (skipped: never listened)"
+fi
+
 grep -qiE 'kernel32|DllNotFoundException' "$LOG" \
     && check 1 "no Windows-only P/Invoke on the way up" \
     || check 0 "no Windows-only P/Invoke on the way up"
@@ -82,4 +101,4 @@ if [ "$listening" != "0" ]; then echo; echo "--- last 30 lines ---"; tail -30 "$
 
 echo
 if [ "$failures" -ne 0 ]; then echo "$failures check(s) failed"; exit 1; fi
-echo "the lobby server runs on .NET 9, on Linux, with players able to reach it"
+echo "the lobby server runs on .NET 9, on Linux, and a client logs in to it"
