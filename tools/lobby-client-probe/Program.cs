@@ -19,6 +19,12 @@ namespace LobbyClientProbe
     {
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
 
+        // Deliberately NOT one of the channels ChannelManager hands out by default ("zk", zkadmin,
+        // top20, core). Those are joined by the server at login, so asking for one of them proves
+        // nothing about the explicit JoinChannel below - the response would already have arrived.
+        // An unknown name is allowed by CanJoin, which still has to read the account to decide.
+        private const string Channel = "probechannel";
+
         public static async Task<int> Main(string[] args)
         {
             if (args.Length < 4)
@@ -35,6 +41,8 @@ namespace LobbyClientProbe
             var client = new TasClient("LobbyClientProbe 1.0");
 
             var connected = new TaskCompletionSource<bool>();
+            var joinedChannel = new TaskCompletionSource<string>();
+            var heard = new TaskCompletionSource<bool>();
             var registered = new TaskCompletionSource<string>();
             var loggedIn = new TaskCompletionSource<string>();
 
@@ -44,11 +52,19 @@ namespace LobbyClientProbe
                 connected.TrySetException(new Exception("connection lost: " + e.ServerParams?[0]));
                 registered.TrySetException(new Exception("connection lost before the server answered Register"));
                 loggedIn.TrySetException(new Exception("connection lost before the server answered Login"));
+                joinedChannel.TrySetException(new Exception("connection lost before the server answered JoinChannel"));
+                heard.TrySetException(new Exception("connection lost before the server relayed the message"));
             };
             client.RegistrationAccepted += (s, e) => registered.TrySetResult(null);
             client.RegistrationDenied += (s, e) => registered.TrySetResult(e.ResultCode.ToString());
             client.LoginAccepted += (s, e) => loggedIn.TrySetResult(null);
             client.LoginDenied += (s, e) => loggedIn.TrySetResult(e.ResultCode.ToString());
+            // Both handlers check WHICH channel. The server auto-joins an account's default
+            // channels at login, so an unfiltered handler is satisfied by one of those before the
+            // explicit JoinChannel below is even sent - which made a deliberately refused join to
+            // the moderator channel report success.
+            client.ChannelJoined += (s, e) => { if (e.Name == Channel) joinedChannel.TrySetResult(null); };
+            client.ChannelJoinFailed += (s, e) => { if (e.ChannelName == Channel) joinedChannel.TrySetResult(e.Reason ?? "refused without a reason"); };
 
             Console.WriteLine($"connecting to {host}:{port}");
             client.Connect(host, port);
@@ -80,6 +96,26 @@ namespace LobbyClientProbe
                 return 1;
             }
             Console.WriteLine("   ok    logged in - the server accepted a real client");
+
+            // Past login. ChannelManager.CanJoin does db.Accounts.FindAsync, so joining is another
+            // EF Core round trip on a path a build cannot reach; saying something comes back
+            // through the server, which is the first thing here that proves two-way traffic rather
+            // than request and reply.
+            await client.JoinChannel(Channel);
+            if (!await Within(joinedChannel.Task, "join channel")) return 1;
+            var join = joinedChannel.Task.Result;
+            if (join != null)
+            {
+                Console.WriteLine($"   FAIL  the server refused to join #{Channel}: {join}");
+                return 1;
+            }
+            Console.WriteLine($"   ok    joined #{Channel} - not a default channel, so this is the explicit join, and CanJoin read the account through EF Core");
+
+            var message = "probe " + Guid.NewGuid().ToString("N").Substring(0, 8);
+            client.Said += (s, e) => { if (e.Text == message) heard.TrySetResult(true); };
+            await client.Say(SayPlace.Channel, Channel, message, false);
+            if (!await Within(heard.Task, "say")) return 1;
+            Console.WriteLine($"   ok    the server relayed what the client said back to it");
 
             return 0;
         }

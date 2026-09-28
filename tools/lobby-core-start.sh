@@ -78,8 +78,9 @@ connects "$API_PORT" \
     && check 0 "a client can connect to the API port ($API_PORT)" \
     || check 1 "a client can connect to the API port ($API_PORT)"
 # The handshake. Opening a port is not serving anybody: this drives LobbyClient's TasClient - the
-# same type the real lobby uses - through a register and a login, and the register writes an
-# Account through EF Core on the way.
+# same type the real lobby uses - through a register, a login, a channel join and a message. The
+# register writes an Account through EF Core, the join reads one back through it, and the message
+# comes back from the server, which is the first thing here that shows traffic in both directions.
 if [ "$listening" = "0" ]; then
     # errexit off around the pipeline: pipefail makes a failing probe abort the script before
     # check() can report it, which is how a real failure once printed no verdict at all.
@@ -88,9 +89,9 @@ if [ "$listening" = "0" ]; then
         127.0.0.1 "$PLAYER_PORT" "$PROBE_USER" "$PROBE_PASS" 2>&1 | sed 's/^/  /'
     probe_status="${PIPESTATUS[0]}"
     set -e
-    check "$probe_status" "a client registers and logs in through the .NET 9 server"
+    check "$probe_status" "a client registers, logs in, joins a channel and is heard"
 else
-    check 1 "a client registers and logs in through the .NET 9 server (skipped: never listened)"
+    check 1 "a client registers, logs in, joins a channel and is heard (skipped: never listened)"
 fi
 
 grep -qiE 'kernel32|DllNotFoundException' "$LOG" \
@@ -101,4 +102,4 @@ if [ "$listening" != "0" ]; then echo; echo "--- last 30 lines ---"; tail -30 "$
 
 echo
 if [ "$failures" -ne 0 ]; then echo "$failures check(s) failed"; exit 1; fi
-echo "the lobby server runs on .NET 9, on Linux, and a client logs in to it"
+echo "the lobby server runs on .NET 9, on Linux, and a client talks to it"
