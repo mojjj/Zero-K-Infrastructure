@@ -155,7 +155,8 @@ The `Mono.Unix` question is one method in `PlasmaDownloader`, and it waits for t
    server's path.
 2. ~~`Shared/LobbyClient` and `Shared/MonoTorrent`~~ — both compile.
 3. ~~`Shared/PlasmaDownloader`~~ — compiles; its `Mono.Unix` call is the one runtime item.
-4. `ZkLobbyServer` itself — one EF6 API call left, and the partial-class trap above.
+4. `ZkLobbyServer` itself — the EF6 API call is fixed; `EntityState` in `ForumListManager` is the
+   last one, and the partial-class trap above is what a real probe has to avoid.
 
 ### Steps 2 and 3, measured: both compile
 
@@ -174,8 +175,28 @@ artifact of the probe**:
 
     ZkServerTraceListener.cs: 'DatabaseFacade' does not contain a definition for 'ExecuteSqlCommand'
 
-That is EF6's API; EF Core spells it `ExecuteSqlRaw`. It is the 14-day `LogEntries` prune, so it is
-a one-line change that belongs with the move rather than before it.
+That is EF6's API; EF Core spells it `ExecuteSqlRaw`. **Fixed**, and it needed no new machinery:
+`ExecuteSqlCommandCompat` already existed in both halves of `DbCompat`, put there for
+`ResourceLinkProvider`. The call site moved to it, which is the whole change.
+
+### What is left after that: one namespace, four call sites
+
+    ForumListManager.cs: The name 'EntityState' does not exist in the current context
+
+`ForumListManager` imports `System.Data.Entity` for `EntityState.Added` / `Deleted` / `Unchanged`.
+EF Core has the same enum with the same members, in `Microsoft.EntityFrameworkCore`.
+
+**This one is a different shape from the others and does not fit the existing pattern.** `DbCompat`
+works because C# lets a method move behind one name; a *type* referenced by name in four
+comparisons cannot be aliased the same way without either a `using` alias per file — which is one
+more thing for each stack to get right — or moving the four comparisons behind helpers. It is a
+design choice, small but real, and it belongs to whoever builds `ZkLobbyServer.Core` rather than
+being pre-empted here.
+
+Everything else the probe reports is the duplicate-type artifact described above: roughly 150
+errors of the form *"Operator '==' cannot be applied to operands of type 'ResourceType' and
+'ResourceType'"*, which is one `ResourceType` from the globbed sources and one from the referenced
+`ZkData.Core`. They vanish when the chain is one assembly.
 
 ### The trap a ZkLobbyServer.Core will hit
 

@@ -19,7 +19,11 @@ namespace ZkLobbyServer
             using (var db = new ZkDataContext())
             {
                 var oldEntry = DateTime.UtcNow.AddDays(-14);
-                db.Database.ExecuteSqlCommand("delete from LogEntries where Time < {0}", oldEntry);
+                // ExecuteSqlCommandCompat, not ExecuteSqlCommand: EF Core spells it ExecuteSqlRaw, and
+                // this was the last call in ZkLobbyServer that only EF6 could compile. The twins are
+                // ZkData/DbCompat.cs and ZkData.Core/Ef6Compat/DbCompatCore.cs; both take the same
+                // {0} placeholders, so the SQL reaching the server is unchanged.
+                db.Database.ExecuteSqlCommandCompat("delete from LogEntries where Time < {0}", oldEntry);
             }
             this.ZkLobbyServer = zkLobbyServer;
         }
