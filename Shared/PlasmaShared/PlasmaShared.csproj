@@ -143,6 +143,8 @@
     <Compile Include="Imaging\ImageSizing.cs" />
     <Compile Include="Imaging\PixelBuffers.cs" />
     <Compile Include="Imaging\GdiPixelBridge.cs" />
+    <Compile Include="Imaging\MapImage.cs" />
+    <Compile Include="Imaging\NativeBuffer.cs" />
     <Compile Include="Imaging\IImageProcessor.cs" />
     <Compile Include="Imaging\Images.cs" />
     <Compile Include="Imaging\SystemDrawingImageProcessor.cs" />

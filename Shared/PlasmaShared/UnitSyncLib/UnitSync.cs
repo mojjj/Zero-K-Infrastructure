@@ -136,17 +136,17 @@ namespace ZkData.UnitSyncLib
             return new ArchiveCache(UnitsyncWritableFolder);
         }
 
-        public Bitmap GetHeightMap(string mapName)
+        public MapImage GetHeightMap(string mapName)
         {
             return GetInfoMap(mapName, "height", 1);
         }
 
-        public Bitmap GetMetalMap(string mapName)
+        public MapImage GetMetalMap(string mapName)
         {
             return GetInfoMap(mapName, "metal", 1);
         }
 
-        public Bitmap GetMinimap(Map map)
+        public MapImage GetMinimap(Map map)
         {
             return FixAspectRatio(map, GetSquareMinimap(map.Name, 0));
         }
@@ -265,18 +265,15 @@ namespace ZkData.UnitSyncLib
             return CompleteFindFilesInVfs(searchHandle);
         }
 
-        private static Bitmap FixAspectRatio(Map map, Image squareMinimap)
+        private static MapImage FixAspectRatio(Map map, MapImage squareMinimap)
         {
             // Extracted to ImageSizing.MinimapAspectCorrection, which is tested on both stacks -
-            // unitsync renders every minimap square, and this is what stretches it back.
+            // unitsync renders every minimap square, and this is what stretches it back. The
+            // resize itself is MapImage's, so this method no longer knows which imaging library
+            // is underneath it.
             var newSize = ImageSizing.MinimapAspectCorrection(squareMinimap.Size, map.Size);
 
-            var correctMinimap = new Bitmap(newSize.Width, newSize.Height, PixelFormat.Format24bppRgb);
-            using (var graphics = Graphics.FromImage(correctMinimap))
-            {
-                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                graphics.DrawImage(squareMinimap, new Rectangle(Point.Empty, newSize));
-            }
+            var correctMinimap = squareMinimap.ResizeTo(newSize);
             squareMinimap.Dispose();
             return correctMinimap;
         }
@@ -315,7 +312,7 @@ namespace ZkData.UnitSyncLib
             return CompleteFindFilesInVfs(searchHandle);
         }
 
-        private Bitmap GetInfoMap(string mapName, string name, int bytesPerPixel)
+        private MapImage GetInfoMap(string mapName, string name, int bytesPerPixel)
         {
             var width = 0;
             var height = 0;
@@ -331,7 +328,7 @@ namespace ZkData.UnitSyncLib
                 // PixelBuffers.GreyscaleToRgb24 now - the same arithmetic, minus the pointer walk
                 // and the stride it had to compute, and tested on .NET 9 where this cannot run.
                 var size = new Size(width, height);
-                return GdiPixelBridge.FromRgb24(PixelBuffers.GreyscaleToRgb24(infoMapData, size), size);
+                return MapImage.FromRgb24(PixelBuffers.GreyscaleToRgb24(infoMapData, size), size);
             }
             finally
             {
@@ -498,7 +495,7 @@ namespace ZkData.UnitSyncLib
             return sides.Select(side => ReadVfsFile("SidePics\\" + side + ".bmp")).ToArray();
         }
 
-        private Bitmap GetSquareMinimap(string mapName, int mipLevel)
+        private MapImage GetSquareMinimap(string mapName, int mipLevel)
         {
             if ((mipLevel < 0) || (mipLevel > MaxMipLevel)) throw new ArgumentOutOfRangeException("mipLevel", string.Format("Mip level must range from 0 to {0}.", MaxMipLevel));
 
@@ -514,8 +511,8 @@ namespace ZkData.UnitSyncLib
             // PixelBuffers.Rgb565ToRgb24, which Tests/UnitSyncPixelTests.cs checks against GDI+
             // itself for all 65,536 values on the Windows CI job.
             var square = new Size(size, size);
-            var raw = GdiPixelBridge.CopyFrom(pointer, stride * size);
-            return GdiPixelBridge.FromRgb24(PixelBuffers.Rgb565ToRgb24(raw, square, stride), square);
+            var raw = NativeBuffer.CopyFrom(pointer, stride * size);
+            return MapImage.FromRgb24(PixelBuffers.Rgb565ToRgb24(raw, square, stride), square);
         }
 
 

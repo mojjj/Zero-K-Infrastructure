@@ -112,6 +112,12 @@
     <Compile Remove="..\Shared\PlasmaShared\Utils.Imaging.cs" />
     <Compile Remove="..\Shared\PlasmaShared\ResizedImageCache.cs" />
     <Compile Remove="..\Shared\PlasmaShared\Imaging\SystemDrawingImageProcessor.cs" />
+
+    <!-- The Framework half of the MapImage twin, and the GDI+ bridge it is now the only caller of.
+         MapImageCore.cs is the half this project wants: it keeps unitsync's RGB24 pixels and goes
+         through ImageSharp for a resize or an encode, so nothing here constructs a Bitmap. -->
+    <Compile Remove="..\Shared\PlasmaShared\Imaging\MapImage.cs" />
+    <Compile Remove="..\Shared\PlasmaShared\Imaging\GdiPixelBridge.cs" />
     <Compile Include="..\ZkLobbyServer\**\*.cs" Exclude="..\ZkLobbyServer\obj\**;..\ZkLobbyServer\bin\**;..\ZkLobbyServer\Properties\**" />
   </ItemGroup>
 
@@ -121,7 +127,6 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
-    <PackageReference Include="System.Drawing.Common" Version="9.0.0" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.0" />
     <PackageReference Include="SharpCompress" Version="0.31.0" />
     <PackageReference Include="DotNetZip" Version="1.16.0" />

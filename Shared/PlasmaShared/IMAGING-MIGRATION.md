@@ -478,3 +478,39 @@ the Framework stack too, so it is a decision about what both stacks carry, not a
 `GdiPixelBridge` deliberately - not only because that would throw, but because
 `ImagesProcessorChoiceTests` asserts this assembly has **no** System.Drawing.Common reference, and
 linking that file would add one. `Marshal.Copy` does what `GdiPixelBridge.CopyFrom` does.
+
+### Done, 2026-09-28: the compat twin, and System.Drawing.Common is gone from the port
+
+`MapImage` is a compat twin in the idiom the rest of the port uses:
+
+| file | stack | what it holds |
+|---|---|---|
+| `Imaging/MapImage.cs` | net48 | a `System.Drawing.Image`, built by `GdiPixelBridge` - so map registration produces exactly the bytes it did before |
+| `Imaging/MapImageCore.cs` | net9 | unitsync's RGB24 pixels and a `Size`. ImageSharp is reached for only to resize or encode |
+
+`UnitSync` and `Map` name `MapImage` and neither knows which half it got.
+`Map.Minimap`/`Heightmap`/`Metalmap` change type, which is safe because all three are
+`[NonSerialized]`, `[XmlIgnore]` and `[JsonIgnore]` - nothing ever persisted them.
+
+`NativeBuffer.CopyFrom` was split out of `GdiPixelBridge`: it is `Marshal.Copy` and never needed
+GDI+, so the .NET 9 build no longer links a file full of `Bitmap` to get at it. `GdiPixelBridge`
+now has exactly one caller, the Framework half of the twin.
+
+**The result is that no project in this repository references `System.Drawing.Common` any more** -
+not `ZkLobbyServer.Core`, and not `ZkData.Core`, which carried it "COMPILE-TIME ONLY" because
+`Map` declared `Bitmap` members. Verified by exit code and by the built assemblies, which contain
+no reference to it. That removal is the guard: a `Bitmap` added to anything either project
+compiles no longer resolves.
+
+Proven end to end on .NET 9 on Linux, against the real engine and a real map, in
+`Tests.Portable/UnitSyncEngineTests`:
+
+    GetMinimap -> 2,097,152 bytes RGB565 -> Rgb565ToRgb24 -> MapImage -> ToBytes(256)
+        -> 6,019 bytes of JPEG, header FF D8
+
+The step that threw `TypeInitializationException` in the measurement above now completes.
+
+**What is deliberately unchanged:** the Framework stack still uses GDI+, so the images
+AutoRegistrator uploads are byte-for-byte what they were. The two halves ask for bicubic and will
+not agree pixel-for-pixel if the .NET 9 path ever registers maps - the same caveat recorded when
+`Images.Processor` moved to ImageSharp, and the same answer: nothing stored is touched.
