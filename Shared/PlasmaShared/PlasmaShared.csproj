@@ -138,6 +138,7 @@
     <Compile Include="UnitsyncResourcePresenceChecker.cs" />
     <Compile Include="Utils.cs" />
     <Compile Include="Utils.Enumerable.cs" />
+    <Compile Include="Utils.Imaging.cs" />
     <Compile Include="Utils.Polyfills.cs" />
     <Compile Include="Imaging\ImageSizing.cs" />
     <Compile Include="Imaging\PixelBuffers.cs" />

@@ -417,3 +417,33 @@ pixel buffers from the native library and wrap them in `Bitmap`. That is interop
 a library swap, and it cannot be tested without unitsync and real map files. `tools/native-calls.txt`
 records that the `unitsync` name resolves correctly on Linux - measured - but no entry point of the
 135 has ever been called.
+
+### Narrowed, 2026-09-28: 84 errors across 7 files down to 28 across 3
+
+Most of that surface was code the lobby server compiles but cannot reach. Decided by what
+references each file, not by what it is called:
+
+| removed from `ZkLobbyServer.Core` | why |
+|---|---|
+| `Diagrams/Node.cs`, `Diagrams/Diagram.cs` | `GalaxyDesigner`, a Windows-only WPF app, is their only consumer anywhere in the repository. `port-sources.props` already links `Vector.cs` alone for the same reason |
+| `Utils.Imaging.cs` (new) | `GetResized`, `GetResizedWithCache`, `SaveJpeg`, `ToBytes`, split out of `Utils.cs` the way `Utils.Enumerable.cs` and `Utils.Polyfills.cs` already were. Every caller is ZeroKLobby, ChobbyLauncher or AutoRegistrator - all Framework, all Windows |
+| `ResizedImageCache.cs` | reached only through `Utils.GetResizedWithCache` |
+| `Imaging/SystemDrawingImageProcessor.cs` | nothing anywhere instantiates it; `Images.Processor` names the ImageSharp one. Kept in PlasmaShared so that choice stays one line to revert |
+
+What is left is exactly what this document always said was the hard part, and nothing else:
+
+| errors | file |
+|---|---|
+| 14 | `UnitSyncLib/UnitSync.cs` |
+| 12 | `UnitSyncLib/Map.cs` |
+| 2 | `Imaging/GdiPixelBridge.cs` |
+
+All three are the native-buffer-to-`Bitmap` interop. That is not a library swap and it cannot be
+tested without unitsync and real map files, so the package reference stays until it can be.
+
+**A warning about measuring this, earned twice in one afternoon.** Do not delete the package with
+`sed -i '/System.Drawing.Common/d'`: this file now contains that string inside an XML comment, and
+removing that line leaves malformed XML. MSBuild then fails with `MSB4067` at project-load time,
+compiles nothing, and reports **zero** compile errors - which reads exactly like success. Remove
+the `<PackageReference>` element specifically, and check the exit code rather than a grep of the
+output. The same mistake in a different costume as the `**/*.resx` one above.
