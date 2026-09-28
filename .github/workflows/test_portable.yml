@@ -83,6 +83,15 @@ jobs:
       - name: Check the lobby server's native calls against their verdicts
         run: ./tools/check-native-calls.py
 
+      # The other platform dependency, and it fails the same way: System.Drawing.Common is
+      # Windows-only on .NET 9, so new use here breaks no build and throws when the line finally
+      # runs on Linux. The surface was cut from 7 files to 3; this holds it there. It reads source
+      # rather than trusting a build, because a single failed declaration stops Roslyn binding
+      # method bodies across the whole compilation - which is how one file used Bitmap throughout
+      # and contributed none of the 84 errors that measured this.
+      - name: Check the lobby server's System.Drawing surface
+        run: ./tools/check-gdi-surface.py
+
       - name: Check the lobby-server seam
         run: dotnet run --project ZkData.Core -- seam --check
 
