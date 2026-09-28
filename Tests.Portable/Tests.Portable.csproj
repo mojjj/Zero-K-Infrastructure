@@ -81,6 +81,11 @@
     <!-- The .NET 9 half of the UnixPermissions twin, so the engine-permissions test calls the
          same code EngineDownload does rather than a copy of it. -->
     <Compile Include="..\Shared\PlasmaDownloader\UnixPermissionsCore.cs" Link="Linked\UnixPermissionsCore.cs" />
+    <!-- The UDP autohost listener. 225 lines that reference only Trace and Utils, so it links
+         without dragging the rest of LobbyClient in. -->
+    <Compile Include="..\Shared\PlasmaShared\Crc.cs" Link="Linked\Crc.cs" />
+    <Compile Include="..\Shared\PlasmaShared\Utils.cs" Link="Linked\Utils.cs" /> <!-- SafeThread, which Talker uses; GDI-free since Utils.Imaging.cs was split out -->
+    <Compile Include="..\Shared\LobbyClient\Talker.cs" Link="Linked\Talker.cs" />
     <!-- Images.cs picks the implementation. Linkable only because that choice is now
          ImageSharp: while it named SystemDrawingImageProcessor it dragged in System.Drawing. -->
     <Compile Include="..\Shared\PlasmaShared\Imaging\Images.cs" Link="Linked\Images.cs" />
