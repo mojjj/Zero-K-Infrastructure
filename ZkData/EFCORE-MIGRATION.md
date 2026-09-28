@@ -4319,8 +4319,63 @@ routes shared a class.
 
 Worth recording rather than discovering later. `MissionEditor` is WPF: the mono check cannot build
 it - `PresentationCore` and friends are not there - and the Windows job that can,
-`Build and test Zero-K`, has been **queued and never running** for every pull request in this
-stretch; its self-hosted runner is not picking work up.
+`Build and test Zero-K`, was **queued and never running** for every pull request in a long
+stretch of this work - its self-hosted runner was not picking work up. ~~It still is not.~~ It is
+now: that job has been passing since 2026-09-28 (4m38s on #167). So the editor IS compile-checked
+again, on pull requests, and the paragraph below overstates the gap it was written about.
 
 That is why `MissionServiceJsonClient` lives in `ZkData` and the editor holds one line. The line
 itself is unverified by any automated check, and the ~1500 lines it could have been are not.
+
+## Phase 1: EF6 linked unsaved rows by a sentinel, and we swept for the rest
+
+Running the .NET 9 lobby server turned up a registration failure no build could see:
+
+    The value of 'AccountUserID.AccountID' is unknown when attempting to save changes. This is
+    because the property is also part of a foreign key for which the principal entity in the
+    relationship is not known.
+       at ZkLobbyServer.LoginChecker.DoRegister(...) LoginChecker.cs:line 246
+
+`DoRegister` builds an `Account`, calls `LogIP`/`LogUserID` - which do
+`new AccountUserID { AccountID = acc.AccountID, ... }` while `acc.AccountID` is still `0` and never
+set the navigation - and only then adds the account.
+
+**It works under EF6 because EF6 leaves an unsaved store-generated int key at `0`.** The Added
+principal's key is therefore also `0`, and relationship fixup matches the dependent's foreign key
+to it. The rows are related by which sentinel value EF6 picked. EF Core uses negative temporary
+keys, `0` matches nothing, and `SaveChanges` throws. Fixed by adding the row to the principal's
+navigation collection, which both stacks read; `Tests.Database/RegistrationFixupTests` pins the EF6
+behaviour in both forms, so the fix cannot break the stack serving players.
+
+### The sweep, and how far it is worth trusting
+
+**44** places construct an EF entity taking a key off another object. All but `LoginChecker`'s two
+take it from a principal that is already saved - loaded from the database, or saved by an
+intervening `SaveChanges`. Each site a method-aware scan flagged was then read:
+
+| site | why it is fine |
+|---|---|
+| `BattleResultHandler.SaveSpringBattle` | uses `sb.SpringBattlePlayers.Add(...)` - the navigation, already |
+| `BattleResultHandler.StoreAwards` | `sb` is the battle *reselected after* `SaveChanges` |
+| `CommandPoll` | `SaveChanges` between the `MapPollOutcome` and its options |
+| `ZeroKWeb.Host` fixture builder | `SaveChanges` after the galaxy, and after the planets |
+| `ZkLobbyServer.ReportUser` | both accounts arrive loaded |
+
+**The scan is a heuristic and its limits are the point.** Three versions of it were wrong before one
+worked, and each failure was found by feeding it the defect it was written to catch:
+
+- keying on "the principal is `new`ed in this method" missed `LogIP` entirely, because there the
+  principal arrives as a **parameter** - provenance the file cannot answer
+- deciding "a `SaveChanges` appears between them" by file order was wrong too: file order is not
+  execution order once the two sit in different methods
+- requiring the foreign key to be spelled the same on both sides missed `TargetPlanetID =
+  target.PlanetID`, a line visible in the same screenful as a site it did flag
+
+Even the working version still has false positives - it looks for the navigation within a fixed
+window, so a long comment between the two lines hides it. **That is why it is not a CI check.** A
+gate that cannot reliably catch its own motivating case would buy confidence rather than coverage.
+The guard that actually covers this path is `tools/lobby-core-start.sh`, which registers a real
+account through EF Core on every pull request.
+
+**How to apply:** `new Dependent { FkId = principal.Id }` before the principal is saved is the shape
+to watch. Written as `principal.Dependents.Add(...)` it is correct in both stacks.
