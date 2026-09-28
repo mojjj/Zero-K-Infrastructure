@@ -444,11 +444,41 @@ match the player's `ScriptPassword` in the host script, the engine answers *"ser
 or rejected connection"*, the client exits before joining, and nothing ever reaches `Talker` - so
 the symptom is silence in the event stream rather than an error about a password.
 
+### The end of a game, and a fifth defect
+
+The engine will not finish a game here on its own: the host script uses `StartPosType=2`, so Spring
+waits for every player to place a start position and ready up, which a headless client never does.
+So `SERVER_STARTPLAYING` and `SERVER_GAMEOVER` are **synthesised**, in the layout `Talker` parses -
+the layout a real `PLAYER_JOINED` had already arrived in.
+
+```
+   ok    SERVER_STARTPLAYING parsed: BattleStarted, replay=probe.sdfz, engineBattleID=0123456789ABCDEF...
+   ok    SERVER_GAMEOVER parsed: GameOver, duration=0s, winners=[probe]
+   ok    the battle context is complete - this is what BattleResultHandler is handed
+```
+
+Sending `GAMEOVER` alone would have proved nothing, and that is worth stating: `DedicatedServer`
+refuses to raise `GameOver` unless `Context.IngameStartTime` is set, which only
+`SERVER_STARTPLAYING` does. A check built on `GAMEOVER` by itself would have passed by never being
+reached.
+
+**The defect.** `process.PriorityClass = ProcessPriorityClass.High` throws
+`Win32Exception(13): Permission denied` on Linux, because an unprivileged process may only *lower*
+its nice value. It sits inside `talker_SpringEvent`'s `catch`, so the throw took `BattleStarted`
+with it: the engine started a game and **the lobby was never told**. `IngameStartTime` is assigned
+before the throw, so `GameOver` would still have worked later - which is what makes it a partial
+failure rather than an obvious one.
+
+The same shape as `kernel32`, `MonoPosixHelper` and the EF6 zero key: compiles everywhere, throws
+on Linux, swallowed by a `catch` into a state that looks like success. The priority is an
+optimisation, so it is now guarded and logs a warning instead of taking an event with it.
+
 ### Still not done
 
-**Nothing has recorded a result.** A player joining is not a battle finished:
-`BattleResultHandler` writing a `SpringBattle` row, the award and rating passes that follow it, and
-Planetwars are all still untested on .NET&nbsp;9.
+**Nothing has written a row.** The context is complete, and `BattleResultHandler` is the code that
+would turn it into a `SpringBattle` - but running that needs a database, accounts matching the
+player names, and map and mod `Resources` rows. The award and rating passes that follow it, and
+Planetwars, are equally untouched.
 
 `LogIP` is only half-covered: it skips private addresses, so a probe connecting from `127.0.0.1`
 never reaches it. The EF6 test covers that half; nothing on .NET 9 does yet.

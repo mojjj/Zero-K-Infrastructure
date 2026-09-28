@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using LobbyClient;
 using PlasmaShared;
@@ -26,6 +28,7 @@ namespace DedicatedProbe
     public static class Program
     {
         private static string joinedName;
+        private static SpringBattleContext startedContext;
 
         public static int Main(string[] args)
         {
@@ -74,6 +77,10 @@ namespace DedicatedProbe
             server.DedicatedServerStarted += (s, e) => started.Set();
             var joined = new ManualResetEventSlim(false);
             server.PlayerJoined += (s, e) => { joinedName = e.Username; joined.Set(); };
+            var battleStarted = new ManualResetEventSlim(false);
+            server.BattleStarted += (s, e) => { startedContext = e; battleStarted.Set(); };
+            var gameOver = new ManualResetEventSlim(false);
+            server.GameOver += (s, e) => gameOver.Set();
 
             string script;
             try
@@ -171,12 +178,96 @@ namespace DedicatedProbe
                 }
 
                 Console.WriteLine("   ok    a real player joined, and the ported code was told: PlayerJoined(" + joinedName + ")");
+
+                // The end of a game, synthesised.
+                //
+                // The engine will not send SERVER_STARTPLAYING here: the host script uses
+                // StartPosType=2, so Spring waits for every player to place a start position and
+                // ready up, which a headless client never does. Without it Context.IngameStartTime
+                // stays null and DedicatedServer refuses to raise GameOver at all - so GAMEOVER on
+                // its own would be inert, and a check built on it would pass by never being reached.
+                //
+                // Both packets are built to the layout Talker parses, which is the layout the engine
+                // emits; the PLAYER_JOINED above arrived in exactly this shape from a real one.
+                var autohostPort = AutohostPortFrom(script);
+                if (autohostPort == 0)
+                {
+                    Console.WriteLine("   FAIL  no AutohostPort in the generated script, so nothing can be sent to the Talker");
+                    return 1;
+                }
+
+                Send(autohostPort, StartPlaying("0123456789abcdef0123456789abcdef", "probe.sdfz"));
+                if (!battleStarted.Wait(TimeSpan.FromSeconds(15)))
+                {
+                    Console.WriteLine("   FAIL  SERVER_STARTPLAYING did not reach BattleStarted");
+                    return 1;
+                }
+                Console.WriteLine("   ok    SERVER_STARTPLAYING parsed: BattleStarted, replay=" + startedContext?.ReplayName
+                                  + ", engineBattleID=" + startedContext?.EngineBattleID);
+
+                Send(autohostPort, GameOver(0, new byte[] { 0 }));
+                if (!gameOver.Wait(TimeSpan.FromSeconds(15)))
+                {
+                    Console.WriteLine("   FAIL  SERVER_GAMEOVER did not reach GameOver");
+                    return 1;
+                }
+
+                var winners = server.Context?.ActualPlayers?.Where(x => x.IsVictoryTeam).Select(x => x.Name).ToList();
+                Console.WriteLine("   ok    SERVER_GAMEOVER parsed: GameOver, duration=" + server.Context?.Duration
+                                  + "s, winners=[" + string.Join(",", winners ?? new List<string>()) + "]");
+
+                if (server.Context?.GameEndedOk != true)
+                {
+                    Console.WriteLine("   FAIL  the context does not record the game as ended, so nothing downstream would store a result");
+                    return 1;
+                }
+                Console.WriteLine("   ok    the battle context is complete - this is what BattleResultHandler is handed");
                 return 0;
             }
             finally
             {
                 try { server.ExitGame(); } catch { }
             }
+        }
+
+        /// <summary>The port ScriptGenerator wrote for the Talker, read back out of the script.</summary>
+        private static int AutohostPortFrom(string script)
+        {
+            var match = Regex.Match(script, @"AutohostPort=(\d+);");
+            return match.Success ? int.Parse(match.Groups[1].Value) : 0;
+        }
+
+        private static void Send(int port, byte[] payload)
+        {
+            using (var client = new UdpClient())
+                client.Send(payload, payload.Length, "127.0.0.1", port);
+        }
+
+        /// <summary>[2][size:4 LE][gameID:16][replay name] - the layout Talker reads.</summary>
+        private static byte[] StartPlaying(string gameIdHex, string replayName)
+        {
+            var name = Encoding.UTF8.GetBytes(replayName);
+            var gameId = Enumerable.Range(0, 16).Select(i => Convert.ToByte(gameIdHex.Substring(i * 2, 2), 16)).ToArray();
+            var packet = new byte[21 + name.Length];
+            packet[0] = (byte)2;
+            packet[1] = (byte)(packet.Length & 0xFF);
+            packet[2] = (byte)((packet.Length >> 8) & 0xFF);
+            packet[3] = (byte)((packet.Length >> 16) & 0xFF);
+            packet[4] = (byte)((packet.Length >> 24) & 0xFF);
+            Array.Copy(gameId, 0, packet, 5, 16);
+            Array.Copy(name, 0, packet, 21, name.Length);
+            return packet;
+        }
+
+        /// <summary>[3][size][playerNumber][winning ally teams] - the layout Talker reads.</summary>
+        private static byte[] GameOver(byte playerNumber, byte[] winningAllyTeams)
+        {
+            var packet = new byte[3 + winningAllyTeams.Length];
+            packet[0] = (byte)3;
+            packet[1] = (byte)packet.Length;
+            packet[2] = playerNumber;
+            Array.Copy(winningAllyTeams, 0, packet, 3, winningAllyTeams.Length);
+            return packet;
         }
 
         private static bool WaitForPort(int port, TimeSpan timeout)
