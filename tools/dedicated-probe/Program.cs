@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -24,6 +25,8 @@ namespace DedicatedProbe
     /// </summary>
     public static class Program
     {
+        private static string joinedName;
+
         public static int Main(string[] args)
         {
             if (args.Length < 5)
@@ -69,6 +72,8 @@ namespace DedicatedProbe
             var server = new DedicatedServer(paths);
             var started = new ManualResetEventSlim(false);
             server.DedicatedServerStarted += (s, e) => started.Set();
+            var joined = new ManualResetEventSlim(false);
+            server.PlayerJoined += (s, e) => { joinedName = e.Username; joined.Set(); };
 
             string script;
             try
@@ -117,6 +122,55 @@ namespace DedicatedProbe
                     return 1;
                 }
                 Console.WriteLine("   ok    a Spring dedicated server is running, started by the ported code");
+
+                // A real player. spring-headless connects to the game above and plays it; the engine
+                // then tells the autohost, LobbyClient's Talker receives that over UDP, and
+                // DedicatedServer raises PlayerJoined. Everything in that chain is the port's.
+                var headless = Path.Combine(Path.GetDirectoryName(binary), "spring-headless");
+                if (!File.Exists(headless))
+                {
+                    Console.WriteLine("   ----  no spring-headless beside the dedicated server; stopping at 'a server is up'");
+                    return 0;
+                }
+
+                var clientScript = Path.Combine(paths.WritableDirectory, "client-script.txt");
+                // MyPasswd must match the player's ScriptPassword in the host script, or the engine
+                // answers "server requested quit or rejected connection" and the client exits before
+                // it ever joins - which looks identical to the autohost path being broken.
+                File.WriteAllText(clientScript,
+                    "[GAME]\n{\n\tHostIP=127.0.0.1;\n\tHostPort=" + port + ";\n\tIsHost=0;\n\tMyPlayerName=probe;\n\tMyPasswd="
+                    + context.Players[0].ScriptPassword + ";\n}\n");
+
+                using (var client = Process.Start(new ProcessStartInfo(headless, "\"" + clientScript + "\"")
+                {
+                    WorkingDirectory = Path.GetDirectoryName(headless),
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                }))
+                {
+                    // Drained, or the pipes fill and the client stalls before it ever joins.
+                    client.OutputDataReceived += (s2, e2) => { };
+                    client.ErrorDataReceived += (s2, e2) => { if (e2.Data != null && e2.Data.Contains("ExitSpringProcess")) Console.WriteLine("     client refused: " + e2.Data); };
+                    client.BeginOutputReadLine();
+                    client.BeginErrorReadLine();
+
+                    try
+                    {
+                        if (!joined.Wait(TimeSpan.FromSeconds(90)))
+                        {
+                            Console.WriteLine("   FAIL  a client connected to the engine but DedicatedServer never raised PlayerJoined");
+                            Console.WriteLine("         that is the Talker UDP path: the engine reports to it and it raises the event");
+                            return 1;
+                        }
+                    }
+                    finally
+                    {
+                        try { if (!client.HasExited) client.Kill(); } catch { }
+                    }
+                }
+
+                Console.WriteLine("   ok    a real player joined, and the ported code was told: PlayerJoined(" + joinedName + ")");
                 return 0;
             }
             finally
