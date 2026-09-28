@@ -473,12 +473,46 @@ The same shape as `kernel32`, `MonoPosixHelper` and the EF6 zero key: compiles e
 on Linux, swallowed by a `catch` into a state that looks like success. The priority is an
 optimisation, so it is now guarded and logs a warning instead of taking an event with it.
 
+## A finished battle becomes rows
+
+~~Nothing has written a row.~~ `tools/battle-result-probe` hands a complete `SpringBattleContext`
+to `BattleResultHandler.SaveSpringBattle` - the real writer - on .NET 9 against a real database,
+and checks what landed by querying it back rather than by reading the object it was given:
+
+```
+   ok    the database assigned a SpringBattleID (151)
+   ok    the founder resolved to an account by name
+   ok    the map and the game resolved to Resources by name
+   ok    both players were written (2)
+   ok    every player row points at the battle
+   ok    nothing was left behind: the fixture is untouched
+```
+
+It is a CI step, because storing needs a database and **no engine** - the mirror of
+`dedicated-server-check.sh`, which needs an engine and no database. Splitting them is what makes
+each runnable at all: tied together, neither would be.
+
+Everything runs in a transaction that is always rolled back, and the last check proves it by
+counting what the fixture holds afterwards.
+
+**That "every player row points at the battle" line is the EF6 zero-key trap, executed.** The
+sweep in `ZkData/EFCORE-MIGRATION.md` read `SaveSpringBattle` and concluded it was already correct
+because it uses `sb.SpringBattlePlayers.Add(...)` rather than copying a key. Reading it was right;
+this runs it.
+
+`SaveSpringBattle` is `internal` rather than `private` so the probe calls exactly it. The
+`InternalsVisibleTo` deliberately lives in `ZkLobbyServer/InternalsVisibleTo.cs` and **not** under
+`Properties/`, because `ZkLobbyServer.Core` globs this project while excluding `Properties\**` - an
+attribute placed there reaches the Framework assembly and silently misses the .NET 9 one, which
+looked exactly like `InternalsVisibleTo` not working.
+
 ### Still not done
 
-**Nothing has written a row.** The context is complete, and `BattleResultHandler` is the code that
-would turn it into a `SpringBattle` - but running that needs a database, accounts matching the
-player names, and map and mod `Resources` rows. The award and rating passes that follow it, and
-Planetwars, are equally untouched.
+**Nothing has finished a game by itself, and nothing has rated one.** The two ends meet in the
+middle only by hand: the engine's `GAMEOVER` is synthesised, and the context the writer stores is
+built rather than captured. What sits between them - `SubmitSpringBattleResult`'s rating pass,
+award calculation, replay upload and Planetwars - needs a live `ZkLobbyServer`, and none of it has
+run on .NET&nbsp;9.
 
 `LogIP` is only half-covered: it skips private addresses, so a probe connecting from `127.0.0.1`
 never reaches it. The EF6 test covers that half; nothing on .NET 9 does yet.

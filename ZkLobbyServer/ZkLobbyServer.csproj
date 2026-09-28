@@ -148,6 +148,7 @@
     <Compile Include="OfflineMessageHandler.cs" />
     <Compile Include="PartyManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="InternalsVisibleTo.cs" />
     <Compile Include="ReplayStorage.cs" />
     <Compile Include="ServerBattle.cs" />
     <Compile Include="ServerRunner.cs" />
