@@ -19,7 +19,14 @@ mkdir -p "$CACHE"
 # ZK_DOTNET_NAME names the container so a caller that starts a long-running server can stop it
 # again: killing the `docker run` client does not reliably stop what it started, and a stray
 # container keeps holding the port that the next run needs.
+# ZK_DOTNET_MOUNT mounts one extra host directory read-only at /mnt/extra, for things that must
+# NOT live in the repository - the Spring engine above all. It is ~42MB, it is not ours, and this
+# checkout is synced by Synology Drive, so an engine dropped in the tree would be replicated and
+# would keep reappearing after deletion.
 exec docker run --rm -i ${ZK_DOTNET_NAME:+--name "$ZK_DOTNET_NAME"} \
+    ${ZK_DOTNET_MOUNT:+-v "$ZK_DOTNET_MOUNT:/mnt/extra:ro"} \
+    ${ZK_DOTNET_MOUNT:+-e ZK_UNITSYNC_DIR=/mnt/extra} \
+    ${ZK_DOTNET_MOUNT:+-e SPRING_DATADIR=/mnt/extra} \
     --network host \
     -u "$(id -u):$(id -g)" \
     -v "$REPO:/repo" \
