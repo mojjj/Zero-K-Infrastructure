@@ -89,9 +89,9 @@ if [ "$listening" = "0" ]; then
         127.0.0.1 "$PLAYER_PORT" "$PROBE_USER" "$PROBE_PASS" 2>&1 | sed 's/^/  /'
     probe_status="${PIPESTATUS[0]}"
     set -e
-    check "$probe_status" "a client registers, logs in, joins a channel and is heard"
+    check "$probe_status" "a client registers, logs in, chats, and opens a battle"
 else
-    check 1 "a client registers, logs in, joins a channel and is heard (skipped: never listened)"
+    check 1 "a client registers, logs in, chats, and opens a battle (skipped: never listened)"
 fi
 
 grep -qiE 'kernel32|DllNotFoundException' "$LOG" \
@@ -102,4 +102,4 @@ if [ "$listening" != "0" ]; then echo; echo "--- last 30 lines ---"; tail -30 "$
 
 echo
 if [ "$failures" -ne 0 ]; then echo "$failures check(s) failed"; exit 1; fi
-echo "the lobby server runs on .NET 9, on Linux, and a client talks to it"
+echo "the lobby server runs on .NET 9, on Linux, up to the point a game would start"
