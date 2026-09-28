@@ -324,12 +324,22 @@ running game touches - not on the path to the listener.
 - Left set, those MiscVars make every later host-harness run find a lobby server configured and
   none running. `lobby-core-start.sh` clears them on the way out; by hand, `clear` yourself.
 
-## A client connects, registers and logs in
+## A client connects, registers, logs in, chats and opens a battle
 
 ~~No player has connected through it~~ - one does now, every time the check runs.
 `tools/lobby-client-probe` drives **LobbyClient's `TasClient`**, the same type the real lobby uses,
-through a connect, a `Register` and a `Login`. Not a reimplementation of the protocol: if the
-protocol changes, the probe follows it.
+through a connect, a `Register`, a `Login`, a `JoinChannel`, a `Say` and an `OpenBattle`. Not a
+reimplementation of the protocol: if the protocol changes, the probe follows it.
+
+`OpenBattle` is the boundary. It constructs a `ServerBattle`, stores it and announces it to every
+connected user - and starts no Spring process, which is why it is reachable without the engine.
+Everything up to here now runs on .NET 9; everything past it is untested.
+
+**Every assertion in the probe names which thing answered it**, and that is not fussiness. The
+server auto-joins an account's default channels at login, so an unfiltered `ChannelJoined` handler
+is satisfied before the explicit join is even sent - which made a *correctly refused* join to the
+moderator channel report `ok joined #zkadmin` for an account with `AdminLevel 0`. That read as an
+authorization hole for a while. It was not one; the probe was reading someone else's answer.
 
 ### What that found: registration linked its rows by an accident of EF6
 
