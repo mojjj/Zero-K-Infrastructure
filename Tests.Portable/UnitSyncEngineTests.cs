@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PlasmaShared.Imaging;
 using ZkData.UnitSyncLib;
 
 namespace Tests.Portable
@@ -24,10 +25,10 @@ namespace Tests.Portable
     /// and this checkout is synced by Synology Drive, which replicates anything in the tree and
     /// restores it after deletion.
     ///
-    /// What these still do not cover: everything that needs game data. GetMinimap, GetHeightMap
-    /// and GetMetalMap are the calls that return pixel buffers and are the reason
-    /// System.Drawing.Common is still referenced - they need map archives, which no engine zip
-    /// contains. See Shared/PlasmaShared/IMAGING-MIGRATION.md.
+    /// fetch-engine.sh also installs one small map, because the calls that still hold
+    /// System.Drawing.Common - GetMinimap, GetHeightMap, GetMetalMap - do nothing without one.
+    /// The minimap test below takes that path as far as it goes without GDI+, which turns out to
+    /// be all but the last step. See Shared/PlasmaShared/IMAGING-MIGRATION.md.
     /// </summary>
     [TestClass]
     public class UnitSyncEngineTests
@@ -75,6 +76,56 @@ namespace Tests.Portable
             Console.WriteLine("        engine reports: " + version);
         }
 
+        /// <summary>
+        ///     The call that still holds System.Drawing.Common in the port, taken as far as it can
+        ///     go without it - which turns out to be all but the last step.
+        ///
+        ///     Deliberately does NOT use GdiPixelBridge, and not only because it would throw:
+        ///     ImagesProcessorChoiceTests asserts this assembly has no System.Drawing.Common
+        ///     reference at all, and linking that file would add one. Marshal.Copy does the same
+        ///     job as GdiPixelBridge.CopyFrom, which is all that is needed to get the bytes out.
+        /// </summary>
+        [TestMethod]
+        public void A_real_minimap_comes_back_from_the_engine_and_unpacks_without_any_GDI()
+        {
+            if (Skip()) return;
+
+            Assert.IsTrue(UnitSync.NativeMethods.Init(true, 0),
+                "unitsync refused to initialise: " + (UnitSync.NativeMethods.GetNextError() ?? "and reported no error"));
+            try
+            {
+                Assert.AreNotEqual(0, UnitSync.NativeMethods.GetMapCount(),
+                    "no map in the data directory - tools/fetch-engine.sh puts one in maps/");
+                var name = UnitSync.NativeMethods.GetMapName(0);
+
+                const int size = 1024;          // mip level 0
+                const int bytesPerPixel = 2;    // RGB565
+                const int stride = size * bytesPerPixel;
+
+                var pointer = UnitSync.NativeMethods.GetMinimap(name, 0);
+                Assert.AreNotEqual(IntPtr.Zero, pointer, "GetMinimap returned nothing for " + name);
+
+                var raw = new byte[stride * size];
+                Marshal.Copy(pointer, raw, 0, raw.Length);
+
+                var rgb = PixelBuffers.Rgb565ToRgb24(raw, new System.Drawing.Size(size, size), stride);
+                Assert.AreEqual(size * size * 3, rgb.Length, "the unpacked buffer is not 24-bit RGB of the right size");
+
+                // Not all one colour: a failed read or an unmapped buffer gives a flat block.
+                var first = (rgb[0], rgb[1], rgb[2]);
+                var differs = false;
+                for (var i = 3; i < rgb.Length && !differs; i += 3)
+                    if ((rgb[i], rgb[i + 1], rgb[i + 2]) != first) differs = true;
+                Assert.IsTrue(differs, "every pixel is identical, so this is probably not an image");
+
+                Console.WriteLine("        {0}: {1}x{1}, first pixel rgb({2},{3},{4})", name, size, rgb[0], rgb[1], rgb[2]);
+            }
+            finally
+            {
+                UnitSync.NativeMethods.UnInit();
+            }
+        }
+
         [TestMethod]
         public void The_engine_initialises_and_reports_an_empty_archive_set()
         {
@@ -88,8 +139,9 @@ namespace Tests.Portable
                 // No archives have been added, so both counts must be 0. The point is not the
                 // number - it is that an int comes back across the boundary at all, from a call
                 // that does real work inside the engine rather than returning a constant.
-                Assert.AreEqual(0, UnitSync.NativeMethods.GetMapCount(), "a map appeared without any archive being added");
-                Assert.AreEqual(0, UnitSync.NativeMethods.GetPrimaryModCount(), "a game appeared without any archive being added");
+                // fetch-engine.sh puts one map in the data directory, and no game.
+                Assert.AreEqual(1, UnitSync.NativeMethods.GetMapCount(), "expected exactly the map fetch-engine.sh installs");
+                Assert.AreEqual(0, UnitSync.NativeMethods.GetPrimaryModCount(), "a game appeared, and fetch-engine.sh installs none");
             }
             finally
             {

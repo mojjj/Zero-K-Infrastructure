@@ -28,4 +28,16 @@ if [ ! -f "$DEST/libunitsync.so" ]; then
     echo "unpacked into $DEST" >&2
 fi
 
+# A map too, because the calls that still need System.Drawing.Common - GetMinimap, GetHeightMap,
+# GetMetalMap - do nothing without one. The smallest on springfiles (333KB), fetched from the same
+# place AutoRegistrator's WebFolderSync uses. maps/ is where unitsync looks inside a data
+# directory.
+MAP_FILE="${ZK_ENGINE_MAP:-bluescreen_fields_v2.sd7}"
+if [ ! -f "$DEST/maps/$MAP_FILE" ]; then
+    echo "fetching map $MAP_FILE (~333KB)" >&2
+    mkdir -p "$DEST/maps"
+    curl -fsSL --max-time 300 -o "$DEST/maps/$MAP_FILE" \
+        "https://springfiles.springrts.com/files/maps/$MAP_FILE"
+fi
+
 echo "$DEST"

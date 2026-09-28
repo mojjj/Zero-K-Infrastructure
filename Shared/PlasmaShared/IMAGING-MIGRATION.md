@@ -447,3 +447,34 @@ removing that line leaves malformed XML. MSBuild then fails with `MSB4067` at pr
 compiles nothing, and reports **zero** compile errors - which reads exactly like success. Remove
 the `<PackageReference>` element specifically, and check the exit code rather than a grep of the
 output. The same mistake in a different costume as the `**/*.resx` one above.
+
+### The blocker is one function, measured 2026-09-28
+
+The three remaining files were called "the awkward one... interop marshalling, not a library swap,
+and it cannot be tested without unitsync and real map files". Both are now fetchable -
+`tools/fetch-engine.sh` gets a 42MB engine and a 333KB map from the projects' own distribution -
+so it was tested. On .NET 9 on Linux, against the real engine and a real map:
+
+| step | result |
+|---|---|
+| `GetMapCount()` | 1 |
+| `GetMapName(0)` | `Bluescreen fields v2` |
+| `GetMinimap(name, 0)` | a real pointer |
+| `Marshal.Copy` of the buffer | 2,097,152 bytes = 1024x1024x2, RGB565 |
+| `PixelBuffers.Rgb565ToRgb24` | 3,145,728 bytes, first pixel rgb(0,121,214) |
+| `GdiPixelBridge.FromRgb24` | **throws** `TypeInitializationException` |
+
+**Everything except the last line already works without GDI+.** The interop binds and marshals,
+the buffer arrives intact, and the 5-6-5 unpacking is `PixelBuffers`, which is managed, portable
+and already pinned against GDI+ itself for all 65,536 values on the Windows job. What fails is
+only the final step that turns a finished RGB24 byte array into an image object.
+
+So this is not the rewrite the note above feared. `GdiPixelBridge.FromRgb24` needs an ImageSharp
+twin, and the type flowing out of `UnitSync.GetSquareMinimap` and stored on `Map.Minimap` has to
+stop being `System.Drawing.Bitmap`. That second half is the real work: `Map.Minimap` is consumed by
+the Framework stack too, so it is a decision about what both stacks carry, not a swap.
+
+`Tests.Portable/UnitSyncEngineTests` holds the measured half down. It stops before
+`GdiPixelBridge` deliberately - not only because that would throw, but because
+`ImagesProcessorChoiceTests` asserts this assembly has **no** System.Drawing.Common reference, and
+linking that file would add one. `Marshal.Copy` does what `GdiPixelBridge.CopyFrom` does.
