@@ -223,6 +223,39 @@ jobs:
       - name: Build the site container and check it serves
         run: ./tools/site-container.sh
 
+      # The Spring engine, cached. ~42MB from the projects' own distribution plus a 333KB map, and
+      # the runners are ephemeral - so without this every run would fetch it again. The version is
+      # in the key, so a bump fetches once and then stays cached.
+      - name: Cache the Spring engine
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zk-engine
+            ~/.cache/zk-spring
+          key: zk-engine-105.1.1-2457-g8095d30
+          restore-keys: zk-engine-
+
+      # Everything the port does with a real engine, which until now ran only on a developer
+      # machine: resolve libunitsync, call it, read a real minimap out of it, and make a downloaded
+      # binary executable. Skipped by each test when no engine is mounted, so a failed fetch is not
+      # a failed build.
+      - name: Call a real Spring engine from .NET 9
+        run: |
+          set -euo pipefail
+          if ENGINE="$(./tools/fetch-engine.sh)"; then
+            ZK_DOTNET_MOUNT="$ENGINE" ./tools/dotnet.sh test Tests.Portable/Tests.Portable.csproj -v q --nologo
+          else
+            echo "skipped: no engine could be fetched"
+          fi
+
+      # The whole game chain: DedicatedServer starts spring-dedicated, a headless client joins it,
+      # the autohost stream reaches Talker, and the finished context is stored through
+      # BattleResultHandler. This is the only check that covers any of it.
+      - name: Host a game, join it, and store the result
+        env:
+          ZK_CONNECTION_STRING: "Data Source=127.0.0.1,14330;Initial Catalog=zk_test;User ID=sa;Password=ZkLocal!Dev2026;MultipleActiveResultSets=true;TrustServerCertificate=true"
+        run: ./tools/dedicated-server-check.sh
+
       # The lobby server, actually running on .NET 9. ZkLobbyServer.Core building is checked in
       # test_portable.yml; that says the chain compiles, which is a different claim. This starts
       # the process against the database and checks it opens the port players connect to.
