@@ -32,10 +32,21 @@ namespace Tests.Portable
     {
         private static string StandIn => Path.Combine(AppContext.BaseDirectory, "libunitsync.so");
 
+        /// <summary>
+        ///     These two ask what happens when NO engine can be found, so they are meaningless - and
+        ///     actively wrong - once one is mounted. UnitSyncEngineTests installs the real
+        ///     libunitsync.so in this same directory, which both satisfies the load these tests
+        ///     expect to fail and puts a file here that the cleanup below would delete out from under
+        ///     them. Running the whole suite with an engine is what surfaced that; CI has none.
+        /// </summary>
+        private static bool AnEngineIsMounted =>
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ZK_UNITSYNC_DIR"));
+
         [TestInitialize]
         [TestCleanup]
         public void RemoveTheStandIn()
         {
+            if (AnEngineIsMounted) return;
             if (File.Exists(StandIn)) File.Delete(StandIn);
         }
 
@@ -45,6 +56,11 @@ namespace Tests.Portable
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
                 Assert.Inconclusive("this asks what Linux probes for; it says nothing on other platforms");
+                return;
+            }
+            if (AnEngineIsMounted)
+            {
+                Assert.Inconclusive("an engine is mounted, so 'not found' is not the question here - see UnitSyncEngineTests");
                 return;
             }
 
@@ -68,6 +84,11 @@ namespace Tests.Portable
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
                 Assert.Inconclusive("this asks what Linux probes for; it says nothing on other platforms");
+                return;
+            }
+            if (AnEngineIsMounted)
+            {
+                Assert.Inconclusive("an engine is mounted, so 'not found' is not the question here - see UnitSyncEngineTests");
                 return;
             }
 
