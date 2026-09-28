@@ -78,6 +78,13 @@ jobs:
       - name: Check the lobby-server seam
         run: dotnet run --project ZkData.Core -- seam --check
 
+      # The lobby server on .NET 9. It links the same production sources the Framework server
+      # runs, so a green build here means the whole chain - PlasmaShared, LobbyClient,
+      # MonoTorrent, PlasmaDownloader, ZkLobbyServer - still compiles off Framework. A change
+      # that reaches for a Framework-only API fails here rather than at the eventual switch.
+      - name: Build the lobby server on .NET 9
+        run: dotnet build ZkLobbyServer.Core -warnaserror:NU1605
+
       - name: Test report
         # run even if the tests failed, but not for a PR from a fork
         if: (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request') && (success() || failure())
