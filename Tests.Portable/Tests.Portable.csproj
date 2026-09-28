@@ -84,6 +84,12 @@
   <ItemGroup>
     <Compile Include="..\Shared\PlasmaShared\ISpringieService\RatingCategory.cs" Link="Linked\RatingCategory.cs" />
     <Compile Include="..\Shared\PlasmaShared\GlobalConst.Portable.cs"                Link="Linked\GlobalConst.Portable.cs" />
+    <!-- Only the P/Invoke declarations. UnitSync.cs itself is not linked: this asks how the
+         runtime RESOLVES the library name, and pulling in the wrapper would drag its image
+         handling along for no gain. A partial class is happy with one part present. -->
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\NativeMethods.cs" Link="Linked\UnitSyncNativeMethods.cs" />
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\MapInfo.cs" Link="Linked\UnitSyncMapInfo.cs" /> <!-- a struct one declaration returns -->
+    <Compile Include="..\Shared\PlasmaShared\UnitSyncLib\StartPos.cs" Link="Linked\UnitSyncStartPos.cs" /> <!-- which MapInfo holds -->
     <Compile Include="..\Shared\PlasmaShared\ModeType.cs"                          Link="Linked\ModeType.cs" />
     <Compile Include="..\Shared\PlasmaShared\Utils.Enumerable.cs"                  Link="Linked\Utils.Enumerable.cs" />
   </ItemGroup>
