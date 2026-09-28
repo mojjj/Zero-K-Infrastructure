@@ -359,3 +359,61 @@ the backfill question below and is not the port's to answer.
 
 Only step 1 is verifiable in this repository today. Steps 2-4 need either a test
 deployment or the native unitsync library.
+
+## The lobby server, measured 2026-09-28
+
+`ZkLobbyServer.Core` still references `System.Drawing.Common`. The website's half of this job is
+done - `Images.Processor` is ImageSharp - but the lobby server compiles a different set of files,
+and this is what it would take to get it off the package.
+
+**Nothing the CI check walks touches it.** The server starts, registers an account, logs in, joins
+a channel and opens a battle on .NET 9 without a single GDI+ call, which is why none of this has
+surfaced as a failure. What touches it is map imagery, on the same path as the engine.
+
+### How big it is, and why that number is a floor
+
+Removing the `PackageReference` and building gives **84 errors across 7 files**:
+
+| errors | file |
+|---|---|
+| 24 | `Utils.cs` - the shared resize/JPEG helpers |
+| 16 | `ResizedImageCache.cs` |
+| 14 | `UnitSyncLib/UnitSync.cs` |
+| 14 | `Diagrams/Node.cs` |
+| 12 | `UnitSyncLib/Map.cs` |
+| 2 | `Imaging/GdiPixelBridge.cs` |
+| 2 | `Diagrams/Diagram.cs` |
+
+**That table is a lower bound, not the answer, and the reason is worth knowing before anyone
+repeats the measurement.** `Imaging/SystemDrawingImageProcessor.cs` is in the same compilation -
+`-getItem:Compile` lists it - and it uses `Image`, `Bitmap`, `Graphics` and `InterpolationMode`
+throughout. It contributes **zero** of the 84. Compiled on its own against net9 without the
+package it produces **46 errors**.
+
+The cause is Roslyn declaration-error masking, the same trap the EF Core port hit: `Utils.cs` line
+22 is `using Encoder = System.Drawing.Imaging.Encoder;`, an alias that fails to bind. A failed
+declaration stops method-body binding **across the whole compilation**, and every GDI+ use in
+`SystemDrawingImageProcessor` is inside a method body. So one build reports the files whose
+*declarations* break and hides every file whose *bodies* do.
+
+To get the real set, fix the declaration errors first and rebuild, repeatedly, or compile
+suspected files in isolation:
+
+    <Compile Include="the/one/file.cs" />   with EnableDefaultItems=false
+
+(and set `EnableDefaultEmbeddedResourceItems=false` too, or the build fails on a `**/*.resx` glob
+before it ever reaches the compiler - which looks exactly like "no errors").
+
+### What it would take
+
+`Utils.cs`, `ResizedImageCache.cs` and `GdiPixelBridge.cs` are library-swap work: the seam already
+exists, and these are the callers that have not moved through it. `Diagrams/*` draws the galaxy
+map and is website code that the lobby server only compiles because `ZkLobbyServer.Core` globs all
+of PlasmaShared - **excluding it is probably cheaper than porting it**, and would want checking
+against what actually references it rather than against the file's name.
+
+`UnitSync.cs` and `Map.cs` are the awkward ones this document already flagged: they receive raw
+pixel buffers from the native library and wrap them in `Bitmap`. That is interop marshalling, not
+a library swap, and it cannot be tested without unitsync and real map files. `tools/native-calls.txt`
+records that the `unitsync` name resolves correctly on Linux - measured - but no entry point of the
+135 has ever been called.
