@@ -75,6 +75,14 @@ jobs:
       - name: Check every C# file is in a project
         run: ./tools/check-orphaned-sources.py
 
+      # A P/Invoke compiles everywhere and only fails when it runs. kernel32 in
+      # TcpTransportServerListener.Bind threw on Linux, Bind retried 120 times and gave up, and the
+      # server came up with its API listening and no player port - invisible to every build here.
+      # This does not judge whether a call is guarded; it names the libraries and demands a written
+      # verdict for each, failing if the set changes in either direction.
+      - name: Check the lobby server's native calls against their verdicts
+        run: ./tools/check-native-calls.py
+
       - name: Check the lobby-server seam
         run: dotnet run --project ZkData.Core -- seam --check
 
