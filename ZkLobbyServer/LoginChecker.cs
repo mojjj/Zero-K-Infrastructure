@@ -395,6 +395,15 @@ namespace ZkLobbyServer
             if (entry == null)
             {
                 entry = new AccountIP { AccountID = acc.AccountID, IP = ip, FirstLogin = DateTime.UtcNow };
+                // Adding to the navigation as well, and not only setting the foreign key.
+                // On registration acc.AccountID is still 0 here - the account has not been
+                // saved - so the key above points at nothing. EF6 gets away with it because
+                // its unsaved store-generated key is ALSO 0, so fixup matches the two by
+                // coincidence; EF Core uses negative temporary keys, nothing matches, and
+                // SaveChanges throws "the value of 'AccountIP.AccountID' is unknown". The
+                // navigation says what is actually related, which both stacks read.
+                // Tests.Database/RegistrationFixupTests holds the EF6 half of this down.
+                acc.AccountIPs.Add(entry);
                 db.AccountIPs.InsertOnSubmit(entry);
             }
             entry.LoginCount++;
@@ -410,6 +419,7 @@ namespace ZkLobbyServer
                 if (entry == null)
                 {
                     entry = new AccountUserID { AccountID = acc.AccountID, UserID = user_id, FirstLogin = DateTime.UtcNow, InstallID = installID };
+                    acc.AccountUserIDs.Add(entry); // see LogIP: the foreign key alone is not enough on registration
                     db.AccountUserIDs.InsertOnSubmit(entry);
                 }
                 entry.LoginCount++;
