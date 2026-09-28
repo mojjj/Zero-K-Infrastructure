@@ -222,3 +222,15 @@ jobs:
       # source tree is not in it.
       - name: Build the site container and check it serves
         run: ./tools/site-container.sh
+
+      # The lobby server, actually running on .NET 9. ZkLobbyServer.Core building is checked in
+      # test_portable.yml; that says the chain compiles, which is a different claim. This starts
+      # the process against the database and checks it opens the port players connect to.
+      #
+      # It exists because of a defect only running found: Bind P/Invoked kernel32, which throws
+      # off Windows, so the server came up with its API listening and no player port at all.
+      # A process-is-alive check and an API-answers check would both have passed.
+      - name: Start the lobby server on .NET 9 and connect to it
+        env:
+          ZK_CONNECTION_STRING: "Data Source=127.0.0.1,14330;Initial Catalog=zk_test;User ID=sa;Password=ZkLocal!Dev2026;MultipleActiveResultSets=true;TrustServerCertificate=true"
+        run: ./tools/lobby-core-start.sh

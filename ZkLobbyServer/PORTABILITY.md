@@ -192,12 +192,8 @@ assembly.
 
 ### What this does not mean
 
-It compiles. It has not been run, nothing calls it, and it is not in `Zero-K.sln`. The runtime
-questions the survey listed are unchanged: `Mono.Posix` restores as a Framework package,
-`System.Drawing.Common` is Windows-only, and neither matters until something actually starts this
-assembly. Starting it is the next piece of work, and it needs the same treatment
-`ZkLobbyServer.Standalone` got - a host, a configuration path, and a check that proves it served
-somebody.
+~~It compiles. It has not been run~~ - **it has now been run.** See "It runs" below.
+
 
 ### Steps 2 and 3, measured: both compile
 
@@ -289,3 +285,48 @@ are entirely its own doing. Both of this survey's wrong turns were of that kind.
 
 Each of those can be a linked-source probe project of its own, the way `ZkData.Core` and
 `ZeroKWeb.Core` were — production files compiling in both stacks unmodified, so nothing forks.
+
+## It runs
+
+`ZkLobbyServer.Standalone.Core` is the .NET 9 host: two linked files (`Program.cs` and
+`StandalonePlanetwarsEventCreator.cs`, the same sources the Framework `ZkLobbyServer.Standalone`
+compiles) against `ZkLobbyServer.Core`. It starts, and `tools/lobby-core-start.sh` keeps it that
+way - a CI step in `test_database.yml` runs the process against a real database and connects to
+the port players use. Twenty seconds, so it costs nothing to keep honest.
+
+### What running found that compiling could not
+
+`TcpTransportServerListener.Bind` P/Invoked `SetHandleInformation` out of `kernel32.dll`. Off
+Windows that throws `DllNotFoundException` - and `Bind` catches it, retries 120 times at one
+second each, and gives up. **The server then comes up with its API listening and no player port
+at all.** Nothing looked wrong: the process was alive, the API answered, and the message was one
+line in a log two minutes of retries deep.
+
+The call clears `HANDLE_FLAG_INHERIT` so a spawned Spring server does not inherit the listening
+socket. On Unix .NET already opens sockets `FD_CLOEXEC`, so there is nothing to clear and nothing
+needed in its place; the call is now guarded by `RuntimeInformation.IsOSPlatform(OSPlatform
+.Windows)`. The Framework build never hit this because mono maps `kernel32` for it.
+
+This is the whole argument for the check being a *start*, not a build. Restoring the bug fails
+four of its six assertions; a process-liveness check or an API ping passes with the bug in place.
+
+### The runtime questions the survey listed
+
+Unchanged and still unanswered, because starting the server does not reach them: `Mono.Posix`
+restores as a Framework package and `System.Drawing.Common` is Windows-only. Both sit on paths a
+running game touches - not on the path to the listener.
+
+### Two things to know before running it by hand
+
+- `tools/lobby-config.sh` defaults the API port to **8200**, which is `GlobalConst.LobbyServerPort`
+  in Local mode - the API then takes the port the player listener is about to ask for. Pass a
+  different one: `./tools/lobby-config.sh set 8300`.
+- Left set, those MiscVars make every later host-harness run find a lobby server configured and
+  none running. `lobby-core-start.sh` clears them on the way out; by hand, `clear` yourself.
+
+### Still not done
+
+**No player has connected through it.** Opening the port is not serving a game: the protocol
+handshake, the Spring process the server spawns, and Planetwars are all untested on .NET 9. And it
+is still not in `Zero-K.sln`, which is correct - the Framework solution cannot build a `net9.0`
+project.

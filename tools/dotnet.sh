@@ -16,7 +16,10 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CACHE="${ZK_NUGET_CACHE:-$HOME/.nuget/packages}"
 mkdir -p "$CACHE"
 
-exec docker run --rm -i \
+# ZK_DOTNET_NAME names the container so a caller that starts a long-running server can stop it
+# again: killing the `docker run` client does not reliably stop what it started, and a stray
+# container keeps holding the port that the next run needs.
+exec docker run --rm -i ${ZK_DOTNET_NAME:+--name "$ZK_DOTNET_NAME"} \
     --network host \
     -u "$(id -u):$(id -g)" \
     -v "$REPO:/repo" \
