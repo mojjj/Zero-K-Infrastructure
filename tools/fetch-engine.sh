@@ -25,6 +25,11 @@ if [ ! -f "$DEST/libunitsync.so" ]; then
     curl -fsSL --max-time 600 -o "$tmp/engine.zip" "$URL"
     unzip -o -q "$tmp/engine.zip" -d "$DEST"
     [ -f "$DEST/libunitsync.so" ] || { echo "no libunitsync.so in $VERSION - wrong platform or layout" >&2; exit 1; }
+
+    # Deliberately NOT chmod +x. The archive gives its binaries mode 0664 - spring-dedicated will
+    # not run as extracted - and that is exactly what EngineDownload.FixPermissions exists to fix.
+    # Leaving it faithful is what lets Tests.Portable/UnixPermissionsTests show the difference
+    # against a real engine rather than a temp file. To run one by hand: chmod +x "$DEST/spring*".
     echo "unpacked into $DEST" >&2
 fi
 
