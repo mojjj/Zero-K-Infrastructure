@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -69,6 +69,11 @@ namespace LobbyClient
             scriptPath = null;
             gamePrivateMessages = null;
             process = null;
+
+            // Closed, not just dropped: Close is what sets the listener's exit flag, so nulling the
+            // field on its own left the thread running and its socket bound for the life of the
+            // process. ExitGame below has always closed it; this path had not.
+            talker?.Close();
             talker = null;
         }
 
