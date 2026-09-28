@@ -90,6 +90,9 @@
     <Compile Include="..\Shared\LobbyClient\**\*.cs" Exclude="..\Shared\LobbyClient\obj\**;..\Shared\LobbyClient\bin\**;..\Shared\LobbyClient\Properties\**" />
     <Compile Include="..\Shared\MonoTorrent\**\*.cs" Exclude="..\Shared\MonoTorrent\obj\**;..\Shared\MonoTorrent\bin\**;..\Shared\MonoTorrent\Properties\**" />
     <Compile Include="..\Shared\PlasmaDownloader\**\*.cs" Exclude="..\Shared\PlasmaDownloader\obj\**;..\Shared\PlasmaDownloader\bin\**;..\Shared\PlasmaDownloader\Properties\**" />
+    <!-- The .NET Framework half of the UnixPermissions twin: it calls Mono.Posix, which throws
+         on .NET 9. UnixPermissionsCore.cs is the half this project wants. -->
+    <Compile Remove="..\Shared\PlasmaDownloader\UnixPermissions.cs" />
     <Compile Include="..\ZkLobbyServer\**\*.cs" Exclude="..\ZkLobbyServer\obj\**;..\ZkLobbyServer\bin\**;..\ZkLobbyServer\Properties\**" />
   </ItemGroup>
 
@@ -106,7 +109,6 @@
     <PackageReference Include="JetBrains.Annotations" Version="2023.3.0" />
     <PackageReference Include="NeoLua" Version="1.3.14" />
     <PackageReference Include="NetJSON" Version="1.2.1.10" />
-    <PackageReference Include="Mono.Posix-4.5" Version="4.5.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />
     <PackageReference Include="MaxMind.GeoIP2" Version="5.1.0" />
     <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />

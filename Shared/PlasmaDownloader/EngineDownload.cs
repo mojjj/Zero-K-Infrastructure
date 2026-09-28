@@ -8,7 +8,6 @@ using System.Net.Mime;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
-using Mono.Unix.Native;
 using PlasmaShared;
 using SharpCompress.Archives;
 using SharpCompress.Common;
@@ -136,8 +135,7 @@ namespace PlasmaDownloader
                 var tpath = Path.Combine(targetDir, "spring");
                 try
                 {
-                    Syscall.chmod(tpath,
-    FilePermissions.S_IRWXU | FilePermissions.S_IRGRP | FilePermissions.S_IXGRP | FilePermissions.S_IROTH | FilePermissions.S_IXOTH);
+                    UnixPermissions.MakeExecutable(tpath);
                     //Process.Start("chmod u+x " + tpath);
                 }
                 catch (Exception ex)

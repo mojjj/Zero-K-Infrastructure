@@ -312,9 +312,28 @@ four of its six assertions; a process-liveness check or an API ping passes with 
 
 ### The runtime questions the survey listed
 
-Unchanged and still unanswered, because starting the server does not reach them: `Mono.Posix`
-restores as a Framework package and `System.Drawing.Common` is Windows-only. Both sit on paths a
-running game touches - not on the path to the listener.
+**`Mono.Posix` is answered, and it was a defect.** `EngineDownload.FixPermissions` makes the
+downloaded `spring` binary executable with `Syscall.chmod`. On .NET 9 that throws - *"Unable to
+load shared library 'MonoPosixHelper'"*, because MonoPosixHelper is a mono runtime component -
+and the call sits inside `catch (Exception) { Trace.TraceWarning(...) }`. So the download reports
+success and leaves the engine **non-executable**: the game would simply never start, with a
+warning as the only trace.
+
+Three things kept it hidden. The method runs only under `PlatformID.Unix`, so no Windows build
+executes it; the Framework build runs under mono, which provides MonoPosixHelper; and the catch
+turns the failure into a warning. The same shape as the `kernel32` defect above - compiles
+everywhere, throws on the platform it was written for, swallowed into a broken state.
+
+Replaced with a compat twin, the idiom the rest of the port uses: `UnixPermissions.cs` keeps
+`Syscall.chmod` for the Framework build and `UnixPermissionsCore.cs` uses `File.SetUnixFileMode`
+(.NET 7+, no package), same name so `EngineDownload` calls it unchanged in both stacks.
+`ZkLobbyServer.Core` no longer references Mono.Posix at all, and **that removal is the guard**: a
+`using Mono.Unix` added to anything the .NET 9 server compiles now fails the build.
+
+**`System.Drawing.Common` is not answered.** It is Windows-only on .NET 9, and
+`ZkLobbyServer.Core` still references it - `UnitSync.cs`, `Map.cs`, `ResizedImageCache.cs` and the
+GDI+ bridge all use it. Nothing on the path the probe walks touches it, which is why the server
+starts; what touches it is map imagery, on the same path as the engine.
 
 ### Two things to know before running it by hand
 
