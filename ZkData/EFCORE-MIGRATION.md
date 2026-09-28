@@ -4379,3 +4379,45 @@ account through EF Core on every pull request.
 
 **How to apply:** `new Dependent { FkId = principal.Id }` before the principal is saved is the shape
 to watch. Written as `principal.Dependents.Add(...)` it is correct in both stacks.
+
+## Phase 3: a LINQ shape EF6 tolerated and EF Core will not translate
+
+Found by feeding the port a name that did not exist. Two places looked an account up like this:
+
+```csharp
+db.Accounts.FirstOrDefault(x => x.Name == name)
+    ?? db.Accounts.FirstOrDefault(x => x.Name.Equals(name, StringComparison.CurrentCultureIgnoreCase));
+```
+
+The first query translates. **The fallback does not**: EF Core throws `InvalidOperationException`
+on `string.Equals` with a `StringComparison`. And because it sits behind a `??`, it runs only when
+the exact match finds nothing - so both threw for precisely the **"no such account"** answer their
+callers detect by testing null.
+
+| where | what it costs |
+|---|---|
+| `Account.AccountByName` | any lookup of an unknown name - `SaveSpringBattle`'s founder and players among them |
+| `Account.AccountVerify` | signing in |
+| `LoginChecker`, the lobby's own login path | **a player typing a username that does not exist gets no answer at all** - the server throws and never replies |
+
+Every check written before this used a name that already existed, so the working half was exercised
+over and over and the broken half never once.
+
+`ToLower()` translates on both stacks and is the fix. Note that on a SQL Server database with a
+case-insensitive collation - which this one has - the first query already matched case-insensitively,
+so the fallback was doing nothing useful even on EF6.
+
+### The sweep
+
+`StringComparison` inside a LINQ predicate is exact enough to grep for, unlike the zero-key shape.
+**Thirteen files mention it; two were database queries**, and both are fixed. The rest operate on
+lists already in memory - `PlanetWarsTurnHandler`'s extra-data lines, `LegacyCallAudit`'s log
+window, `MapsController`'s unitsync scan results, `TasClient`'s user dictionary - where the same
+call is correct and stays.
+
+**How to repeat it:**
+
+    grep -rnE "(Where|FirstOrDefault|Any|Single|First|Count|All)\([^)]*StringComparison" --include=*.cs .
+
+then read each hit for whether the receiver is a `DbSet` or a list. The grep is precise; the
+judgement is not automatable, which is why this is written down rather than made a check.

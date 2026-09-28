@@ -94,7 +94,13 @@ namespace ZkLobbyServer
                     if (info != null) accBySteamID = db.Accounts.Include(x => x.Clan).Include(x => x.Faction).FirstOrDefault(x => x.SteamID == info.steamid);
                     if (!string.IsNullOrEmpty(login.Name))
                     {
-                        accByLogin = db.Accounts.Include(x => x.Clan).Include(x => x.Faction).FirstOrDefault(x => x.Name == login.Name) ?? db.Accounts.Include(x => x.Clan).Include(x => x.Faction).FirstOrDefault(x => x.Name.Equals(login.Name, StringComparison.CurrentCultureIgnoreCase));
+                        // ToLower() rather than string.Equals with a StringComparison, which EF
+                        // Core cannot translate. The fallback runs only when the exact match finds
+                        // nothing - so on .NET 9 this threw for every login with a name that does
+                        // not exist, which is the ordinary "wrong username" case rather than an
+                        // exotic one. Same line, same fix, as Account.AccountByName.
+                        var loweredLogin = login.Name?.ToLower();
+                        accByLogin = db.Accounts.Include(x => x.Clan).Include(x => x.Faction).FirstOrDefault(x => x.Name == login.Name) ?? db.Accounts.Include(x => x.Clan).Include(x => x.Faction).FirstOrDefault(x => x.Name.ToLower() == loweredLogin);
                     }
 
                     if (accBySteamID == null)
