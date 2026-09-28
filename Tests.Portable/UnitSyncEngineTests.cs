@@ -119,6 +119,23 @@ namespace Tests.Portable
                 Assert.IsTrue(differs, "every pixel is identical, so this is probably not an image");
 
                 Console.WriteLine("        {0}: {1}x{1}, first pixel rgb({2},{3},{4})", name, size, rgb[0], rgb[1], rgb[2]);
+
+                // The step that used to throw. MapImage is the compat twin: this assembly gets the
+                // .NET 9 half, which keeps the pixels and reaches for ImageSharp only to resize or
+                // encode. Before it existed, GdiPixelBridge.FromRgb24 threw
+                // TypeInitializationException here and the minimap path stopped one call short.
+                using (var image = MapImage.FromRgb24(rgb, new System.Drawing.Size(size, size)))
+                {
+                    Assert.AreEqual(size, image.Size.Width);
+
+                    // What AutoRegistrator does with it, and the reason the type needs to survive a
+                    // resize and an encode rather than just hold bytes.
+                    var jpeg = image.ToBytes(256);
+                    Assert.IsTrue(jpeg.Length > 0, "the minimap encoded to nothing");
+                    Assert.AreEqual(0xFF, jpeg[0], "not a JPEG: the first byte should be 0xFF");
+                    Assert.AreEqual(0xD8, jpeg[1], "not a JPEG: the second byte should be 0xD8");
+                    Console.WriteLine("        encoded to {0} bytes of JPEG, bounded to 256", jpeg.Length);
+                }
             }
             finally
             {

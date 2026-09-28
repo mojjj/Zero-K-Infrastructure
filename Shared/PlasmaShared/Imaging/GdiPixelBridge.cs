@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
@@ -9,10 +9,12 @@ namespace PlasmaShared.Imaging
     /// Turns the tightly packed RGB24 buffers <see cref="PixelBuffers"/> produces into GDI+
     /// Bitmaps.
     ///
-    /// **Deliberately the only System.Drawing left in the unitsync path**, and deliberately not
-    /// linked into any .NET 9 project. UnitSync still returns Bitmaps because Map, ToBytes and
-    /// AutoRegistrator all speak them; what has moved out is the arithmetic, which is now tested
-    /// on both stacks. This is the seam where the remaining work will cut.
+    /// **The only System.Drawing left in the unitsync path**, and not linked into any .NET 9
+    /// project. It has exactly one caller now - the Framework half of <see cref="MapImage"/> -
+    /// because UnitSync and Map speak MapImage rather than Bitmap, and the .NET 9 twin of that
+    /// keeps the pixels instead. The arithmetic left here long ago; this is the last of it.
+    ///
+    /// CopyFrom moved to <see cref="NativeBuffer"/>: it was Marshal.Copy and never needed GDI+.
     ///
     /// Row padding and channel order are the two things GDI+ will not tell you about until an
     /// image looks wrong, so both are handled here, once, with names on them.
@@ -47,12 +49,5 @@ namespace PlasmaShared.Imaging
             return bitmap;
         }
 
-        /// <summary>Copies a native buffer out, so nothing downstream holds a pointer unitsync owns.</summary>
-        public static byte[] CopyFrom(IntPtr source, int length)
-        {
-            var buffer = new byte[length];
-            Marshal.Copy(source, buffer, 0, length);
-            return buffer;
-        }
     }
 }

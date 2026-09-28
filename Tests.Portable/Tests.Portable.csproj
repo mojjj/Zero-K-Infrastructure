@@ -75,6 +75,9 @@
     <Compile Include="..\Shared\PlasmaShared\Imaging\PixelBuffers.cs" Link="Linked\PixelBuffers.cs" />
     <Compile Include="..\Shared\PlasmaShared\Imaging\IImageProcessor.cs" Link="Linked\IImageProcessor.cs" />
     <Compile Include="..\Shared\PlasmaShared\Imaging\ImageSharpImageProcessor.cs" Link="Linked\ImageSharpImageProcessor.cs" />
+    <!-- The .NET 9 half of the MapImage twin. MapImage.cs, the GDI+ half, must stay out: it
+         would pull System.Drawing.Common in and ImagesProcessorChoiceTests asserts there is none. -->
+    <Compile Include="..\Shared\PlasmaShared\Imaging\MapImageCore.cs" Link="Linked\MapImageCore.cs" />
     <!-- Images.cs picks the implementation. Linkable only because that choice is now
          ImageSharp: while it named SystemDrawingImageProcessor it dragged in System.Drawing. -->
     <Compile Include="..\Shared\PlasmaShared\Imaging\Images.cs" Link="Linked\Images.cs" />

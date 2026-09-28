@@ -4,15 +4,12 @@
     python3 tools/check-gdi-surface.py
 
 System.Drawing.Common is Windows-only on .NET 9 - `new Bitmap(4,4)` throws
-TypeInitializationException on Linux. The lobby server still references the package, and
-Shared/PlasmaShared/IMAGING-MIGRATION.md records why: three files wrap raw pixel buffers from the
-native unitsync library in Bitmap, which is interop marshalling rather than a library swap and
-cannot be tested without unitsync and real map files.
+TypeInitializationException on Linux. The lobby server no longer references the package at all, so
+the primary guard is the build. This is the second line: it is what notices the package being put
+back alongside a new user, which the build alone would then be happy with.
 
-Everything else was removed from that project rather than ported, because it was code the server
-compiles but cannot reach. This keeps that line where it is: the set of GDI+-using files must
-match tools/gdi-surface.txt, and it fails IN EITHER DIRECTION - a new one needs a decision, and one
-that disappears means the blocker got smaller and the baseline should say so.
+The set of GDI+-using files must match tools/gdi-surface.txt - currently empty - and it fails IN
+EITHER DIRECTION, so a file appearing needs a decision and the baseline going stale is loud.
 
 **What this checks, precisely.** It names files that MENTION a GDI+-only type, in the compile
 items MSBuild actually resolves. That is not the same claim as "fails to compile without the
@@ -103,6 +100,12 @@ def main():
         print("System.Drawing.Common is Windows-only on .NET 9: new use here does not fail any build,")
         print("it throws TypeInitializationException when the line finally runs on Linux.")
         return 1
+
+    if not found:
+        print("no file in %s uses System.Drawing.Common - the package is not referenced either,"
+              % PROJECT.name)
+        print("and that is the guard this check stands behind rather than replaces.")
+        return 0
 
     print("%d files in %s still need System.Drawing.Common, all recorded:" % (len(found), PROJECT.name))
     for path in sorted(found):
