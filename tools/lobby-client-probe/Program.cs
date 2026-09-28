@@ -136,6 +136,46 @@ namespace LobbyClientProbe
             if (!await Within(battleOpened.Task, "open battle")) return 1;
             Console.WriteLine($"   ok    the server opened a battle and announced it");
 
+            // A login that must FAIL, and fail cleanly - on its own connection, because a refused
+            // login leaves the server-side user unauthenticated and everything after it on that
+            // connection then silently does nothing. Found by doing it inline first: the battle
+            // stopped opening.
+            //
+            // LoginChecker looks the name up with an exact-match query and a case-insensitive
+            // fallback. The fallback used string.Equals with a StringComparison, which EF Core
+            // cannot translate, so on .NET 9 it threw for every name that does not exist - the
+            // ordinary "wrong username" case - and the server answered nothing at all.
+            return await AnUnknownNameIsRefused(host, port);
+        }
+
+        private static async Task<int> AnUnknownNameIsRefused(string host, int port)
+        {
+            var client = new TasClient("LobbyClientProbe 1.0");
+            var connected = new TaskCompletionSource<bool>();
+            var answered = new TaskCompletionSource<string>();
+
+            client.Connected += (s, e) => connected.TrySetResult(true);
+            client.ConnectionLost += (s, e) =>
+            {
+                connected.TrySetException(new Exception("connection lost"));
+                answered.TrySetException(new Exception("the server dropped the connection instead of refusing the login"));
+            };
+            client.LoginAccepted += (s, e) => answered.TrySetResult(null);
+            client.LoginDenied += (s, e) => answered.TrySetResult(e.ResultCode.ToString());
+
+            client.Connect(host, port);
+            if (!await Within(connected.Task, "connect for the unknown-name login")) return 1;
+
+            await client.Login("nosuchaccount" + Guid.NewGuid().ToString("N").Substring(0, 8), "whatever");
+            if (!await Within(answered.Task, "login with an unknown name")) return 1;
+
+            var denial = answered.Task.Result;
+            if (denial == null)
+            {
+                Console.WriteLine("   FAIL  the server ACCEPTED a login for an account that does not exist");
+                return 1;
+            }
+            Console.WriteLine($"   ok    an unknown name is refused, not crashed on ({denial})");
             return 0;
         }
 
