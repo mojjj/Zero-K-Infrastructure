@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using LobbyClient;
+using PlasmaShared;
 
 namespace LobbyClientProbe
 {
@@ -43,6 +44,7 @@ namespace LobbyClientProbe
             var connected = new TaskCompletionSource<bool>();
             var joinedChannel = new TaskCompletionSource<string>();
             var heard = new TaskCompletionSource<bool>();
+            var battleOpened = new TaskCompletionSource<bool>();
             var registered = new TaskCompletionSource<string>();
             var loggedIn = new TaskCompletionSource<string>();
 
@@ -54,6 +56,7 @@ namespace LobbyClientProbe
                 loggedIn.TrySetException(new Exception("connection lost before the server answered Login"));
                 joinedChannel.TrySetException(new Exception("connection lost before the server answered JoinChannel"));
                 heard.TrySetException(new Exception("connection lost before the server relayed the message"));
+                battleOpened.TrySetException(new Exception("connection lost before the server opened the battle"));
             };
             client.RegistrationAccepted += (s, e) => registered.TrySetResult(null);
             client.RegistrationDenied += (s, e) => registered.TrySetResult(e.ResultCode.ToString());
@@ -63,6 +66,7 @@ namespace LobbyClientProbe
             // channels at login, so an unfiltered handler is satisfied by one of those before the
             // explicit JoinChannel below is even sent - which made a deliberately refused join to
             // the moderator channel report success.
+            client.BattleOpened += (s, e) => { if (e.FounderName == name) battleOpened.TrySetResult(true); };
             client.ChannelJoined += (s, e) => { if (e.Name == Channel) joinedChannel.TrySetResult(null); };
             client.ChannelJoinFailed += (s, e) => { if (e.ChannelName == Channel) joinedChannel.TrySetResult(e.Reason ?? "refused without a reason"); };
 
@@ -116,6 +120,21 @@ namespace LobbyClientProbe
             await client.Say(SayPlace.Channel, Channel, message, false);
             if (!await Within(heard.Task, "say")) return 1;
             Console.WriteLine($"   ok    the server relayed what the client said back to it");
+
+            // The last protocol step before a game: the server constructs a ServerBattle and
+            // announces it to everyone, then joins us to it. Nothing starts Spring here.
+            await client.OpenBattle(new BattleHeader
+            {
+                Title = "probe battle",
+                Map = "test_map_1",
+                Game = "test_mod_1",
+                Engine = "105.1.1-2511-g2c4d0a1",
+                MaxPlayers = 2,
+                Mode = AutohostMode.None,
+                Password = null,
+            });
+            if (!await Within(battleOpened.Task, "open battle")) return 1;
+            Console.WriteLine($"   ok    the server opened a battle and announced it");
 
             return 0;
         }
