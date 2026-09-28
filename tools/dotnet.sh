@@ -13,6 +13,11 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Written out rather than inlined: an earlier one-liner used ${VAR:-:ro}, which expands to the
+# variable's VALUE when it is set, so the mount became /mnt/extra1 and the engine vanished.
+MOUNT_SUFFIX=":ro"
+[ -n "${ZK_DOTNET_MOUNT_RW:-}" ] && MOUNT_SUFFIX=""
 CACHE="${ZK_NUGET_CACHE:-$HOME/.nuget/packages}"
 mkdir -p "$CACHE"
 
@@ -24,7 +29,7 @@ mkdir -p "$CACHE"
 # checkout is synced by Synology Drive, so an engine dropped in the tree would be replicated and
 # would keep reappearing after deletion.
 exec docker run --rm -i ${ZK_DOTNET_NAME:+--name "$ZK_DOTNET_NAME"} \
-    ${ZK_DOTNET_MOUNT:+-v "$ZK_DOTNET_MOUNT:/mnt/extra:ro"} \
+    ${ZK_DOTNET_MOUNT:+-v "$ZK_DOTNET_MOUNT:/mnt/extra$MOUNT_SUFFIX"} \
     ${ZK_DOTNET_MOUNT:+-e ZK_UNITSYNC_DIR=/mnt/extra} \
     ${ZK_DOTNET_MOUNT:+-e SPRING_DATADIR=/mnt/extra} \
     --network host \

@@ -391,11 +391,42 @@ the navigation form works there too - the fix cannot break the stack still servi
 This is the third defect the port has found by *running* something it had only ever compiled, and
 the second that no amount of reading would have produced.
 
+## The Spring process starts, on .NET 9, on Linux
+
+~~The Spring process the server spawns~~ - `tools/dedicated-server-check.sh` calls
+`DedicatedServer.HostGame`, the same method `ZkLobbyServer` calls when a battle starts, and a real
+`spring-dedicated` comes up:
+
+```
+   ok    the port resolved the dedicated server: .../engine/linux64/105.1.1-2457-g8095d30/spring-dedicated
+   ok    ScriptGenerator produced a host script (1081 chars)
+   ok    DedicatedServer launched the process
+   ok    UDP 8452 is held - a player could connect to this game
+```
+
+Nothing here is reimplemented: `ScriptGenerator` writes the script, `SpringPaths` resolves the
+binary and sets `SPRING_DATADIR`, and `Process.Start` launches it, exactly as in production.
+
+**It costs an engine and a 333KB map, and no game download at all.** A dedicated server *relays*
+the game rather than simulating it, but it still resolves and hashes both archives - so a game is
+required, just not a real one. A six-line `modinfo.lua` satisfies it, which is what keeps this out
+of multi-gigabyte territory. Not wired into CI: it fetches 42MB and runs an engine, and the
+runners are ephemeral so nothing would be cached.
+
+### Two things it got wrong before it got them right
+
+Both are in the code as comments, because both are easy to repeat. `DedicatedServerStarted` fires
+when the **process** starts, not when the game port is bound - checking immediately reported
+"nothing is listening" while the engine's own log said `[GameServer] Server started on port 8452`.
+And the check bound the wildcard address rather than the loopback one the script names; a wildcard
+bind can succeed alongside a specific one, so it answers a different question than the one asked.
+
 ### Still not done
 
-**No game has been served.** A login is not a battle: the Spring process the server spawns,
-Planetwars, and the map and mod downloads (`PlasmaDownloader`, which is where `Mono.Posix` and
-`System.Drawing.Common` actually sit) are all still untested on .NET 9.
+**No player has joined a game.** A server that is up is not a game that was played: the handshake
+between `spring-dedicated` and a real client, the `Talker` event stream that tells the lobby what
+happened, `BattleResultHandler` writing the result, and Planetwars are all still untested on
+.NET&nbsp;9.
 
 `LogIP` is only half-covered: it skips private addresses, so a probe connecting from `127.0.0.1`
 never reaches it. The EF6 test covers that half; nothing on .NET 9 does yet.
