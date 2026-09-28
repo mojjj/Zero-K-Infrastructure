@@ -421,12 +421,34 @@ when the **process** starts, not when the game port is bound - checking immediat
 And the check bound the wildcard address rather than the loopback one the script names; a wildcard
 bind can succeed alongside a specific one, so it answers a different question than the one asked.
 
+### A player joins, and the ported code is told
+
+~~No player has joined a game.~~ `spring-headless` connects to the hosted game, plays it, and the
+whole chain back to the port runs:
+
+```
+   ok    a Spring dedicated server is running, started by the ported code
+   ok    a real player joined, and the ported code was told: PlayerJoined(probe)
+```
+
+Every link in that is the port's: the engine reports over UDP to `LobbyClient.Talker`, whose
+listener thread parses the autohost packet, and `DedicatedServer` raises `PlayerJoined`. That is
+the mechanism by which the lobby server learns anything at all about a running game.
+
+It still needs no game content. A headless client joins the six-line `Probe Game` and goes ingame,
+which was the surprise - the assumption had been that a *client* must simulate and therefore needs
+real units.
+
+**One trap, and it looks exactly like a broken autohost path.** If the client's `MyPasswd` does not
+match the player's `ScriptPassword` in the host script, the engine answers *"server requested quit
+or rejected connection"*, the client exits before joining, and nothing ever reaches `Talker` - so
+the symptom is silence in the event stream rather than an error about a password.
+
 ### Still not done
 
-**No player has joined a game.** A server that is up is not a game that was played: the handshake
-between `spring-dedicated` and a real client, the `Talker` event stream that tells the lobby what
-happened, `BattleResultHandler` writing the result, and Planetwars are all still untested on
-.NET&nbsp;9.
+**Nothing has recorded a result.** A player joining is not a battle finished:
+`BattleResultHandler` writing a `SpringBattle` row, the award and rating passes that follow it, and
+Planetwars are all still untested on .NET&nbsp;9.
 
 `LogIP` is only half-covered: it skips private addresses, so a probe connecting from `127.0.0.1`
 never reaches it. The EF6 test covers that half; nothing on .NET 9 does yet.
