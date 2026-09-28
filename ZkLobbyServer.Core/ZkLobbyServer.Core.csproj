@@ -93,6 +93,25 @@
     <!-- The .NET Framework half of the UnixPermissions twin: it calls Mono.Posix, which throws
          on .NET 9. UnixPermissionsCore.cs is the half this project wants. -->
     <Compile Remove="..\Shared\PlasmaDownloader\UnixPermissions.cs" />
+
+    <!-- Diagram rendering for the galaxy map. GalaxyDesigner - a Windows-only WPF app - is its
+         only consumer anywhere in the repository; nothing in the lobby server names either type,
+         and port-sources.props already links Vector.cs alone for the same reason. Both files are
+         pure GDI+ (Graphics, Pen, Brush), so compiling them here buys nothing and costs 16 of the
+         errors that stand between this project and dropping System.Drawing.Common. Vector.cs
+         stays: it is System.Drawing.Primitives only, and Tests.Portable runs its tests on net9. -->
+    <Compile Remove="..\Shared\PlasmaShared\Diagrams\Node.cs" />
+    <Compile Remove="..\Shared\PlasmaShared\Diagrams\Diagram.cs" />
+
+    <!-- The rest of the System.Drawing.Common surface that this project cannot reach.
+         Utils.Imaging.cs holds GetResized/SaveJpeg/ToBytes: every caller is ZeroKLobby,
+         ChobbyLauncher or AutoRegistrator, all Framework and all Windows. ResizedImageCache is
+         reached only through those. SystemDrawingImageProcessor has no consumer anywhere -
+         Images.Processor names the ImageSharp one - and is kept in PlasmaShared so that the
+         choice stays one line to revert. -->
+    <Compile Remove="..\Shared\PlasmaShared\Utils.Imaging.cs" />
+    <Compile Remove="..\Shared\PlasmaShared\ResizedImageCache.cs" />
+    <Compile Remove="..\Shared\PlasmaShared\Imaging\SystemDrawingImageProcessor.cs" />
     <Compile Include="..\ZkLobbyServer\**\*.cs" Exclude="..\ZkLobbyServer\obj\**;..\ZkLobbyServer\bin\**;..\ZkLobbyServer\Properties\**" />
   </ItemGroup>
 
