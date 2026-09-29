@@ -34,10 +34,20 @@ docker rm -f zk-lobby-up zk-site-up >/dev/null 2>&1 || true
 harness_log="$(mktemp)"
 cleanup() {
     docker rm -f zk-lobby-up zk-site-up >/dev/null 2>&1 || true
+    docker run --rm --network host -e ZK_CONNECTION_STRING="$CS" \
+        --entrypoint dotnet zk-site bin/ZeroKWeb.Host.dll --remove-planetwars-round >/dev/null 2>&1 || true
     rm -f "$harness_log"
     [ "${1:-}" = "keep-config" ] || ./tools/lobby-config.sh clear
 }
 trap 'cleanup' EXIT
+
+# Before the lobby server, not after. PlanetWarsMatchMaker reads the default galaxy and the
+# faction list in its CONSTRUCTOR and gives up on both if there is no galaxy yet, and MiscVar
+# caches per process - so a round seeded after it starts is a round it never hears about, and
+# the symptom is nothing rather than an error.
+echo "seeding a PlanetWars round..."
+docker run --rm --network host -e ZK_CONNECTION_STRING="$CS" \
+    --entrypoint dotnet zk-site bin/ZeroKWeb.Host.dll --seed-planetwars-round | sed 's/^/   /'
 
 echo "starting the lobby server..."
 docker run -d --rm --name zk-lobby-up --network host -e ZK_CONNECTION_STRING="$CS" zk-lobby >/dev/null
@@ -84,9 +94,9 @@ if [ "${lobby:-}" = "1" ] && [ "${site:-}" = "1" ]; then
     else
         harness=1
     fi
-    grep -E "MatchMaker rendered|needs a lobby server" "$harness_log" | sed 's/^/     /' || true
+    grep -E "MatchMaker rendered|options loop|faction beside|Join form|needs a lobby server|needs a seeded round" "$harness_log" | sed 's/^/     /' || true
     check "$harness" "the site's own checks pass with a lobby server attached"
-    [ "$harness" = "0" ] || tail -30 "$harness_log"
+    [ "$harness" = "0" ] || grep -E "^\s+(FAIL|note)" "$harness_log" | head -20
 
     # THE CONTROL, and the only reason the check above means anything: stop the lobby server and
     # the same page must stop working. Without this, a 200 proves the page rendered - not that it
