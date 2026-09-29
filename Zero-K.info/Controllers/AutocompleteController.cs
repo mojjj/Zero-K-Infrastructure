@@ -170,12 +170,22 @@ namespace ZeroKWeb.Controllers
                             });
         }
 
+        /// <summary>
+        ///     Properties, not fields, and that is the whole difference between this endpoint
+        ///     working and not. MVC 5 serialised a JsonResult with JavaScriptSerializer, which
+        ///     writes public fields; System.Text.Json does not, so on .NET 9 every autocomplete
+        ///     answered <c>[{},{},{}]</c> - valid JSON, correct status, no data. A check that
+        ///     asserted a 200 would have passed.
+        ///
+        ///     Properties are written by both, so this stays single-sourced rather than needing
+        ///     IncludeFields configured on one stack only.
+        /// </summary>
         public class AutocompleteItem
         {
-            public int id;
-            public string label;
-            public string url;
-            public string value;
+            public int id { get; set; }
+            public string label { get; set; }
+            public string url { get; set; }
+            public string value { get; set; }
         }
     }
 }

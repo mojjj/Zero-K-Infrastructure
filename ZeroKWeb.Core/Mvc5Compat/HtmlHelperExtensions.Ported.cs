@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -303,6 +303,14 @@ namespace System.Web.Mvc
         /// </summary>
         private static IUrlHelper Url(IHtmlHelper helper)
         {
+            // A null helper is not a mistake here. Several of these are called from CONTROLLERS
+            // rather than views - AutocompleteController passes null to PrintMap and PrintClan -
+            // and on MVC 5 that was harmless, because the originals ignore the helper entirely and
+            // use Global.UrlHelper(). The ported ones went through the argument instead, so the
+            // same call threw NullReferenceException and every map autocomplete answered 500.
+            // Nothing noticed, because no request had ever been made to one of those URLs.
+            if (helper == null) return ZeroKWeb.Global.UrlHelper();
+
             var context = helper.ViewContext;
             var factory = context.HttpContext.RequestServices.GetRequiredService<IUrlHelperFactory>();
             return factory.GetUrlHelper(context);

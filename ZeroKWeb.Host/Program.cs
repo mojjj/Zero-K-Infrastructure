@@ -548,6 +548,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckMaps(client);
                 failures += await CheckSteamAndRealLogon();
                 failures += await CheckEngines();
+                failures += await CheckPagesNobodyHadRequested(client);
                 failures += await CheckPlanetwarsActionSurface();
                 failures += await CheckClanActionSurface();
                 failures += await CheckFormPostsAreGuarded();
@@ -1542,6 +1543,59 @@ namespace ZeroKWeb.Host
         /// Both were in `other` until now for unrelated compile errors, which is what had been
         /// hiding the fact that they were child-action views at all.
         /// </summary>
+        /// <summary>
+        ///     The controllers no request had ever reached.
+        ///
+        ///     Eighteen of the site's thirty-four were exercised here; these are from the other
+        ///     sixteen. They compiled, their views compiled, and nothing more - which is exactly the
+        ///     gap that hid every defect the lobby port found by running things. It hid three more
+        ///     here, all in Autocomplete, and all of them would have passed a check that only
+        ///     asserted a status code:
+        ///
+        ///     - Json(data, JsonRequestBehavior.AllowGet) bound to ASP.NET Core's OWN
+        ///       Json(object, object), because an instance method beats an extension method. The
+        ///       compat overload was never called and the enum arrived as serializer settings: 500.
+        ///     - AutocompleteItem had public FIELDS. System.Text.Json does not serialise those, so
+        ///       the endpoints answered [{},{},{}] - valid JSON, correct status, no data.
+        ///     - PrintMap(null, name) threw, because the ported Url(helper) dereferenced the helper
+        ///       that MVC 5's version ignores.
+        ///
+        ///     So these assert what came back, not that something did.
+        /// </summary>
+        private static async Task<int> CheckPagesNobodyHadRequested(HttpClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine("pages no request had ever reached:");
+            var failures = 0;
+
+            foreach (var path in new[] { "/Factions", "/Missions", "/Mods", "/Contributions", "/LobbyNews", "/Download", "/Images" })
+            {
+                var response = await client.GetAsync(Url + path);
+                var html = await response.Content.ReadAsStringAsync();
+                failures += Check(response.IsSuccessStatusCode && html.Contains("</html>"),
+                    path + " is a whole page (" + (int)response.StatusCode + ", " + html.Length + " bytes)");
+            }
+
+            // Autocomplete answers JSON, and answering it EMPTY is the failure that looked like
+            // success - so every one of these checks the payload rather than the status.
+            foreach (var probe in new[]
+                     {
+                         new { Path = "/Autocomplete?term=t", What = "everything" },
+                         new { Path = "/Autocomplete/Users?term=p", What = "users" },
+                         new { Path = "/Autocomplete/Maps?term=t", What = "maps" },
+                     })
+            {
+                var response = await client.GetAsync(Url + probe.Path);
+                var json = await response.Content.ReadAsStringAsync();
+                failures += Check(response.IsSuccessStatusCode, probe.Path + " answered (" + (int)response.StatusCode + ")");
+                failures += Check(json.Contains("\"id\"") && json.Contains("\"label\""),
+                    "and the " + probe.What + " it returned have fields, not [{},{}] - "
+                    + "System.Text.Json ignores public fields where MVC 5's serialiser wrote them");
+            }
+
+            return failures;
+        }
+
         private static async Task<int> CheckDivergedViews(HttpClient client)
         {
             Console.WriteLine();
