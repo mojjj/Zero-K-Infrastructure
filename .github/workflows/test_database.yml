@@ -276,3 +276,94 @@ jobs:
         env:
           ZK_CONNECTION_STRING: "Data Source=127.0.0.1,14330;Initial Catalog=zk_test;User ID=sa;Password=ZkLocal!Dev2026;MultipleActiveResultSets=true;TrustServerCertificate=true"
         run: ./tools/lobby-core-start.sh
+
+  # Phase 4's other half: the website and the lobby server as two processes, against one
+  # database, actually talking. Everything above runs the site with its lobby server missing -
+  # which is a real configuration and worth checking, but it is the one the live site is moving
+  # AWAY from, and nothing in CI had ever run the one it is moving to.
+  #
+  # Its own job, for the reason the host job gives above: the host job's name is a required
+  # status check, and this is the heaviest thing here - a mono build of the Framework lobby
+  # server, a site image, and both of them started against SQL Server. It can be promoted once
+  # it has a record.
+  #
+  # What it covers that nothing else does:
+  #   * the LobbyApiUrl switch, end to end, over the HTTP+JSON transport rather than in-process
+  #   * the negative control - the front page answers 200 with the lobby server up and 500 with
+  #     it stopped, so a passing run cannot mean the two never spoke
+  #   * the site's OWN harness checks with a lobby server attached, which is the only place
+  #     /Planetwars/MatchMaker renders at all, options loop and Join form included
+  stack:
+    name: Site and lobby server as two containers (SQL Server 2022)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      DB_NAME: zk_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Both caches, because this job builds both halves: the site on the .NET 9 SDK and the
+      # lobby server under mono. The host job needs only the first and the test job only the
+      # second, which is why neither of them warms this one.
+      - name: Cache NuGet packages for the .NET 9 SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: zk-net9-nuget-${{ hashFiles('**/*.csproj', 'port-sources.props', 'port-views.props') }}
+          restore-keys: zk-net9-nuget-
+
+      # Key and paths identical to the test job's above, deliberately: a different key would
+      # miss its cache and then write a second one beside it, and both jobs would pay for a
+      # restore neither of them shared.
+      - name: Cache NuGet packages for the mono build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zk-mono-nuget
+            ~/.cache/zk-website-build
+          key: zk-mono-nuget-${{ hashFiles('**/*.csproj', '**/packages.config') }}
+          restore-keys: zk-mono-nuget-
+
+      - name: Start SQL Server
+        run: |
+          docker compose -f db/docker-compose.yml up -d
+          ./db/wait-for-db.sh
+
+      - name: Create the schema
+        run: ./db/dbsetup.sh latest
+
+      - name: Load the test fixture
+        run: ./db/load-fixture.sh
+
+      # Builds both images, seeds a PlanetWars round, starts both processes, runs the site's own
+      # checks against the running lobby server, and tears all of it down. It leaves the fixture
+      # as it found it, which the step after this one is what actually says.
+      - name: Bring up both processes and check they talk
+        run: ./tools/stack.sh
+
+      # The teardown is part of what is being checked, not housekeeping. stack.sh seeds a galaxy,
+      # two planets, a link, a faction and a MiscVar, and a run that left any of them behind would
+      # quietly change what every later run of this fixture measures.
+      - name: The fixture is as it was found
+        run: |
+          set -euo pipefail
+          left=$(docker exec zk-db /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa \
+              -P 'ZkLocal!Dev2026' -C -d zk_test -h -1 -W \
+              -Q "SET NOCOUNT ON; SELECT (SELECT COUNT(*) FROM Galaxies) + (SELECT COUNT(*) FROM Planets) + (SELECT COUNT(*) FROM Links) + (SELECT COUNT(*) FROM Factions) + (SELECT COUNT(*) FROM MiscVars WHERE VarName IN ('planetWarsMode', 'LobbyApiUrl', 'LobbyApiSecret'))")
+          echo "rows the stack could have left behind: $left"
+          [ "$left" = "0" ] || { echo "the stack did not clean up after itself"; exit 1; }
+
+      - name: SQL Server log
+        if: failure()
+        run: docker logs zk-db --tail 80
+
+      - name: Make the NuGet cache readable by the runner
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" ~/.cache/zk-mono-nuget || true
+
+      - name: Stop SQL Server
+        if: always()
+        run: docker compose -f db/docker-compose.yml down -v

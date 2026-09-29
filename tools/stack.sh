@@ -50,12 +50,33 @@ docker run --rm --network host -e ZK_CONNECTION_STRING="$CS" \
     --entrypoint dotnet zk-site bin/ZeroKWeb.Host.dll --seed-planetwars-round | sed 's/^/   /'
 
 echo "starting the lobby server..."
-docker run -d --rm --name zk-lobby-up --network host -e ZK_CONNECTION_STRING="$CS" zk-lobby >/dev/null
+# No --rm: a container that removes itself takes its log with it the instant it exits, and
+# this one exits precisely when something is worth reading. The cleanup trap below force-
+# removes it either way.
+docker run -d --name zk-lobby-up --network host -e ZK_CONNECTION_STRING="$CS" zk-lobby >/dev/null
 for _ in $(seq 1 240); do
     docker logs zk-lobby-up 2>&1 | grep -q "lobby server running" && { lobby=1; break; }
     docker inspect -f '{{.State.Running}}' zk-lobby-up 2>/dev/null | grep -q true || break
     sleep 1
 done
+
+# Why, while the container is still there to ask. The cleanup trap removes it, so a caller that
+# waits until the end - CI did - finds nothing to read, and the failure is a bare "the lobby
+# server is up" FAIL. It takes this server about ninety seconds of WHR before it says anything
+# interesting, which made a port collision read like a timeout for as long as nobody looked.
+if [ "${lobby:-}" != "1" ]; then
+    echo
+    # Errors first, then the tail. This server logs one line per WHR iteration at startup -
+    # hundreds of them - so a plain tail shows nothing but "Running WHR iteration N" while the
+    # exception that killed it scrolled past long before.
+    echo "the lobby server did not come up. Anything it called an error:"
+    docker logs zk-lobby-up 2>&1 | grep -iE "error|exception|refusing|fatal|at [A-Z]" \
+        | tail -25 | sed 's/^/   /' || true
+    echo
+    echo "and its last 10 lines:"
+    docker logs zk-lobby-up 2>&1 | tail -10 | sed 's/^/   /' || true
+    echo
+fi
 
 echo "starting the website..."
 docker run -d --rm --name zk-site-up --network host \
