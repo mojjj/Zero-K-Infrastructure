@@ -172,10 +172,16 @@ jobs:
   # asking for a byte range, posting a PayPal IPN body, posting to /MissionService. Compiling
   # proves things about types; this is the only check anywhere that proves a page comes back.
   #
-  # A separate job rather than a step in the one above, deliberately. That job's name is a
-  # required status check, so a step added to it blocks every pull request the first time this
-  # is flaky in an environment it has never run in. This one can be promoted to required once it
-  # has a record. The cost is a second SQL Server - about a minute.
+  # A separate job rather than a step in the one above, deliberately: a step added to an existing
+  # job blocks every pull request the first time it is flaky in an environment it has never run
+  # in. The cost of the separation is a second SQL Server - about a minute.
+  #
+  # **Its name is a required status check on master since 2026-09-29**, which makes the name
+  # load-bearing: protection matches the context as an exact string, so renaming this job leaves
+  # protection waiting for something nothing reports any more, and every pull request blocks
+  # forever on a check that will never appear. Change it only together with the protection
+  # setting, and prefer not to. Two of the three jobs here are in that position now, and this
+  # workflow has made the mistake once already, on 2026-09-18.
   host:
     name: Host harness (.NET 9 over HTTP, SQL Server 2022)
     runs-on: ubuntu-latest
@@ -287,8 +293,8 @@ jobs:
   # of the Framework lobby server, a site image, and both started against SQL Server - and it runs
   # in about five and a half minutes.
   #
-  # **Its name is a required status check on master since 2026-09-29**, which the host job's is
-  # not. That makes the name load-bearing: branch protection matches it as an exact string, so
+  # **Its name is a required status check on master since 2026-09-29**, as the host job's is.
+  # That makes the name load-bearing: branch protection matches it as an exact string, so
   # renaming this job - even to describe it better - leaves protection waiting for a context
   # nothing reports any more, and every pull request blocks forever on a check that will never
   # appear. Change it only together with the protection setting, and prefer not to.
