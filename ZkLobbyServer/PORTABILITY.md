@@ -580,13 +580,33 @@ lobby server runs a full pass at startup on .NET&nbsp;9 every time
 `tools/lobby-core-start.sh` starts it. The rating *computation* is not in question; only the
 hand-off after a battle is, and that hand-off cannot be observed from inside a rollback.
 
+### What a live ZkLobbyServer costs, measured
+
+Award calculation, replay upload and Planetwars sit past `server.GhostSay`, which
+`SubmitSpringBattleResult` calls **unconditionally and before the rating block** - so a null-server
+run stops there. The obvious next thought is to construct a real one. Its constructor says
+otherwise:
+
+```csharp
+RatingSystems.Init();                                        // a full WHR pass
+Downloader.GetResource(DownloadType.ENGINE, ...);            // downloads an engine
+Downloader.PackageDownloader.DoMasterRefresh();              // fetches the package master list
+SteamWebApi = new SteamWebApi(..., new Secrets().GetSteamWebApiKey());
+```
+
+Two network fetches and a Steam API key before it has done anything. Constructing one is not a
+step a database probe can take; it *is* starting the server, which `tools/lobby-core-start.sh`
+already does. Reaching those paths therefore needs the standalone server **and** a game that
+finishes - which needs a real game archive. They are one problem, not two, and they are gated on
+content rather than on the port.
+
 ### Still not done
 
 **Nothing has finished a game by itself, and nothing has rated one end to end.** The engine's
-`GAMEOVER` is synthesised because "Probe Game" has no victory condition. The rating hand-off is
-argued above. And award calculation, replay upload and Planetwars all need a live
-`ZkLobbyServer` - `SubmitSpringBattleResult` calls `server.GhostSay` unconditionally, before the
-rating block, so even a null-server run stops there.
+`GAMEOVER` is synthesised because "Probe Game" has no victory condition; the rating hand-off cannot
+be observed from inside a rollback, and is covered more strongly elsewhere; and the three paths
+above need a running server plus real game content. Everything reachable without those has been
+run.
 
 `LogIP` is only half-covered: it skips private addresses, so a probe connecting from `127.0.0.1`
 never reaches it. The EF6 test covers that half; nothing on .NET 9 does yet.
