@@ -38,6 +38,13 @@ namespace ZeroKWeb.Compat
     /// authenticated request. MVC 5 re-issues the cookie each time to slide its expiry; cookie
     /// authentication does that itself with SlidingExpiration, which is set below.
     ///
+    /// The login path is <c>Home/NotLoggedIn</c> and not the <c>loginUrl</c> in Web.config, which
+    /// says <c>Home/Logon</c>. That is deliberate and it is what 4.8 does too: the site guards its
+    /// pages with its own <c>[Auth]</c> attribute, and AppCode/Auth.cs sends an unauthenticated
+    /// visitor to NotLoggedIn. FormsAuthentication's loginUrl is what would apply if nothing else
+    /// did. Checked before matching it, because the two lines disagree and the config one is the
+    /// more obvious to copy.
+    ///
     /// The cookie is NOT named .ASPXAUTH. Sharing the name with the Framework site would invite
     /// the two to read each other's cookies, and the ticket formats have nothing in common - the
     /// failure would be a confusing 500 rather than a clean "not signed in".
@@ -57,7 +64,11 @@ namespace ZeroKWeb.Compat
                     options.Cookie.HttpOnly = true;
                     options.Cookie.SameSite = SameSiteMode.Lax;
                     options.LoginPath = loginPath;
-                    options.ExpireTimeSpan = TimeSpan.FromDays(30);
+                    // Web.config: <forms loginUrl="~/Home/Logon" timeout="2880" /> - 2880
+                    // MINUTES, which is two days. This said 30 days, which is not a decision
+                    // anyone recorded and is fifteen times as long for a stolen cookie to stay
+                    // good. Spelled in minutes so it reads the same as the line it comes from.
+                    options.ExpireTimeSpan = TimeSpan.FromMinutes(2880);
                     options.SlidingExpiration = true;
                 });
             return services;

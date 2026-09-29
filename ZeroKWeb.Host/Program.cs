@@ -446,6 +446,27 @@ namespace ZeroKWeb.Host
                     failures += Check(signIn.StatusCode == System.Net.HttpStatusCode.Redirect,
                         "  the right password signs in");
 
+                    // How long that cookie is good for. Web.config says timeout="2880" - minutes,
+                    // so two days - and the port had 30 days, which nobody had written down as a
+                    // decision. A stolen cookie outliving the Framework site's by fifteen times is
+                    // not something a status code would ever show.
+                    var authCookie = signIn.Headers.TryGetValues("Set-Cookie", out var setCookies)
+                        ? setCookies.FirstOrDefault(x => x.StartsWith("ZkAuth="))
+                        : null;
+                    failures += Check(authCookie != null, "  and sets the auth cookie");
+                    if (authCookie != null)
+                    {
+                        var expires = System.Text.RegularExpressions.Regex.Match(authCookie, @"expires=([^;]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        var lifetime = expires.Success && DateTime.TryParse(expires.Groups[1].Value,
+                                           System.Globalization.CultureInfo.InvariantCulture,
+                                           System.Globalization.DateTimeStyles.AdjustToUniversal, out var when)
+                            ? when - DateTime.UtcNow
+                            : (TimeSpan?)null;
+                        failures += Check(lifetime != null && lifetime.Value.TotalHours > 47 && lifetime.Value.TotalHours < 49,
+                            "  and it lasts the 48 hours Web.config asks for, not longer ("
+                            + (lifetime?.TotalHours.ToString("0.0") ?? "no expiry") + "h)");
+                    }
+
                     var whoami = await (await client.GetAsync(Url + "/Harness/Whoami")).Content.ReadAsStringAsync();
                     failures += Check(whoami.Contains("signed in as " + name),
                         "  the cookie comes back as an Account (" + whoami.Trim() + ")");
