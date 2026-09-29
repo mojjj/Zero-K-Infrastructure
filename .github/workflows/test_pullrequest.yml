@@ -36,8 +36,20 @@ jobs:
     # right. Most of the suite lives in test_portable.yml; a green tick here is "it builds, and
     # the Windows-only claims hold".
     #
-    # NOTE FOR UPSTREAM: this line is a fork-local change. Upstream has the runner and should keep
-    # `runs-on: zk`.
+    # **This job's name is a required status check on master since 2026-09-29.** Its record when
+    # it was promoted: 39 green out of 40, and the one failure was real - a csproj naming a view
+    # that had been deleted, which fails in the publish step and so passes every Linux check here.
+    #
+    # Two consequences. The name is now matched by branch protection as an exact string, so
+    # renaming this job leaves every pull request blocked on a context nothing reports any more.
+    # And the `runs-on` line below is load-bearing in a way it was not before.
+    #
+    # NOTE FOR UPSTREAM: `runs-on: windows-latest` is a fork-local change; upstream has the `zk`
+    # runner and should keep `runs-on: zk`. **Do not take that line back into this fork.** A
+    # self-hosted runner does not come with a fork, so the label would match nothing, every run
+    # would queue until GitHub expired it, and - now that this is required - every pull request
+    # would block forever rather than merely losing the check. That is how it behaved here from
+    # the fork until 2026-09-24, when nothing depended on it.
     runs-on: windows-latest
 
     steps:
