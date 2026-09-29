@@ -1685,6 +1685,18 @@ namespace ZeroKWeb.Host
             }
         }
 
+        /// <summary>Points the galaxy at its winning faction, or at nobody again.</summary>
+        private static void SetGalaxyWinner(int galaxyID, int? factionID, string endMessage)
+        {
+            using (var db = new ZkDataContext())
+            {
+                var galaxy = db.Galaxies.Single(g => g.GalaxyID == galaxyID);
+                galaxy.WinnerFactionID = factionID;
+                galaxy.EndMessage = endMessage;
+                db.SaveChanges();
+            }
+        }
+
         private static int AddPlanet(ZkDataContext db, int galaxyID, string name, double x, double y, int resourceID)
         {
             var planet = new Planet
@@ -1946,6 +1958,32 @@ namespace ZeroKWeb.Host
                     "the galaxy map names both planets");
                 pw += Check(galaxy.Contains("id=\"lg" + planetID + "_" + otherPlanetID + "\""),
                     "and drew the link between them");
+
+                // The page PlanetWars shows between seasons. It used to be its own view - the
+                // Index action returned View("GalaxyOffline") - until 2017 moved it into the
+                // switch at the top of Galaxy.cshtml and drove it from the galaxy row instead.
+                // MiscVar.PlanetWarsMode defaults to AllOffline when unset, so every request the
+                // harness has ever made was already in that mode; what had never run is the half
+                // of it that needs a winner, which is the half that replaced the deleted view.
+                pw += await WithFactionAndClan(async (factionID, clanID) =>
+                {
+                    // One word between the stars on purpose: the wiki parser's bold stops at a
+                        // space, and a phrase would come back with the stars still in it.
+                        SetGalaxyWinner(galaxyID, factionID, "The *Harness* won the season.");
+                    try
+                    {
+                        var ended = await (await client.GetAsync(Url + "/Planetwars")).Content.ReadAsStringAsync();
+                        return Check(ended.Contains("PlanetWars ended, Harness Faction won!"),
+                                   "the finished season names its winner")
+                             + Check(ended.Contains("The <strong>Harness</strong> won the season."),
+                                   "and its end message went through the wiki parser");
+                    }
+                    finally
+                    {
+                        // Before the faction is removed under us: the galaxy points at it.
+                        SetGalaxyWinner(galaxyID, null, null);
+                    }
+                });
 
                 return pw;
             });

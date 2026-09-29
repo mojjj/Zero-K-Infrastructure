@@ -324,8 +324,6 @@
     <Content Include="Views\Forum\SearchResults.cshtml" />
     <Content Include="Views\Forum\Search.cshtml" />
     <Content Include="Views\Planetwars\PwMatchMaker.cshtml" />
-    <Content Include="Views\Planetwars\GalaxyOffline.cshtml" />
-    <Content Include="Views\Planetwars\GalaxyOfflinePW12.cshtml" />
     <Content Include="Views\Shared\DisplayTemplates\ForumPost.cshtml" />
     <Content Include="Views\PostHistory\PostHistoryIndex.cshtml" />
     <Content Include="Views\Shared\DisplayTemplates\DiffPiece.cshtml" />
