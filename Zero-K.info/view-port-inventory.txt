@@ -11,8 +11,8 @@
 # razor-language         Razor itself rejects it; needs rewriting regardless
 # other                  a package reference or an MVC 5 API
 
-total 123
-compiles                 112
+total 122
+compiles                 111
 diverged                 11
 child-action             0
 waiting-on-controllers   0

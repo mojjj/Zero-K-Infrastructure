@@ -1611,62 +1611,94 @@ namespace ZeroKWeb.Host
         }
 
         /// <summary>
-        /// A galaxy with one planet, for the PlanetWars pages.
+        /// A galaxy with two linked planets, for the PlanetWars pages.
         ///
-        /// The fixture has no galaxies and no planets, and three actions open with
-        /// `Galaxies.Single(g =&gt; g.IsDefault)` or `Planets.Single(...)` - so /Planetwars/Minimap,
-        /// /Planetwars/Ladder and /Planetwars/Planet all threw before they reached a view. That is
-        /// eleven never-rendered views behind two missing rows.
+        /// The fixture has no galaxies and no planets, and four actions open with
+        /// `Galaxies.Single(g =&gt; g.IsDefault)` or `Planets.Single(...)` - so /Planetwars,
+        /// /Planetwars/Minimap, /Planetwars/Ladder and /Planetwars/Planet all threw before they
+        /// reached a view.
         ///
-        /// The planet points at a real Resource from the fixture rather than a seeded one: views
-        /// read `planet.Resource.MapPlanetWarsIcon` and the map's name, and a resource invented
-        /// here would have no map behind it.
+        /// **Two planets and a link, not one planet.** Galaxy.cshtml draws the map's links as
+        /// native SVG, and all of that - the gradient defs, GalaxyMapGeometry.Link, the rotate
+        /// transform - sits inside `foreach (var link in Model.Links)`. A galaxy with one planet
+        /// renders the page with that loop running zero times, which would report the view as
+        /// rendered while the half of it that was rewritten from Raphael had never run.
         ///
-        /// Planets cascade on the galaxy's delete, so the cleanup removes one row.
+        /// ImageName is set because /Planetwars composes the galaxy JPEG on first request from
+        /// `File.ReadAllBytes(MapPath("/img/galaxies/" + gal.ImageName))`. A null there reads a
+        /// directory rather than a file.
+        ///
+        /// The planets point at real Resources from the fixture rather than seeded ones: the
+        /// views read `planet.Resource.MapPlanetWarsIcon` and the map's name, and composing the
+        /// map reads that icon off disk.
         /// </summary>
-        private static async Task<int> WithGalaxy(Func<int, int, Task<int>> body)
+        private static async Task<int> WithGalaxy(Func<int, int, int, Task<int>> body)
         {
-            int galaxyID, planetID;
+            int galaxyID, planetID, otherPlanetID;
 
             using (var db = new ZkDataContext())
             {
-                var resource = db.Resources.OrderBy(r => r.ResourceID).First();
+                var resources = db.Resources.OrderBy(r => r.ResourceID).Take(2).ToList();
 
                 var galaxy = new Galaxy
                 {
                     IsDefault = true, IsDirty = false, Started = DateTime.UtcNow.AddDays(-1),
+                    ImageName = "galaxy1.jpg",
                     Width = 1000, Height = 1000, Turn = 1, AttackerSideCounter = 0,
                 };
                 db.Galaxies.Add(galaxy);
                 db.SaveChanges();
                 galaxyID = galaxy.GalaxyID;
 
-                var planet = new Planet
-                {
-                    GalaxyID = galaxyID,
-                    Name = "Harness Planet",
-                    TeamSize = 2,
-                    X = 0.5,
-                    Y = 0.5,
-                    MapResourceID = resource.ResourceID,
-                };
-                db.Planets.Add(planet);
+                // Apart on both axes, so the link between them has a length and an angle. Two
+                // planets sharing a Y would leave GalaxyMapGeometry.Link rotating by zero, and
+                // zero is the one angle that looks right however wrong the arithmetic is.
+                planetID = AddPlanet(db, galaxyID, "Harness Planet", 0.35, 0.40, resources[0].ResourceID);
+                otherPlanetID = AddPlanet(db, galaxyID, "Harness Neighbour", 0.65, 0.60,
+                    resources[resources.Count > 1 ? 1 : 0].ResourceID);
+
+                db.Links.Add(new Link { GalaxyID = galaxyID, PlanetID1 = planetID, PlanetID2 = otherPlanetID });
                 db.SaveChanges();
-                planetID = planet.PlanetID;
             }
 
             try
             {
-                return await body(galaxyID, planetID);
+                return await body(galaxyID, planetID, otherPlanetID);
             }
             finally
             {
                 using (var db = new ZkDataContext())
                 {
+                    db.Links.RemoveRange(db.Links.Where(l => l.GalaxyID == galaxyID));
+                    db.SaveChanges();
+                    db.Planets.RemoveRange(db.Planets.Where(p => p.GalaxyID == galaxyID));
+                    db.SaveChanges();
                     var galaxy = db.Galaxies.FirstOrDefault(g => g.GalaxyID == galaxyID);
                     if (galaxy != null) { db.Galaxies.Remove(galaxy); db.SaveChanges(); }
                 }
+
+                // /Planetwars caches the map it composed as a file, and that cache lives in the
+                // repository beside the two tracked renders. Left behind, it is an untracked
+                // artifact in a checked-out tree.
+                var render = System.IO.Path.Combine(FindSiteRoot(), "img", "galaxies", "render_" + galaxyID + ".jpg");
+                if (System.IO.File.Exists(render)) System.IO.File.Delete(render);
             }
+        }
+
+        private static int AddPlanet(ZkDataContext db, int galaxyID, string name, double x, double y, int resourceID)
+        {
+            var planet = new Planet
+            {
+                GalaxyID = galaxyID,
+                Name = name,
+                TeamSize = 2,
+                X = x,
+                Y = y,
+                MapResourceID = resourceID,
+            };
+            db.Planets.Add(planet);
+            db.SaveChanges();
+            return planet.PlanetID;
         }
 
         /// <summary>
@@ -1888,13 +1920,13 @@ namespace ZeroKWeb.Host
                 return seeded;
             });
 
-            // PlanetWars. Three actions open with Single() over a table the fixture leaves empty,
+            // PlanetWars. Four actions open with Single() over a table the fixture leaves empty,
             // so none of them had ever reached a view - eleven never-rendered views behind two
             // missing rows.
-            failures += await WithGalaxy(async (galaxyID, planetID) =>
+            failures += await WithGalaxy(async (galaxyID, planetID, otherPlanetID) =>
             {
                 var pw = 0;
-                foreach (var path in new[] { "/Planetwars/Minimap", "/Planetwars/Ladder", "/Planetwars/Planet/" + planetID })
+                foreach (var path in new[] { "/Planetwars", "/Planetwars/Minimap", "/Planetwars/Ladder", "/Planetwars/Planet/" + planetID })
                 {
                     var response = await client.GetAsync(Url + path);
                     var html = await response.Content.ReadAsStringAsync();
@@ -1905,6 +1937,15 @@ namespace ZeroKWeb.Host
                 // The planet page carries the seeded planet, not just the layout around it.
                 var planet = await (await client.GetAsync(Url + "/Planetwars/Planet/" + planetID)).Content.ReadAsStringAsync();
                 pw += Check(planet.Contains("Harness Planet"), "and the planet's name is in it");
+
+                // The galaxy map drew its link. Both planets being named proves the planet loop
+                // ran; the gradient id proves the link loop did, and that is the part of the view
+                // that replaced Raphael. Asserting the page alone would pass with Links empty.
+                var galaxy = await (await client.GetAsync(Url + "/Planetwars")).Content.ReadAsStringAsync();
+                pw += Check(galaxy.Contains("Harness Planet") && galaxy.Contains("Harness Neighbour"),
+                    "the galaxy map names both planets");
+                pw += Check(galaxy.Contains("id=\"lg" + planetID + "_" + otherPlanetID + "\""),
+                    "and drew the link between them");
 
                 return pw;
             });
