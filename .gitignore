@@ -240,3 +240,4 @@ Thumbs.db
 # The asset build output (tools/build-assets.mjs) and its toolchain.
 build/
 node_modules/
+rendered-views.tmp*
