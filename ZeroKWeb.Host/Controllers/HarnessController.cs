@@ -163,5 +163,13 @@ namespace ZeroKWeb.Host.Controllers
                 : "signed in as " + ZeroKWeb.Global.Account.Name
                   + " (AccountID " + ZeroKWeb.Global.Account.AccountID
                   + ", AdminLevel " + ZeroKWeb.Global.Account.AdminLevel + ")");
+
+        /// <summary>
+        ///     Throws, so the check that unhandled exceptions reach Trace has something to throw.
+        ///     Deliberately not a real page that happens to fail: /News does fail today, because the
+        ///     fixture has no news, and a check built on that would break the moment someone adds a
+        ///     news row for an unrelated reason.
+        /// </summary>
+        public ActionResult Throw() => throw new InvalidOperationException("harness-deliberate-failure");
     }
 }

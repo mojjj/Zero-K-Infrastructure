@@ -124,6 +124,36 @@ namespace ZeroKWeb.Host
             // default, Html.ActionLink("Forum index", "Index") renders as "/" because routing elides
             // the defaults, which is correct and makes the link impossible to tell apart from a
             // broken one. The first version of this check asserted the wrong URL for that reason.
+            // What MVC 5's MvcApplication_Error does, and nothing more.
+            //
+            // On 4.8 an unhandled request exception reaches Global.asax, which writes it with
+            // Trace.TraceError - and Global.StartApplication has put a ZkServerTraceListener on
+            // Trace.Listeners, so it lands in the log the Admin/TraceLogs page reads. ASP.NET Core
+            // logs through ILogger instead, so on the port those exceptions went to Kestrel's
+            // console and nowhere the site can see. This host does not call StartApplication - it
+            // deliberately starts no lobby server - but the Trace call is the half that belongs to
+            // serving a request rather than to booting the application.
+            //
+            // The "does not implement IController" filter is copied verbatim: on 4.8 that message
+            // is what a request for a missing controller produces, and it was noise worth dropping.
+            // It is kept so this reproduces the original rather than improving on it.
+            //
+            // The exception is RETHROWN. MVC 5 leaves it for customErrors to turn into a page, and
+            // choosing what this host shows instead would be inventing behaviour, not porting it.
+            app.Use(async (context, next) =>
+            {
+                try
+                {
+                    await next();
+                }
+                catch (Exception ex)
+                {
+                    if (!ex.Message.Contains("was not found or does not implement IController"))
+                        System.Diagnostics.Trace.TraceError(ex.ToString());
+                    throw;
+                }
+            });
+
             app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
 
             if (serving)
@@ -1686,6 +1716,26 @@ namespace ZeroKWeb.Host
 
                 return signedIn;
             });
+
+            // An unhandled exception must reach Trace, because that is where the site's own log
+            // comes from - Global.StartApplication puts a ZkServerTraceListener there and
+            // Admin/TraceLogs reads it. ASP.NET Core would otherwise log to ILogger and the site
+            // would never see its own errors.
+            var captured = new System.Text.StringBuilder();
+            var capture = new System.Diagnostics.TextWriterTraceListener(new System.IO.StringWriter(captured));
+            System.Diagnostics.Trace.Listeners.Add(capture);
+            try
+            {
+                var threw = await client.GetAsync(Url + "/Harness/Throw");
+                System.Diagnostics.Trace.Flush();
+                failures += Check((int)threw.StatusCode == 500, "a deliberate failure answers 500 (" + (int)threw.StatusCode + ")");
+                failures += Check(captured.ToString().Contains("harness-deliberate-failure"),
+                    "and it reached Trace, which is where Admin/TraceLogs reads the site's errors from");
+            }
+            finally
+            {
+                System.Diagnostics.Trace.Listeners.Remove(capture);
+            }
 
             return failures;
         }
