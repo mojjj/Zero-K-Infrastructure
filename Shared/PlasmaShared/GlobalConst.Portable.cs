@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 namespace ZkData
 {
     /// <summary>
@@ -108,11 +109,43 @@ namespace ZkData
         // The query/form key the game client puts a one-use lobby session token in, so a player
         // arriving from the client is signed in without typing a password. Read by Global.asax on
         // the Framework side and by Mvc5Compat/ZkAuthentication.cs on the port's.
-        // Where replays and other Springie data live on disk. A settable property with a
-        // hardcoded Windows default and a "todo hack solve" from whoever wrote it; ReplayStorage
-        // reads it, and moving it here is what lets that file be linked. The ninth thing found
-        // stranded in the half that needs WCF.
-        public static string SpringieDataDir { get; set; } = @"c:\projekty\springie_spring"; // todo hack solve
+        // Where replays and other Springie data live on disk. ReplayStorage reads it, and
+        // ZkLobbyServer hands it to SpringPaths as the writable folder that engines, maps and
+        // demos are downloaded into.
+        public static string SpringieDataDir { get; set; } = DefaultSpringieDataDir();
+
+        /// <summary>
+        /// The "todo hack solve" this carried was a hardcoded <c>c:\projekty\springie_spring</c>.
+        ///
+        /// **Windows keeps that path exactly**, because it is not a placeholder there - it is
+        /// where the live server's engines and replays are, and a default that moved would point
+        /// a deployed server at an empty directory and re-download everything into it.
+        ///
+        /// Off Windows it was never a path at all. There is no c: drive and a backslash is an
+        /// ordinary filename character, so SpringPaths created a single DIRECTORY literally named
+        /// <c>c:\projekty\springie_spring</c> in whatever the current working directory happened
+        /// to be - which, for anything run from a checkout, is the checkout. That is where the
+        /// 72MB of engine in this repository's working tree came from.
+        ///
+        /// ZK_SPRINGIE_DATA_DIR overrides both, in the same shape and for the same reason as
+        /// ZK_CONNECTION_STRING in GlobalConst.cs: the only way to point a deployment somewhere
+        /// else without editing source.
+        ///
+        /// Read once, into a settable property, so the two call sites keep seeing one answer.
+        /// </summary>
+        static string DefaultSpringieDataDir()
+        {
+            var configured = Environment.GetEnvironmentVariable("ZK_SPRINGIE_DATA_DIR");
+            if (!string.IsNullOrEmpty(configured)) return configured;
+
+            // PlatformID.Unix is the idiom SpringPaths itself uses to tell the two apart, rather
+            // than a second one that could disagree with it.
+            if (Environment.OSVersion.Platform != PlatformID.Unix) return @"c:\projekty\springie_spring";
+
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.IsNullOrEmpty(home)) home = Path.GetTempPath();
+            return Path.Combine(home, ".local", "share", "zk-springie");
+        }
 
         public const string SessionTokenVariable = "asmallcake";
 
