@@ -1593,6 +1593,20 @@ namespace ZeroKWeb.Host
                     + "System.Text.Json ignores public fields where MVC 5's serialiser wrote them");
             }
 
+            // The site's other JSON endpoint, and the only one outside Autocomplete. It serialises
+            // an ANONYMOUS type, whose members are properties, so it never had the empty-object
+            // problem - but it did go through the same Json(data, JsonRequestBehavior) overload, so
+            // it answered 500 like the rest until that was fixed.
+            //
+            // isDownloadable=0 because the default is 1 and the fixture's maps have no download
+            // rows: the default answers [] correctly, which would make this check pass while
+            // proving nothing. /Maps itself still lists maps, through three UNFILTERED sections of
+            // its view - checked, so the difference is understood rather than suspected.
+            var maps = await client.GetAsync(Url + "/Maps/JsonSearch?search=test&isDownloadable=0");
+            var mapsJson = await maps.Content.ReadAsStringAsync();
+            failures += Check(maps.IsSuccessStatusCode, "/Maps/JsonSearch answered (" + (int)maps.StatusCode + ")");
+            failures += Check(mapsJson.Contains("\"internalName\""), "and it returned maps with their fields");
+
             return failures;
         }
 
