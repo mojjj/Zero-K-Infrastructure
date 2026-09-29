@@ -59,6 +59,18 @@ namespace ZeroKWeb.Host
             // so it is consulted before the built-in providers, none of which know the type.
             builder.Services.AddControllersWithViews(options =>
                 options.ModelBinderProviders.Insert(0, new System.Web.HttpPostedFileBinderProvider()));
+            // Web.config: <globalization uiCulture="en" culture="en-US" />. Nothing here pinned it,
+            // so formatting followed whatever locale the process happened to start in - invariant
+            // in the container, and whatever LANG says on a real host. A server in a de_DE locale
+            // would render 1234,56 and 29.09.2026 where the site running today renders 1234.56 and
+            // 9/29/2026, on every page, with nothing failing.
+            //
+            // Set as the thread defaults rather than through UseRequestLocalization: <globalization>
+            // does not negotiate from Accept-Language unless it says culture="auto", and this one
+            // does not, so a fixed default is the same behaviour and not a new one.
+            System.Globalization.CultureInfo.DefaultThreadCurrentCulture = new System.Globalization.CultureInfo("en-US");
+            System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = new System.Globalization.CultureInfo("en");
+
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddZkAuthentication();
 
@@ -1737,6 +1749,15 @@ namespace ZeroKWeb.Host
 
                 return signedIn;
             });
+
+            // The culture every request runs under. Web.config pins en-US, and the port pinned
+            // nothing - so this asserts the EFFECT, not the setting: a culture that failed to
+            // apply would still be readable somewhere while formatting the wrong way.
+            var culture = await (await client.GetAsync(Url + "/Harness/Culture")).Content.ReadAsStringAsync();
+            failures += Check(culture.StartsWith("en-US|en|"),
+                "requests run under en-US/en, as <globalization> asks (" + culture.Split('|')[0] + "/" + culture.Split('|')[1] + ")");
+            failures += Check(culture.EndsWith("|1234.56|9/29/2026"),
+                "and a number and a date come out the American way (" + string.Join(" ", culture.Split('|').Skip(2)) + ")");
 
             // An unhandled exception must reach Trace, because that is where the site's own log
             // comes from - Global.StartApplication puts a ZkServerTraceListener there and

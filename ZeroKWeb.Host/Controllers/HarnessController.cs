@@ -171,5 +171,16 @@ namespace ZeroKWeb.Host.Controllers
         ///     news row for an unrelated reason.
         /// </summary>
         public ActionResult Throw() => throw new InvalidOperationException("harness-deliberate-failure");
+
+        /// <summary>
+        ///     What culture a request actually runs under, and what that does to a number and a
+        ///     date. Web.config pins en-US; nothing in the port did, so this reports the effect
+        ///     rather than the setting - a pinned culture that failed to apply would still read
+        ///     "en-US" somewhere while formatting the wrong way.
+        /// </summary>
+        public ActionResult Culture() => Content(
+            System.Globalization.CultureInfo.CurrentCulture.Name + "|" +
+            System.Globalization.CultureInfo.CurrentUICulture.Name + "|" +
+            1234.56.ToString() + "|" + new DateTime(2026, 9, 29).ToString("d"));
     }
 }
