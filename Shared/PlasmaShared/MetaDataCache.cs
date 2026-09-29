@@ -338,16 +338,51 @@ namespace ZkData
 
         public static Mod ServerGetMod(string internalName)
         {
-            var file = Path.Combine(GlobalConst.SiteDiskPath, "resources", $"{internalName.EscapePath()}.metadata.xml.gz");
-            if (File.Exists(file)) return GetModMetadata(File.ReadAllBytes(file));
+            var file = ServerMetaPath(internalName);
+            if (file != null && File.Exists(file)) return GetModMetadata(File.ReadAllBytes(file));
             return null;
         }
         
         public static Map ServerGetMap(string internalName)
         {
-            var file = Path.Combine(GlobalConst.SiteDiskPath, "resources", $"{internalName.EscapePath()}.metadata.xml.gz");
-            if (File.Exists(file)) return GetMapMetadata(File.ReadAllBytes(file));
+            var file = ServerMetaPath(internalName);
+            if (file != null && File.Exists(file)) return GetMapMetadata(File.ReadAllBytes(file));
             return null;
+        }
+
+        /// <summary>
+        /// Where a resource's metadata would be, and a warning naming it when it is not there.
+        ///
+        /// Both callers returned null for a missing file and said nothing, which reads as "this
+        /// game has no options" to a player running !listoptions - a believable answer to what is
+        /// actually a misconfigured path. That mattered little while the only caller was the
+        /// website, which sets GlobalConst.SiteDiskPath from its own root in Application_Start;
+        /// it matters now that a lobby server runs in its own process and inherits nothing.
+        ///
+        /// Warned once per path, not per call: ServerBattle asks on every battle it opens.
+        /// </summary>
+        static string ServerMetaPath(string internalName)
+        {
+            if (string.IsNullOrEmpty(GlobalConst.SiteDiskPath))
+            {
+                WarnOnce("site-disk-path-unset",
+                    "GlobalConst.SiteDiskPath is not set, so no map or game metadata can be read. "
+                    + "The website sets it from its own root; another process has to be told - "
+                    + "set ZK_SITE_DISK_PATH to the site's directory.");
+                return null;
+            }
+
+            var file = Path.Combine(GlobalConst.SiteDiskPath, "resources", $"{internalName.EscapePath()}.metadata.xml.gz");
+            if (!File.Exists(file)) WarnOnce(file, "No metadata at " + file + " - options for it will look empty.");
+            return file;
+        }
+
+        static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> warned =
+            new System.Collections.Concurrent.ConcurrentDictionary<string, byte>();
+
+        static void WarnOnce(string key, string message)
+        {
+            if (warned.TryAdd(key, 0)) Trace.TraceWarning(message);
         }
         
     }

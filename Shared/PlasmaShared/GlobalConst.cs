@@ -99,7 +99,39 @@ namespace ZkData
         public static string DefaultChobbyTag => Mode == ModeType.Live ? "zkmenu:stable" : "zkmenu:test";
 
 
-        public static string SiteDiskPath = @"c:\projekty\zero-k.info\www";
+        /// <summary>
+        /// The site's own directory on disk - the one holding resources/ and img/. Read by
+        /// MetaDataCache (map and game metadata), MissionUpdater, AutoRegistrator and Fixer.
+        ///
+        /// **The website overwrites this at startup**, in Global.asax's Application_Start:
+        /// <c>GlobalConst.SiteDiskPath = MapPath("~")</c>. So inside the web application the
+        /// default below never applies, and it never had to be right.
+        ///
+        /// It applies to every OTHER process, and that set is growing. The lobby server reads it
+        /// through MetaDataCache.ServerGetMod/ServerGetMap when a battle opens - which worked
+        /// only because the lobby server ran INSIDE the website's IIS worker and inherited that
+        /// assignment. A standalone one does not, on any platform, and off Windows this string is
+        /// not a path at all: no c: drive, and a backslash is an ordinary filename character.
+        ///
+        /// ZK_SITE_DISK_PATH sets it, in the same shape and for the same reason as
+        /// ZK_CONNECTION_STRING below: the only way to point a deployment at the right directory
+        /// without editing source. Off Windows there is no sensible guess - the site's directory
+        /// is wherever it was deployed - so the default is empty rather than invented, and
+        /// MetaDataCache says so instead of quietly finding nothing.
+        /// </summary>
+        public static string SiteDiskPath = DefaultSiteDiskPath();
+
+        static string DefaultSiteDiskPath()
+        {
+            var configured = Environment.GetEnvironmentVariable("ZK_SITE_DISK_PATH");
+            if (!string.IsNullOrEmpty(configured)) return configured;
+
+            // Kept exactly on Windows: AutoRegistrator and Fixer are run by hand from a checkout
+            // there, and this is the path they have always meant.
+            if (Environment.OSVersion.Platform != PlatformID.Unix) return @"c:\projekty\zero-k.info\www";
+
+            return "";
+        }
 
 
         public const int ZkLobbyUserCpu = 6667;
