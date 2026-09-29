@@ -1685,7 +1685,16 @@ namespace ZeroKWeb.Host
             // already reached by other checks. Their INDEX views were not rendered by anything,
             // which the ZK_RENDERED_VIEWS measurement made visible: a controller being exercised
             // says nothing about which of its views ever execute.
-            foreach (var path in new[] { "/Factions", "/Missions", "/Mods", "/Contributions", "/LobbyNews", "/Download", "/Images", "/Home", "/Forum", "/Clans" })
+            foreach (var path in new[]
+                     {
+                         "/Factions", "/Missions", "/Mods", "/Contributions", "/LobbyNews",
+                         "/Download", "/Images", "/Home", "/Forum", "/Clans",
+                         // /Static needs its name: Index(string name = "LobbyStart") answers
+                         // Content("") for everything except UnitGuide, so the bare path is a
+                         // 200 of nothing BY DESIGN. Asking for the page without it measured the
+                         // default and would have been read as the view rendering.
+                         "/Static?name=UnitGuide",
+                     })
             {
                 var response = await client.GetAsync(Url + path);
                 var html = await response.Content.ReadAsStringAsync();
@@ -1724,13 +1733,30 @@ namespace ZeroKWeb.Host
             failures += Check(maps.IsSuccessStatusCode, "/Maps/JsonSearch answered (" + (int)maps.StatusCode + ")");
             failures += Check(mapsJson.Contains("\"internalName\""), "and it returned maps with their fields");
 
+            // Clans/Detail and Factions/Detail are NOT here, and the reason is the fixture rather
+            // than the port. It has no clans and no factions at all, so /Clans/Detail/1 answers a
+            // short "not found" and /Factions/Detail/1 throws from Single() - which is what MVC 5
+            // does with the same rows. Asserting a whole page would have been asserting that the
+            // fixture has data.
+            //
+            // Those two views, and the faction and clan pages behind them, need rows seeded the
+            // way AsModerator seeds an account. That is worth doing and is not this change.
+
             // Pages that need somebody signed in. They redirect anonymously, so the survey above
             // could only see a 302 - and a 302 says nothing about whether the view behind it
             // renders. ZK_RENDERED_VIEWS made that gap countable; these close part of it.
             failures += await AsModerator(async moderator =>
             {
                 var signedIn = 0;
-                foreach (var path in new[] { "/Users", "/Charts" })
+                foreach (var path in new[]
+                         {
+                             "/Users", "/Charts",
+                             // The next layer of pages no request had reached. Every one of these
+                             // renders a view the ZK_RENDERED_VIEWS measurement lists as never
+                             // executed, and each needs a signed-in moderator to get past [Auth].
+                             "/Users/ReportLog", "/Users/MassBan", "/Users/ReportToAdmin/1",
+                             "/Admin/TraceLogs", "/Charts/Ratings", "/Users/AdminUserDetail/1",
+                         })
                 {
                     var response = await moderator.GetAsync(Url + path);
                     var html = await response.Content.ReadAsStringAsync();
