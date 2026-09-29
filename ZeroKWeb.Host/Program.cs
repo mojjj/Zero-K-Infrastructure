@@ -1661,6 +1661,32 @@ namespace ZeroKWeb.Host
             failures += Check(maps.IsSuccessStatusCode, "/Maps/JsonSearch answered (" + (int)maps.StatusCode + ")");
             failures += Check(mapsJson.Contains("\"internalName\""), "and it returned maps with their fields");
 
+            // Pages that need somebody signed in. They redirect anonymously, so the survey above
+            // could only see a 302 - and a 302 says nothing about whether the view behind it
+            // renders. ZK_RENDERED_VIEWS made that gap countable; these close part of it.
+            failures += await AsModerator(async moderator =>
+            {
+                var signedIn = 0;
+                foreach (var path in new[] { "/Users", "/Charts" })
+                {
+                    var response = await moderator.GetAsync(Url + path);
+                    var html = await response.Content.ReadAsStringAsync();
+                    signedIn += Check(response.IsSuccessStatusCode && html.Contains("</html>"),
+                        path + " renders for a signed-in user (" + (int)response.StatusCode + ", " + html.Length + " bytes)");
+                }
+
+                // /Wiki is NOT a page here, and that is correct rather than a gap. Asked for no
+                // node it looks for a wiki thread, finds none - the fixture has no forum posts -
+                // and sends you to create it. The first version of this check expected HTML and
+                // failed; the behaviour was right and the expectation was wrong.
+                var wiki = await moderator.GetAsync(Url + "/Wiki");
+                signedIn += Check((int)wiki.StatusCode == 302
+                                  && (wiki.Headers.Location?.ToString() ?? "").Contains("/Forum/NewPost"),
+                    "/Wiki with no node offers to create it (" + (int)wiki.StatusCode + " -> " + wiki.Headers.Location + ")");
+
+                return signedIn;
+            });
+
             return failures;
         }
 
