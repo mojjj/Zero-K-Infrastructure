@@ -555,12 +555,38 @@ battle rows - so the working half was exercised again and again and the broken h
 fix is `ToLower()`, which translates on both stacks. `tools/battle-result-probe` now asks about a
 name that does not exist, first, before anything else.
 
+### The rating pass, and why it is not in the probe
+
+`SubmitSpringBattleResult` calls `RatingSystems.FillApplicableRatings` and
+`RatingSystems.ProcessResult` after storing the battle. Neither takes a server, so both looked
+reachable from `tools/battle-result-probe` - and they are, but the check they would support is
+not worth having. **Tried, and recorded rather than shipped.**
+
+`ProcessResult` hands the debriefing to `AttachResultReporting`, which invokes it only once the
+rating system has processed that battle. The rating system reads the database **on its own
+connection**, and the probe's battle exists only inside a transaction it always rolls back. So:
+
+```
+WHR: Read 150 battles from database.      <- the fixture's, not the probe's
+```
+
+The debriefing is registered against a `SpringBattleID` that will never be processed, and never
+fires. Committing the battle instead would make the check work and the fixture dirty, which is a
+worse trade for what it proves.
+
+What it would have proved is also already covered, and more strongly: `db/compare-ratings.sh` runs
+the whole WHR pipeline on **both** stacks and compares the ratings, and they are identical. The
+lobby server runs a full pass at startup on .NET&nbsp;9 every time
+`tools/lobby-core-start.sh` starts it. The rating *computation* is not in question; only the
+hand-off after a battle is, and that hand-off cannot be observed from inside a rollback.
+
 ### Still not done
 
-**Nothing has finished a game by itself, and nothing has rated one.** The engine's `GAMEOVER` is
-still synthesised, because a headless client never readies up. And `SubmitSpringBattleResult`'s
-rating pass, award calculation, replay upload and Planetwars all need a live `ZkLobbyServer`; none
-of it has run on .NET&nbsp;9.
+**Nothing has finished a game by itself, and nothing has rated one end to end.** The engine's
+`GAMEOVER` is synthesised because "Probe Game" has no victory condition. The rating hand-off is
+argued above. And award calculation, replay upload and Planetwars all need a live
+`ZkLobbyServer` - `SubmitSpringBattleResult` calls `server.GhostSay` unconditionally, before the
+rating block, so even a null-server run stops there.
 
 `LogIP` is only half-covered: it skips private addresses, so a probe connecting from `127.0.0.1`
 never reaches it. The EF6 test covers that half; nothing on .NET 9 does yet.
