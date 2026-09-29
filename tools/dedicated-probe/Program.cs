@@ -197,8 +197,13 @@ namespace DedicatedProbe
                     return 1;
                 }
 
-                Send(autohostPort, StartPlaying("0123456789abcdef0123456789abcdef", "probe.sdfz"));
-                if (!battleStarted.Wait(TimeSpan.FromSeconds(15)))
+                // /forcestart through the Talker, which is what an autohost does when players do not
+                // ready up - and a headless client never does, because StartPosType is 2 and Spring
+                // waits for everyone to place a start position. So SERVER_STARTPLAYING is REAL: the
+                // replay path and the engine's game id below are ones the engine made, not values
+                // this probe invented.
+                server.ForceStart();
+                if (!battleStarted.Wait(TimeSpan.FromSeconds(30)))
                 {
                     Console.WriteLine("   FAIL  SERVER_STARTPLAYING did not reach BattleStarted");
                     return 1;
@@ -206,6 +211,12 @@ namespace DedicatedProbe
                 Console.WriteLine("   ok    SERVER_STARTPLAYING parsed: BattleStarted, replay=" + startedContext?.ReplayName
                                   + ", engineBattleID=" + startedContext?.EngineBattleID);
 
+                // SERVER_GAMEOVER stays synthesised, and this is the reason rather than an excuse:
+                // the game runs, but nothing in it can ever end. Spring does not decide winners -
+                // the GAME does, in Lua, and "Probe Game" is six lines of modinfo.lua with no
+                // gadgets and no units. Waited 75 seconds for a real one; none comes, and none can.
+                // A real game archive would provide the victory condition and is the multi-gigabyte
+                // download this whole setup exists to avoid.
                 Send(autohostPort, GameOver(0, new byte[] { 0 }));
                 if (!gameOver.Wait(TimeSpan.FromSeconds(15)))
                 {
@@ -251,22 +262,6 @@ namespace DedicatedProbe
         {
             using (var client = new UdpClient())
                 client.Send(payload, payload.Length, "127.0.0.1", port);
-        }
-
-        /// <summary>[2][size:4 LE][gameID:16][replay name] - the layout Talker reads.</summary>
-        private static byte[] StartPlaying(string gameIdHex, string replayName)
-        {
-            var name = Encoding.UTF8.GetBytes(replayName);
-            var gameId = Enumerable.Range(0, 16).Select(i => Convert.ToByte(gameIdHex.Substring(i * 2, 2), 16)).ToArray();
-            var packet = new byte[21 + name.Length];
-            packet[0] = (byte)2;
-            packet[1] = (byte)(packet.Length & 0xFF);
-            packet[2] = (byte)((packet.Length >> 8) & 0xFF);
-            packet[3] = (byte)((packet.Length >> 16) & 0xFF);
-            packet[4] = (byte)((packet.Length >> 24) & 0xFF);
-            Array.Copy(gameId, 0, packet, 5, 16);
-            Array.Copy(name, 0, packet, 21, name.Length);
-            return packet;
         }
 
         /// <summary>[3][size][playerNumber][winning ally teams] - the layout Talker reads.</summary>

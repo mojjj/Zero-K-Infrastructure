@@ -446,10 +446,21 @@ the symptom is silence in the event stream rather than an error about a password
 
 ### The end of a game, and a fifth defect
 
-The engine will not finish a game here on its own: the host script uses `StartPosType=2`, so Spring
-waits for every player to place a start position and ready up, which a headless client never does.
-So `SERVER_STARTPLAYING` and `SERVER_GAMEOVER` are **synthesised**, in the layout `Talker` parses -
-the layout a real `PLAYER_JOINED` had already arrived in.
+The host script uses `StartPosType=2` - `ScriptGenerator` hardcodes it for every non-mission game -
+so Spring waits for each player to place a start position and ready up, and a headless client never
+does. `DedicatedServer.ForceStart()` sends `/forcestart` through the Talker, which is exactly what
+an autohost does when players do not ready up, and **the game then starts for real**:
+`SERVER_STARTPLAYING` is the engine's, and the replay path and game id that reach the database are
+ones the engine made.
+
+`SERVER_GAMEOVER` is still **synthesised**, and the reason is not squeamishness. The game runs, but
+nothing in it can ever end: Spring does not decide winners, the *game* does, in Lua - and "Probe
+Game" is six lines of `modinfo.lua` with no gadgets and no units. Waited 75 seconds for a real one;
+none comes, and none can. A real game archive would carry the victory condition, and is the
+multi-gigabyte download this whole arrangement exists to avoid.
+
+The packet is built in the layout `Talker` parses - the layout a real `PLAYER_JOINED` and a real
+`SERVER_STARTPLAYING` both arrived in.
 
 ```
    ok    SERVER_STARTPLAYING parsed: BattleStarted, replay=probe.sdfz, engineBattleID=0123456789ABCDEF...
@@ -460,7 +471,7 @@ the layout a real `PLAYER_JOINED` had already arrived in.
 Sending `GAMEOVER` alone would have proved nothing, and that is worth stating: `DedicatedServer`
 refuses to raise `GameOver` unless `Context.IngameStartTime` is set, which only
 `SERVER_STARTPLAYING` does. A check built on `GAMEOVER` by itself would have passed by never being
-reached.
+reached. That prerequisite is now met by the engine rather than by a second synthesised packet.
 
 **The defect.** `process.PriorityClass = ProcessPriorityClass.High` throws
 `Win32Exception(13): Permission denied` on Linux, because an unprivileged process may only *lower*
