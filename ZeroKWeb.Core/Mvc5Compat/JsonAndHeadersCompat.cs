@@ -1,5 +1,6 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace System.Web.Mvc
 {
@@ -16,16 +17,28 @@ namespace System.Web.Mvc
     /// honoured: nothing in this site passes it, and an overload that started returning 500 for
     /// a value nobody uses would be inventing behaviour rather than porting it.
     /// </summary>
-    public enum JsonRequestBehavior
+    /// <summary>
+    ///     **Not an enum, and the reason matters.** It was one, with an extension method
+    ///     <c>Json(this Controller, object, JsonRequestBehavior)</c> beside it, and every call site
+    ///     compiled. None of them called it: ASP.NET Core's <c>Controller</c> already declares
+    ///     <c>Json(object value, object serializerSettings)</c>, and an instance method always beats
+    ///     an extension method when both are applicable - an enum value is an <c>object</c>, so the
+    ///     built-in won every time.
+    ///
+    ///     The call therefore passed <c>AllowGet</c> as the SERIALIZER SETTINGS, and every
+    ///     autocomplete endpoint answered 500 at runtime: *"Property 'JsonResult.SerializerSettings'
+    ///     must be an instance of type 'System.Text.Json.JsonSerializerOptions'"*. Nothing caught it
+    ///     because nothing had ever requested one of those URLs.
+    ///
+    ///     So the shim stops fighting overload resolution and joins it: these are the settings now,
+    ///     and they are null, which is what <c>Json(data)</c> passes and means "use the serializer
+    ///     this application is configured with". The call sites are unchanged, MVC 5 still sees its
+    ///     own enum, and the built-in overload does the right thing instead of throwing.
+    /// </summary>
+    public static class JsonRequestBehavior
     {
-        AllowGet = 0,
-        DenyGet = 1
-    }
-
-    public static class JsonCompat
-    {
-        public static JsonResult Json(this Controller controller, object data, JsonRequestBehavior behavior)
-            => controller.Json(data);
+        public static readonly JsonSerializerOptions AllowGet = null;
+        public static readonly JsonSerializerOptions DenyGet = null;
     }
 
     /// <summary>
