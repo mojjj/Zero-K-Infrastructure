@@ -31,8 +31,10 @@ echo "building both images..."
 docker build -q -t zk-site . >/dev/null
 
 docker rm -f zk-lobby-up zk-site-up >/dev/null 2>&1 || true
+harness_log="$(mktemp)"
 cleanup() {
     docker rm -f zk-lobby-up zk-site-up >/dev/null 2>&1 || true
+    rm -f "$harness_log"
     [ "${1:-}" = "keep-config" ] || ./tools/lobby-config.sh clear
 }
 trap 'cleanup' EXIT
@@ -66,6 +68,25 @@ if [ "${lobby:-}" = "1" ] && [ "${site:-}" = "1" ]; then
     # the front page is the one that cannot render without it.
     code=$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$SITE_PORT/" 2>/dev/null)
     check "$([ "$code" = "200" ] && echo 0 || echo 1)" "the front page, which asks the lobby server, answered ($code)"
+
+    # The checks that need a lobby server, run by the site's own harness.
+    #
+    # The image's ENTRYPOINT is the harness binary and its CMD is --serve; with the CMD dropped it
+    # runs the checks instead of serving. That is the whole trick: these are the SAME checks
+    # tools/run-host.sh runs, and the only difference is that LobbyApiUrl is set here, so the ones
+    # that skip themselves without a lobby server - Planetwars/PwMatchMaker.cshtml is the first -
+    # run for real. It binds 127.0.0.1:5199 for its own requests, which is not $SITE_PORT, so the
+    # container already serving above is left alone.
+    echo "   ...  running the site's checks with a lobby server attached"
+    if docker run --rm --network host -e ZK_CONNECTION_STRING="$CS" \
+            --entrypoint dotnet zk-site bin/ZeroKWeb.Host.dll > "$harness_log" 2>&1; then
+        harness=0
+    else
+        harness=1
+    fi
+    grep -E "MatchMaker rendered|needs a lobby server" "$harness_log" | sed 's/^/     /' || true
+    check "$harness" "the site's own checks pass with a lobby server attached"
+    [ "$harness" = "0" ] || tail -30 "$harness_log"
 
     # THE CONTROL, and the only reason the check above means anything: stop the lobby server and
     # the same page must stop working. Without this, a 200 proves the page rendered - not that it

@@ -631,6 +631,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckPlanetwarsActionSurface();
                 failures += await CheckClanActionSurface();
                 failures += await CheckFormPostsAreGuarded();
+                failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
                 if (failures == 0)
@@ -643,6 +644,51 @@ namespace ZeroKWeb.Host
             }
         }
 
+
+        /// <summary>
+        /// Planetwars/PwMatchMaker.cshtml, the last PlanetWars view that had never rendered.
+        ///
+        /// It is not blocked on a row the way Galaxy and Planet were. The action is [Auth] and
+        /// opens with <c>Global.LobbyApi.IsPlanetWarsMatchMakerRunning</c>, so with no lobby
+        /// server attached it cannot reach the view at all - and this harness deliberately runs
+        /// without one, which is the property the null guards in Planet.cshtml and Galaxy.cshtml
+        /// exist to keep.
+        ///
+        /// So it SKIPS rather than fails when there is no lobby server, and runs for real when
+        /// there is: tools/stack.sh sets the LobbyApiUrl MiscVar and starts an actual lobby
+        /// server beside the site, and the site container runs these same checks when it is given
+        /// no --serve. A skip that printed nothing would be the worst of both - this says which
+        /// of the two runs happened, so "it passed" cannot quietly mean "it was not attempted".
+        ///
+        /// A real server always answers: PlanetWarsMatchMaker is constructed unconditionally in
+        /// the ZkLobbyServer constructor, and GenerateLobbyCommand returns a Clear command rather
+        /// than null when PlanetWars is not running. So the view renders with no options, and the
+        /// assertion is deliberately about the view's own markup rather than about a vote: the
+        /// options loop needs a PlanetWars round in progress, which is not something a check can
+        /// seed, and claiming otherwise would be the same mistake the galaxy links nearly were.
+        /// </summary>
+        private static async Task<int> CheckPlanetWarsMatchMaker()
+        {
+            if (ZeroKWeb.Global.LobbyApi == null)
+            {
+                Console.WriteLine("   ....  /Planetwars/MatchMaker needs a lobby server and none is "
+                                  + "configured - run tools/stack.sh, which starts one");
+                return 0;
+            }
+
+            return await AsModerator(async client =>
+            {
+                var response = await client.GetAsync(Url + "/Planetwars/MatchMaker");
+                var html = await response.Content.ReadAsStringAsync();
+
+                // The action answers Content("Match maker offline") when the lobby server says the
+                // matchmaker is not running, and that is a 200 with no view behind it. Asserting
+                // the status alone would pass on exactly that.
+                return Check(response.IsSuccessStatusCode && html.Contains("id=\"matchMaker\""),
+                    "/Planetwars/MatchMaker rendered its view against a real lobby server ("
+                    + (int)response.StatusCode + ", " + html.Length + " bytes)");
+            });
+        }
 
         /// <summary>
         /// HomeController's own Logon, which is the site's real sign-in page - the one visitors
