@@ -207,7 +207,16 @@ namespace ZeroKWeb.Host
                     Console.WriteLine("serving built bundles from " + built);
                 }
 
-                foreach (var assets in new[] { "img", "Scripts", "Styles" })
+                // Resources is the fourth because it is content the site PUBLISHES, not content
+                // it displays: {BaseSiteUrl}/Resources/{name}.metadata.xml.gz is where the game
+                // client downloads map and game metadata from, and now where a lobby server in
+                // another process falls back to when it cannot read the website's disk. IIS
+                // serves it as static content today; nothing here did.
+                //
+                // The directory is not in the repository - AutoRegistrator writes it on a
+                // deployment - and the loop below skips what is not there, so this costs a
+                // checkout nothing.
+                foreach (var assets in new[] { "img", "Scripts", "Styles", "Resources" })
                 {
                     var directory = System.IO.Path.Combine(FindSiteRoot(), assets);
                     if (!System.IO.Directory.Exists(directory)) continue;
