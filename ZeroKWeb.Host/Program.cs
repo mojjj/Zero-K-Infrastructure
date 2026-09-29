@@ -1611,6 +1611,77 @@ namespace ZeroKWeb.Host
         }
 
         /// <summary>
+        /// A faction and a clan, for the pages that cannot exist without them.
+        ///
+        /// The fixture has neither - make-fixture.py nulls ClanID and FactionID on every account
+        /// and copies no rows for either table - so Clans/Detail and Factions/Detail were not
+        /// merely unrendered, they were unreachable: one answered "not found" and the other threw
+        /// from Single(). A survey that asked for them would have been asserting that the fixture
+        /// has data.
+        ///
+        /// Seeded and removed the way AsModerator seeds an account, and for the same reason: the
+        /// alternative is putting rows in the committed fixture, which every other check would
+        /// then have to account for. The ids are returned rather than assumed, because they are
+        /// IDENTITY columns and the tables are empty - the first row is not necessarily 1.
+        ///
+        /// The account is joined to both, and put back afterwards, because a clan page with no
+        /// members renders a different and much shorter view of itself.
+        /// </summary>
+        private static async Task<int> WithFactionAndClan(Func<int, int, Task<int>> body)
+        {
+            int factionID, clanID, accountID;
+            int? originalFaction, originalClan;
+
+            using (var db = new ZkDataContext())
+            {
+                var faction = new Faction
+                {
+                    Name = "Harness Faction", Shortcut = "HARN", Color = "#3366cc",
+                    Metal = 0, Bombers = 0, Dropships = 0, Warps = 0,
+                    EnergyDemandLastTurn = 0, EnergyProducedLastTurn = 0,
+                    VictoryPoints = 0, IsDeleted = false,
+                };
+                db.Factions.Add(faction);
+
+                var clan = new Clan { ClanName = "Harness Clan", Shortcut = "HC", IsDeleted = false };
+                db.Clans.Add(clan);
+                db.SaveChanges();
+
+                factionID = faction.FactionID;
+                clanID = clan.ClanID;
+
+                var account = db.Accounts.OrderBy(a => a.AccountID).First();
+                accountID = account.AccountID;
+                originalFaction = account.FactionID;
+                originalClan = account.ClanID;
+                account.FactionID = factionID;
+                account.ClanID = clanID;
+                db.SaveChanges();
+            }
+
+            try
+            {
+                return await body(factionID, clanID);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var account = db.Accounts.Single(a => a.AccountID == accountID);
+                    account.FactionID = originalFaction;
+                    account.ClanID = originalClan;
+                    db.SaveChanges();
+
+                    var clan = db.Clans.FirstOrDefault(c => c.ClanID == clanID);
+                    if (clan != null) db.Clans.Remove(clan);
+                    var faction = db.Factions.FirstOrDefault(f => f.FactionID == factionID);
+                    if (faction != null) db.Factions.Remove(faction);
+                    db.SaveChanges();
+                }
+            }
+        }
+
+        /// <summary>
         /// The two views that diverged for their child actions - Users/Detail and
         /// Battles/Detail - requested as pages.
         ///
@@ -1733,14 +1804,30 @@ namespace ZeroKWeb.Host
             failures += Check(maps.IsSuccessStatusCode, "/Maps/JsonSearch answered (" + (int)maps.StatusCode + ")");
             failures += Check(mapsJson.Contains("\"internalName\""), "and it returned maps with their fields");
 
-            // Clans/Detail and Factions/Detail are NOT here, and the reason is the fixture rather
-            // than the port. It has no clans and no factions at all, so /Clans/Detail/1 answers a
-            // short "not found" and /Factions/Detail/1 throws from Single() - which is what MVC 5
-            // does with the same rows. Asserting a whole page would have been asserting that the
-            // fixture has data.
-            //
-            // Those two views, and the faction and clan pages behind them, need rows seeded the
-            // way AsModerator seeds an account. That is worth doing and is not this change.
+            // Clans/Detail and Factions/Detail need rows to exist at all: the fixture has no
+            // clans and no factions, so one answered "not found" and the other threw from
+            // Single(). Seeded here rather than committed to the fixture - see WithFactionAndClan.
+            failures += await WithFactionAndClan(async (factionID, clanID) =>
+            {
+                var seeded = 0;
+                foreach (var path in new[] { "/Factions/Detail/" + factionID, "/Clans/Detail/" + clanID })
+                {
+                    var response = await client.GetAsync(Url + path);
+                    var html = await response.Content.ReadAsStringAsync();
+                    seeded += Check(response.IsSuccessStatusCode && html.Contains("</html>"),
+                        path + " is a whole page (" + (int)response.StatusCode + ", " + html.Length + " bytes)");
+                }
+
+                // The seeded rows reach the page, not just its chrome. Asserting only "</html>"
+                // would pass on a page that rendered its layout and lost its model, which is the
+                // shape of failure this port has hit twice - an empty grid and an empty post.
+                var clan = await (await client.GetAsync(Url + "/Clans/Detail/" + clanID)).Content.ReadAsStringAsync();
+                seeded += Check(clan.Contains("Harness Clan"), "and the clan's name is in it");
+                var faction = await (await client.GetAsync(Url + "/Factions/Detail/" + factionID)).Content.ReadAsStringAsync();
+                seeded += Check(faction.Contains("Harness Faction"), "and the faction's name is in it");
+
+                return seeded;
+            });
 
             // Pages that need somebody signed in. They redirect anonymously, so the survey above
             // could only see a 302 - and a 302 says nothing about whether the view behind it
