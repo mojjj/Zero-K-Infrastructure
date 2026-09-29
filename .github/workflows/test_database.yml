@@ -282,10 +282,16 @@ jobs:
   # which is a real configuration and worth checking, but it is the one the live site is moving
   # AWAY from, and nothing in CI had ever run the one it is moving to.
   #
-  # Its own job, for the reason the host job gives above: the host job's name is a required
-  # status check, and this is the heaviest thing here - a mono build of the Framework lobby
-  # server, a site image, and both of them started against SQL Server. It can be promoted once
-  # it has a record.
+  # Its own job, for the reason the host job gives above: a step added to an existing job blocks
+  # every pull request the first time it is flaky. This is the heaviest thing here - a mono build
+  # of the Framework lobby server, a site image, and both started against SQL Server - and it runs
+  # in about five and a half minutes.
+  #
+  # **Its name is a required status check on master since 2026-09-29**, which the host job's is
+  # not. That makes the name load-bearing: branch protection matches it as an exact string, so
+  # renaming this job - even to describe it better - leaves protection waiting for a context
+  # nothing reports any more, and every pull request blocks forever on a check that will never
+  # appear. Change it only together with the protection setting, and prefer not to.
   #
   # What it covers that nothing else does:
   #   * the LobbyApiUrl switch, end to end, over the HTTP+JSON transport rather than in-process
