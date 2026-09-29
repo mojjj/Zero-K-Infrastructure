@@ -273,7 +273,6 @@
     <None Include="SM.eot" />
     <None Include="SM.ttf" />
     <Content Include="Views\Maps\UploadResourceResult.cshtml" />
-    <Content Include="Views\Planetwars\Index.cshtml" />
     <Content Include="Views\Planetwars\Galaxy.cshtml" />
     <Content Include="Web.config">
       <SubType>Designer</SubType>

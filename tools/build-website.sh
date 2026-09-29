@@ -14,6 +14,8 @@
 #   * Razor views are not compiled. mono ships no aspnet_compiler.exe (MSB6004), so a
 #     mistake in a .cshtml file gets through this check untouched.
 #   * It does not run anything. Running the site needs Windows, IIS Express and a database.
+#   * It does not publish, so on its own it cannot catch a project item that names a file
+#     which is not there. The guard below does that part, because the Windows build does.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -28,6 +30,46 @@ if [ -d "$WORK" ]; then
 fi
 mkdir -p "$WORK"
 git -C "$REPO" ls-files -z | tar -C "$REPO" --null -T - -cf - | tar -C "$WORK" -xf -
+
+# Every file the project names is actually there.
+#
+# msbuild compiles what it is given and says nothing about a <Content> item whose file is
+# missing; the Windows build only fails later, in the publish step that copies them:
+#
+#     Microsoft.Web.Publishing.targets(3074,5): error : Copying file Views\...\X.cshtml failed
+#
+# Deleting a dead view and forgetting its csproj line passed here and failed there. This runs
+# against the tracked copy, which is what CI checks out, so a file that is untracked but
+# present on this machine cannot hide the same mistake.
+python3 - "$WORK" "$PROJECT" <<'GUARDEOF'
+import os, re, sys
+
+work, project = sys.argv[1], sys.argv[2]
+source = open(os.path.join(work, project), encoding='utf-8-sig').read()
+root = os.path.dirname(os.path.join(work, project))
+
+# Compared without case, because NTFS is without case and the project was written on it:
+# <Content Include="Img\zk_logo.png_org" /> names img/zk_logo.png_org and is correct. A
+# case-sensitive check here would report files Windows finds perfectly well.
+present = set()
+for directory, _, files in os.walk(root):
+    relative = os.path.relpath(directory, root)
+    for name in files:
+        present.add(os.path.normpath(os.path.join(relative, name)).lower())
+
+missing = []
+for item, include in re.findall(r'<(Content|None|Compile|EmbeddedResource)\s+Include="([^"*$]+)"', source):
+    if os.path.normpath(include.replace('\\', os.sep)).lower() not in present:
+        missing.append('%s: %s' % (item, include))
+
+if missing:
+    print('%s names %d file(s) that are not in the repository:' % (project, len(missing)))
+    for line in missing:
+        print('  ' + line)
+    print('')
+    print('The Windows build fails on these in its publish step. Remove the item or restore the file.')
+    sys.exit(1)
+GUARDEOF
 
 # One workaround, applied to the copy only. ZkData.MissionUpdater.UpdateMission uses
 # ZipFile.Open, which trips a System.IO.Compression facade version conflict under mono -
