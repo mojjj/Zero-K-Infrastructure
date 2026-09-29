@@ -338,44 +338,98 @@ namespace ZkData
 
         public static Mod ServerGetMod(string internalName)
         {
-            var file = ServerMetaPath(internalName);
-            if (file != null && File.Exists(file)) return GetModMetadata(File.ReadAllBytes(file));
-            return null;
+            var data = ServerGetMetaData(internalName);
+            return data == null ? null : GetModMetadata(data);
         }
         
         public static Map ServerGetMap(string internalName)
         {
-            var file = ServerMetaPath(internalName);
-            if (file != null && File.Exists(file)) return GetMapMetadata(File.ReadAllBytes(file));
-            return null;
+            var data = ServerGetMetaData(internalName);
+            return data == null ? null : GetMapMetadata(data);
         }
 
         /// <summary>
-        /// Where a resource's metadata would be, and a warning naming it when it is not there.
+        /// A resource's metadata: off the site's disk when that is reachable, otherwise off the
+        /// site itself over HTTP.
         ///
-        /// Both callers returned null for a missing file and said nothing, which reads as "this
-        /// game has no options" to a player running !listoptions - a believable answer to what is
-        /// actually a misconfigured path. That mattered little while the only caller was the
-        /// website, which sets GlobalConst.SiteDiskPath from its own root in Application_Start;
-        /// it matters now that a lobby server runs in its own process and inherits nothing.
+        /// **The disk read is an optimisation, not the design.** It works because the lobby
+        /// server used to run inside the website's IIS worker, sharing both its process and its
+        /// filesystem. Out of process it inherits neither: GlobalConst.SiteDiskPath falls back to
+        /// a developer's checkout path on Windows and to nothing at all elsewhere, and both
+        /// lookups then returned null silently - which a player sees as "this game has no
+        /// options" from !listoptions.
         ///
-        /// Warned once per path, not per call: ServerBattle asks on every battle it opens.
+        /// The fallback needs no new API. The website already PUBLISHES these exact bytes at
+        /// {ResourceBaseUrl}/{name}.metadata.xml.gz - the game client downloads them from there,
+        /// in this same file, and parses them with the same two methods. A second copy of that
+        /// over ILobbyServerApi would have been a new endpoint for a file that already has a URL,
+        /// and ILobbyServerApi runs website-to-lobby-server, which is the wrong direction for
+        /// this anyway.
+        ///
+        /// Cached by name because an InternalName identifies one immutable version of a resource
+        /// - a new game build is a new row with a new name - and ServerBattle asks on every
+        /// battle it opens. Only successes are cached, so a website that was briefly down does
+        /// not stay down for the life of the process.
         /// </summary>
-        static string ServerMetaPath(string internalName)
+        static byte[] ServerGetMetaData(string internalName)
         {
-            if (string.IsNullOrEmpty(GlobalConst.SiteDiskPath))
+            if (string.IsNullOrEmpty(internalName)) return null;
+
+            byte[] cached;
+            if (serverMetaData.TryGetValue(internalName, out cached)) return cached;
+
+            var escaped = internalName.EscapePath();
+
+            if (!string.IsNullOrEmpty(GlobalConst.SiteDiskPath))
             {
-                WarnOnce("site-disk-path-unset",
-                    "GlobalConst.SiteDiskPath is not set, so no map or game metadata can be read. "
-                    + "The website sets it from its own root; another process has to be told - "
-                    + "set ZK_SITE_DISK_PATH to the site's directory.");
-                return null;
+                var file = Path.Combine(GlobalConst.SiteDiskPath, "resources", $"{escaped}.metadata.xml.gz");
+                if (File.Exists(file))
+                {
+                    var bytes = File.ReadAllBytes(file);
+                    serverMetaData[internalName] = bytes;
+                    return bytes;
+                }
             }
 
-            var file = Path.Combine(GlobalConst.SiteDiskPath, "resources", $"{internalName.EscapePath()}.metadata.xml.gz");
-            if (!File.Exists(file)) WarnOnce(file, "No metadata at " + file + " - options for it will look empty.");
-            return file;
+            var url = $"{GlobalConst.ResourceBaseUrl}/{escaped}.metadata.xml.gz";
+            try
+            {
+                byte[] bytes;
+                lock (serverWebClient) bytes = serverWebClient.DownloadData(url);
+                serverMetaData[internalName] = bytes;
+                return bytes;
+            }
+            catch (Exception ex)
+            {
+                // Once per resource, not once per battle. A whole site being unreachable is one
+                // line per resource anyone tries to host, which is the number worth seeing.
+                WarnOnce(internalName,
+                    $"No metadata for {internalName}: not on disk at "
+                    + $"{(string.IsNullOrEmpty(GlobalConst.SiteDiskPath) ? "<SiteDiskPath unset>" : GlobalConst.SiteDiskPath)}"
+                    + $" and {url} did not answer ({ex.Message}). Its options will look empty.");
+                return null;
+            }
         }
+
+        static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> serverMetaData =
+            new System.Collections.Concurrent.ConcurrentDictionary<string, byte[]>();
+
+        /// <summary>
+        /// Ten seconds, because this is called while a battle is opening. WebClient's default is
+        /// a hundred, and a website that hangs rather than refuses would hold up every battle in
+        /// the lobby for that long, one resource at a time.
+        /// </summary>
+        class TimeoutWebClient : WebClient
+        {
+            protected override WebRequest GetWebRequest(Uri address)
+            {
+                var request = base.GetWebRequest(address);
+                if (request != null) request.Timeout = 10000;
+                return request;
+            }
+        }
+
+        static readonly WebClient serverWebClient = new TimeoutWebClient { Proxy = null };
 
         static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> warned =
             new System.Collections.Concurrent.ConcurrentDictionary<string, byte>();
@@ -383,6 +437,13 @@ namespace ZkData
         static void WarnOnce(string key, string message)
         {
             if (warned.TryAdd(key, 0)) Trace.TraceWarning(message);
+        }
+
+        /// <summary>Forgets what it downloaded. For tests, which change where the site is.</summary>
+        public static void ServerClearMetaDataCache()
+        {
+            serverMetaData.Clear();
+            warned.Clear();
         }
         
     }

@@ -78,6 +78,17 @@ namespace ZkData
             var connectionOverride = Environment.GetEnvironmentVariable("ZK_CONNECTION_STRING");
             if (!string.IsNullOrEmpty(connectionOverride)) ZkDataContextConnectionString = connectionOverride;
 
+            // Which site, for a process that is not it. The mode above picks a BaseSiteUrl per
+            // deployment, and that is right for the website itself and for tools run beside it.
+            // It is not right for a lobby server in another container, which reads map and game
+            // metadata from ResourceBaseUrl and would otherwise ask localhost:44301 - the Local
+            // mode's address for a site that is not there.
+            //
+            // Read after the mode has been applied, so it overrides whichever one is in force -
+            // the same shape and the same placement as ZK_CONNECTION_STRING above.
+            var siteUrlOverride = Environment.GetEnvironmentVariable("ZK_BASE_SITE_URL");
+            if (!string.IsNullOrEmpty(siteUrlOverride)) BaseSiteUrl = siteUrlOverride.TrimEnd('/');
+
             ResourceBaseUrl = string.Format("{0}/Resources", BaseSiteUrl);
             BaseImageUrl = string.Format("{0}/img/", BaseSiteUrl);
             SelfUpdaterBaseUrl = string.Format("{0}/lobby", BaseSiteUrl);
