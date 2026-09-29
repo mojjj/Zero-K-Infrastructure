@@ -560,3 +560,40 @@ What this does **not** mean is that the server can move out today. Still in the 
 The remaining `ILobbyServerApiInProcess` members are still implemented and still used -
 by the lobby server itself, and by the `Fixer` tool through `Global.Server`. What changed
 is that Zero-K.info is not one of their callers.
+
+## The GET surface, surveyed 2026-09-29
+
+The host harness exercised **18 of 34 controllers**. The other sixteen compiled, their views
+compiled, and no request had ever reached them - the same gap that hid every defect the lobby port
+found by running things. It hid three more here, all in `AutocompleteController`, all now fixed and
+checked.
+
+Going a level deeper found nothing further. Of the site's **207 actions**, 86 are GET-able with no
+required argument; requested anonymously they answer:
+
+| | |
+|---|---|
+| 200 | 38 |
+| 302 | 26 - `[Auth]`, redirected to sign in |
+| 405 | 14 - POST-only, which is the CSRF work holding |
+| 404 | 1 |
+| **500** | **7** |
+
+**None of the seven is a port defect**, and the reasons are worth recording so the next survey does
+not re-derive them:
+
+- `/Replays/Download`, `/Missions/File`, `/Forum/DeletePostPrompt`, `/Home/GetTooltip` want an
+  argument the survey did not give them. The same call fails identically on MVC 5.
+- `/News/Index` does `Model.First()` on an empty sequence. The fixture has **0 news rows**. Worth
+  knowing separately that the RSS feed cannot render a site with no news at all, on either stack.
+- `/Planetwars/Minimap` and `/Planetwars/Ladder` do `Galaxies.Single(g => g.IsDefault)` and the
+  fixture has **0 galaxies**. Inserting one makes both answer 200.
+
+`/Planetwars` itself needs more than a row: it reads `img/galaxies/<ImageName>` off disk, so it
+wants a real background image as well. Not a defect either - just content the fixture does not
+carry.
+
+**Filling those gaps in the committed fixture would unlock the pages, and is deliberately not done
+here.** `ZeroKWeb.Host` already creates its own galaxy for the Planetwars checks and keeps
+`IsDefault` false on purpose, with a comment saying a second default galaxy would break an
+unrelated page. Adding a default one to the fixture would walk into exactly that.
