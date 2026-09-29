@@ -35,6 +35,12 @@ namespace ZeroKWeb.Host
                 return 2;
             }
 
+            // Seeding a PlanetWars round, for tools/stack.sh. These do their work and stop; no
+            // web application is built, because the rows have to exist BEFORE the lobby server
+            // starts and the site is not involved in that.
+            if (args.Contains("--seed-planetwars-round")) return SeedPlanetWarsRound();
+            if (args.Contains("--remove-planetwars-round")) return RemovePlanetWarsRound();
+
             // The site's static content - img/, Scripts/, Styles/ - lives in Zero-K.info, and
             // the layout reads it through Server.MapPath. Without this the layout throws on
             // Directory.GetFiles("~/img/screenshots"), which is a missing web root rather than
@@ -684,9 +690,46 @@ namespace ZeroKWeb.Host
                 // The action answers Content("Match maker offline") when the lobby server says the
                 // matchmaker is not running, and that is a 200 with no view behind it. Asserting
                 // the status alone would pass on exactly that.
-                return Check(response.IsSuccessStatusCode && html.Contains("id=\"matchMaker\""),
+                var failures = Check(response.IsSuccessStatusCode && html.Contains("id=\"matchMaker\""),
                     "/Planetwars/MatchMaker rendered its view against a real lobby server ("
                     + (int)response.StatusCode + ", " + html.Length + " bytes)");
+
+                int planetID, factionID;
+                using (var db = new ZkDataContext())
+                {
+                    var planet = db.Planets.FirstOrDefault(x => x.Name == "Harness Planet");
+                    var faction = db.Factions.FirstOrDefault(x => x.Name == "Harness Faction");
+                    if (planet == null || faction == null)
+                    {
+                        Console.WriteLine("   ....  and its options loop needs a seeded round; "
+                                          + "tools/stack.sh seeds one before the lobby server starts");
+                        return failures;
+                    }
+                    planetID = planet.PlanetID;
+                    factionID = faction.FactionID;
+                }
+
+                // The view renders with no options at all when PlanetWars is not running -
+                // GenerateLobbyCommand answers a Clear command rather than null - so the check
+                // above passes on a page whose foreach never runs. This is the part that makes
+                // the loop execute: one attack option, over the same API the lobby server
+                // publishes to everyone else.
+                ZeroKWeb.Global.LobbyApi.AddPlanetWarsAttackOption(planetID, factionID);
+
+                var withOption = await client.GetAsync(Url + "/Planetwars/MatchMaker");
+                var optionHtml = await withOption.Content.ReadAsStringAsync();
+
+                failures += Check(optionHtml.Contains("Harness Planet"),
+                    "and with an attack option on it, the options loop renders the planet ("
+                    + optionHtml.Length + " bytes)");
+                failures += Check(optionHtml.Contains("[HARN]"),
+                    "with the attacking faction beside it");
+                // Only the loop's CanSelectForBattle branch emits this, and only for a viewer in
+                // the attacking faction - which the seed put them in.
+                failures += Check(optionHtml.Contains("MatchMakerJoin"),
+                    "and a Join form, which is the branch a viewer outside the faction never sees");
+
+                return failures;
             });
         }
 
@@ -1680,8 +1723,130 @@ namespace ZeroKWeb.Host
         /// </summary>
         private static async Task<int> WithGalaxy(Func<int, int, int, Task<int>> body)
         {
-            int galaxyID, planetID, otherPlanetID;
+            // A round seeded from outside this process - tools/stack.sh does it before the lobby
+            // server starts - is ALREADY the default galaxy. Seeding a second one makes
+            // Galaxies.Single(x => x.IsDefault) throw, and that opens /Planetwars, /Home and the
+            // site's own Logon, so eight unrelated checks turn into 500s. Reuse it, and leave it
+            // alone afterwards: it belongs to whoever seeded it.
+            var seeded = FindSeededGalaxy();
+            if (seeded != null) return await body(seeded.Value.GalaxyID, seeded.Value.PlanetID, seeded.Value.OtherPlanetID);
 
+            var (galaxyID, planetID, otherPlanetID) = SeedGalaxyRows();
+
+            try
+            {
+                return await body(galaxyID, planetID, otherPlanetID);
+            }
+            finally
+            {
+                RemoveGalaxyRows(galaxyID);
+            }
+        }
+
+        /// <summary>The seeded round, if some other process left one behind. By name; ids do not
+        /// survive the gap between two processes.</summary>
+        private static (int GalaxyID, int PlanetID, int OtherPlanetID)? FindSeededGalaxy()
+        {
+            using (var db = new ZkDataContext())
+            {
+                var planet = db.Planets.FirstOrDefault(x => x.Name == "Harness Planet");
+                var other = db.Planets.FirstOrDefault(x => x.Name == "Harness Neighbour");
+                if (planet == null || other == null) return null;
+                return (planet.GalaxyID, planet.PlanetID, other.PlanetID);
+            }
+        }
+
+        /// <summary>
+        /// A PlanetWars round the lobby server in the NEXT process will find already running.
+        ///
+        /// Everything here has to be in the database before ZkLobbyServer starts, and that is not
+        /// a preference: PlanetWarsMatchMaker's constructor returns immediately when there is no
+        /// default galaxy, leaving its faction list null, and it caches the factions it does find.
+        /// MiscVar caches per process too. A round seeded afterwards is a round the matchmaker
+        /// never hears about, and the failure is silence - AddAttackOption catches, traces and
+        /// returns.
+        ///
+        /// The planets stay neutral and the faction owns nothing, which is what makes them
+        /// attackable without seeding a whole game state; see SeedGalaxyRows.
+        ///
+        /// Removal is by NAME rather than by id, because the process that removes is not the one
+        /// that seeded and ids do not survive the gap.
+        /// </summary>
+        private static int SeedPlanetWarsRound()
+        {
+            RemovePlanetWarsRound();
+
+            var (galaxyID, planetID, otherPlanetID) = SeedGalaxyRows();
+
+            using (var db = new ZkDataContext())
+            {
+                var faction = NewHarnessFaction();
+                db.Factions.Add(faction);
+                db.SaveChanges();
+
+                // The viewer is in the attacking faction, so the options loop renders its Join
+                // form as well as the option: CanSelectForBattle gates that on the player's own
+                // faction, and an option nobody can join renders one branch of the loop short.
+                var account = db.Accounts.OrderBy(a => a.AccountID).First();
+                account.FactionID = faction.FactionID;
+                db.SaveChanges();
+
+                Console.WriteLine("seeded galaxy " + galaxyID + ", planets " + planetID + " and "
+                                  + otherPlanetID + ", faction " + faction.FactionID);
+            }
+
+            MiscVar.PlanetWarsMode = PlanetWarsModes.Running;
+            Console.WriteLine("PlanetWars mode is now Running");
+            return 0;
+        }
+
+        private static int RemovePlanetWarsRound()
+        {
+            using (var db = new ZkDataContext())
+            {
+                foreach (var account in db.Accounts.Where(a => a.Faction.Name == "Harness Faction").ToList())
+                    account.FactionID = null;
+                db.SaveChanges();
+
+                foreach (var galaxyID in db.Planets.Where(x => x.Name == "Harness Planet")
+                             .Select(x => x.GalaxyID).Distinct().ToList())
+                    RemoveGalaxyRows(galaxyID);
+
+                db.Factions.RemoveRange(db.Factions.Where(f => f.Name == "Harness Faction"));
+
+                // The ROW, not the value. MiscVar.SetValue writes AllOffline where there was
+                // nothing before, and the fixture has no planetWarsMode row at all - the getter
+                // answers AllOffline for a missing one. Setting it back would behave identically
+                // and still leave the fixture a row heavier than it was found.
+                db.MiscVars.RemoveRange(db.MiscVars.Where(v => v.VarName == "planetWarsMode"));
+                db.SaveChanges();
+            }
+
+            return 0;
+        }
+
+        /// <summary>The faction the harness seeds, wherever it seeds one.</summary>
+        private static Faction NewHarnessFaction() => new Faction
+        {
+            Name = "Harness Faction", Shortcut = "HARN", Color = "#3366cc",
+            Metal = 0, Bombers = 0, Dropships = 0, Warps = 0,
+            EnergyDemandLastTurn = 0, EnergyProducedLastTurn = 0,
+            VictoryPoints = 0, IsDeleted = false,
+        };
+
+        /// <summary>
+        /// The default galaxy, two linked planets on it, and nothing else. Shared by WithGalaxy,
+        /// which wraps a body in it, and by --seed-planetwars-round, which has to leave it behind
+        /// for a lobby server in another process to read. Two implementations of the same rows
+        /// would drift, and the one that drifted would be the one nobody ran.
+        ///
+        /// The planets are left NEUTRAL - no OwnerFactionID - on purpose, and that is what makes
+        /// a round possible at all: Planet.CheckLinkAttack allows an attack outright when the
+        /// planet has no faction and the attacker owns no planets, so a seeded faction can be
+        /// given an attack option without also seeding treaties, structures and dropships.
+        /// </summary>
+        private static (int GalaxyID, int PlanetID, int OtherPlanetID) SeedGalaxyRows()
+        {
             using (var db = new ZkDataContext())
             {
                 var resources = db.Resources.OrderBy(r => r.ResourceID).Take(2).ToList();
@@ -1694,41 +1859,38 @@ namespace ZeroKWeb.Host
                 };
                 db.Galaxies.Add(galaxy);
                 db.SaveChanges();
-                galaxyID = galaxy.GalaxyID;
+                var galaxyID = galaxy.GalaxyID;
 
                 // Apart on both axes, so the link between them has a length and an angle. Two
                 // planets sharing a Y would leave GalaxyMapGeometry.Link rotating by zero, and
                 // zero is the one angle that looks right however wrong the arithmetic is.
-                planetID = AddPlanet(db, galaxyID, "Harness Planet", 0.35, 0.40, resources[0].ResourceID);
-                otherPlanetID = AddPlanet(db, galaxyID, "Harness Neighbour", 0.65, 0.60,
+                var planetID = AddPlanet(db, galaxyID, "Harness Planet", 0.35, 0.40, resources[0].ResourceID);
+                var otherPlanetID = AddPlanet(db, galaxyID, "Harness Neighbour", 0.65, 0.60,
                     resources[resources.Count > 1 ? 1 : 0].ResourceID);
 
                 db.Links.Add(new Link { GalaxyID = galaxyID, PlanetID1 = planetID, PlanetID2 = otherPlanetID });
                 db.SaveChanges();
+                return (galaxyID, planetID, otherPlanetID);
+            }
+        }
+
+        private static void RemoveGalaxyRows(int galaxyID)
+        {
+            using (var db = new ZkDataContext())
+            {
+                db.Links.RemoveRange(db.Links.Where(l => l.GalaxyID == galaxyID));
+                db.SaveChanges();
+                db.Planets.RemoveRange(db.Planets.Where(p => p.GalaxyID == galaxyID));
+                db.SaveChanges();
+                var galaxy = db.Galaxies.FirstOrDefault(g => g.GalaxyID == galaxyID);
+                if (galaxy != null) { db.Galaxies.Remove(galaxy); db.SaveChanges(); }
             }
 
-            try
-            {
-                return await body(galaxyID, planetID, otherPlanetID);
-            }
-            finally
-            {
-                using (var db = new ZkDataContext())
-                {
-                    db.Links.RemoveRange(db.Links.Where(l => l.GalaxyID == galaxyID));
-                    db.SaveChanges();
-                    db.Planets.RemoveRange(db.Planets.Where(p => p.GalaxyID == galaxyID));
-                    db.SaveChanges();
-                    var galaxy = db.Galaxies.FirstOrDefault(g => g.GalaxyID == galaxyID);
-                    if (galaxy != null) { db.Galaxies.Remove(galaxy); db.SaveChanges(); }
-                }
-
-                // /Planetwars caches the map it composed as a file, and that cache lives in the
-                // repository beside the two tracked renders. Left behind, it is an untracked
-                // artifact in a checked-out tree.
-                var render = System.IO.Path.Combine(FindSiteRoot(), "img", "galaxies", "render_" + galaxyID + ".jpg");
-                if (System.IO.File.Exists(render)) System.IO.File.Delete(render);
-            }
+            // /Planetwars caches the map it composed as a file, and that cache lives in the
+            // repository beside the two tracked renders. Left behind, it is an untracked
+            // artifact in a checked-out tree.
+            var render = System.IO.Path.Combine(FindSiteRoot(), "img", "galaxies", "render_" + galaxyID + ".jpg");
+            if (System.IO.File.Exists(render)) System.IO.File.Delete(render);
         }
 
         /// <summary>Points the galaxy at its winning faction, or at nobody again.</summary>
@@ -1783,13 +1945,7 @@ namespace ZeroKWeb.Host
 
             using (var db = new ZkDataContext())
             {
-                var faction = new Faction
-                {
-                    Name = "Harness Faction", Shortcut = "HARN", Color = "#3366cc",
-                    Metal = 0, Bombers = 0, Dropships = 0, Warps = 0,
-                    EnergyDemandLastTurn = 0, EnergyProducedLastTurn = 0,
-                    VictoryPoints = 0, IsDeleted = false,
-                };
+                var faction = NewHarnessFaction();
                 db.Factions.Add(faction);
 
                 var clan = new Clan { ClanName = "Harness Clan", Shortcut = "HC", IsDeleted = false };
@@ -2014,8 +2170,15 @@ namespace ZeroKWeb.Host
                 pw += await WithFactionAndClan(async (factionID, clanID) =>
                 {
                     // One word between the stars on purpose: the wiki parser's bold stops at a
-                        // space, and a phrase would come back with the stars still in it.
-                        SetGalaxyWinner(galaxyID, factionID, "The *Harness* won the season.");
+                    // space, and a phrase would come back with the stars still in it.
+                    SetGalaxyWinner(galaxyID, factionID, "The *Harness* won the season.");
+
+                    // Set, not assumed. MiscVar.PlanetWarsMode reads AllOffline only while
+                    // nothing has set it, and tools/stack.sh seeds a RUNNING round - so a check
+                    // that took the ambient mode passed here and failed there, asserting the
+                    // offline page against a galaxy the site was rendering as live.
+                    var mode = MiscVar.PlanetWarsMode;
+                    MiscVar.PlanetWarsMode = PlanetWarsModes.AllOffline;
                     try
                     {
                         var ended = await (await client.GetAsync(Url + "/Planetwars")).Content.ReadAsStringAsync();
@@ -2026,6 +2189,7 @@ namespace ZeroKWeb.Host
                     }
                     finally
                     {
+                        MiscVar.PlanetWarsMode = mode;
                         // Before the faction is removed under us: the galaxy points at it.
                         SetGalaxyWinner(galaxyID, null, null);
                     }
