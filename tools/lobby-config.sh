@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 ACTION="${1:-}"
-API_PORT="${2:-8200}"
+API_PORT="${2:-8300}"
 DB_NAME="${DB_NAME:-zk_test}"
 PASS="$(grep -oP '(?<=MSSQL_SA_PASSWORD: ")[^"]+' db/docker-compose.yml)"
 

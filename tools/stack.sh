@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 SITE_PORT=5200
-API_PORT=8200
+API_PORT=8300
 SECRET="local-dev-secret-not-a-real-one"
 DB_NAME="${DB_NAME:-zk_test}"
 
