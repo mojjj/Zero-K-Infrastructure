@@ -1599,6 +1599,65 @@ namespace ZeroKWeb.Host
         }
 
         /// <summary>
+        /// A galaxy with one planet, for the PlanetWars pages.
+        ///
+        /// The fixture has no galaxies and no planets, and three actions open with
+        /// `Galaxies.Single(g =&gt; g.IsDefault)` or `Planets.Single(...)` - so /Planetwars/Minimap,
+        /// /Planetwars/Ladder and /Planetwars/Planet all threw before they reached a view. That is
+        /// eleven never-rendered views behind two missing rows.
+        ///
+        /// The planet points at a real Resource from the fixture rather than a seeded one: views
+        /// read `planet.Resource.MapPlanetWarsIcon` and the map's name, and a resource invented
+        /// here would have no map behind it.
+        ///
+        /// Planets cascade on the galaxy's delete, so the cleanup removes one row.
+        /// </summary>
+        private static async Task<int> WithGalaxy(Func<int, int, Task<int>> body)
+        {
+            int galaxyID, planetID;
+
+            using (var db = new ZkDataContext())
+            {
+                var resource = db.Resources.OrderBy(r => r.ResourceID).First();
+
+                var galaxy = new Galaxy
+                {
+                    IsDefault = true, IsDirty = false, Started = DateTime.UtcNow.AddDays(-1),
+                    Width = 1000, Height = 1000, Turn = 1, AttackerSideCounter = 0,
+                };
+                db.Galaxies.Add(galaxy);
+                db.SaveChanges();
+                galaxyID = galaxy.GalaxyID;
+
+                var planet = new Planet
+                {
+                    GalaxyID = galaxyID,
+                    Name = "Harness Planet",
+                    TeamSize = 2,
+                    X = 0.5,
+                    Y = 0.5,
+                    MapResourceID = resource.ResourceID,
+                };
+                db.Planets.Add(planet);
+                db.SaveChanges();
+                planetID = planet.PlanetID;
+            }
+
+            try
+            {
+                return await body(galaxyID, planetID);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var galaxy = db.Galaxies.FirstOrDefault(g => g.GalaxyID == galaxyID);
+                    if (galaxy != null) { db.Galaxies.Remove(galaxy); db.SaveChanges(); }
+                }
+            }
+        }
+
+        /// <summary>
         /// A faction and a clan, for the pages that cannot exist without them.
         ///
         /// The fixture has neither - make-fixture.py nulls ClanID and FactionID on every account
@@ -1815,6 +1874,27 @@ namespace ZeroKWeb.Host
                 seeded += Check(faction.Contains("Harness Faction"), "and the faction's name is in it");
 
                 return seeded;
+            });
+
+            // PlanetWars. Three actions open with Single() over a table the fixture leaves empty,
+            // so none of them had ever reached a view - eleven never-rendered views behind two
+            // missing rows.
+            failures += await WithGalaxy(async (galaxyID, planetID) =>
+            {
+                var pw = 0;
+                foreach (var path in new[] { "/Planetwars/Minimap", "/Planetwars/Ladder", "/Planetwars/Planet/" + planetID })
+                {
+                    var response = await client.GetAsync(Url + path);
+                    var html = await response.Content.ReadAsStringAsync();
+                    pw += Check(response.IsSuccessStatusCode && html.Contains("</html>"),
+                        path + " is a whole page (" + (int)response.StatusCode + ", " + html.Length + " bytes)");
+                }
+
+                // The planet page carries the seeded planet, not just the layout around it.
+                var planet = await (await client.GetAsync(Url + "/Planetwars/Planet/" + planetID)).Content.ReadAsStringAsync();
+                pw += Check(planet.Contains("Harness Planet"), "and the planet's name is in it");
+
+                return pw;
             });
 
             // Pages that need somebody signed in. They redirect anonymously, so the survey above
