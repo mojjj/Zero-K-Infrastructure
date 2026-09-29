@@ -5,7 +5,10 @@
 @{
 	ViewBag.Title = "Planet";
 	Page.Title = "Planet " + Model.Name;
-	var autohost = Global.LobbyApi.GetPlanetBattles(Model.Resource.InternalName).OrderByDescending(x=>x.UserCount).FirstOrDefault();
+	// Guarded like Galaxy.cshtml's call above it, and for the same reason: Global.LobbyApi is
+	// never null in production, so this changes nothing there, and without it the planet page
+	// is a 500 rather than a page without its battle box whenever no lobby server is attached.
+	var autohost = (Global.LobbyApi?.GetPlanetBattles(Model.Resource.InternalName) ?? new List<ZkLobbyServer.PlanetBattleInfo>()).OrderByDescending(x=>x.UserCount).FirstOrDefault();
     ZkDataContext db = ViewBag.Db;
 
     var colorStyle = "";
