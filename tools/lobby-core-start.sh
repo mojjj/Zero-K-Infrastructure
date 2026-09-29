@@ -23,9 +23,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 DB_NAME="${DB_NAME:-zk_test}"
 export ZK_CONNECTION_STRING="${ZK_CONNECTION_STRING:-$(DB_NAME="$DB_NAME" ./db/connection-string.sh)}"
 
-# The API port must not be lobby-config.sh's default of 8200: that is GlobalConst.LobbyServerPort
-# in Local mode, so the API would take the port the player listener is about to ask for and the
-# thing under test would fail for a reason of our own making.
+# 8300 because 8200 is GlobalConst.LobbyServerPort, the port the player listener is about to ask
+# for. This script worked around that locally and left the shared default alone, so stack.sh and
+# lobby-container.sh went on colliding; the default is 8300 now and this is simply agreeing.
 API_PORT=8300
 PLAYER_PORT=8200
 LOG="$(mktemp)"

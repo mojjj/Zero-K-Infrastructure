@@ -33,7 +33,12 @@ namespace ZkLobbyServer.Api
         /// no business carrying a listener, so the constant moved to where it is a setting rather
         /// than an implementation detail.
         /// </summary>
-        public const string DefaultPrefix = "http://127.0.0.1:8200/";
+        /// 8300, not 8200: <c>GlobalConst.LobbyServerPort</c> is 8200 in Local AND Live mode, so
+        /// a default of 8200 is the port the player listener is about to bind. A standalone lobby
+        /// server started without <c>LobbyApiListenPrefix</c> got as far as "Listening at port
+        /// 8200" and then died on its own socket -
+        /// <c>SocketException: Address already in use</c> out of HttpListener.Start.
+        public const string DefaultPrefix = "http://127.0.0.1:8300/";
 
         /// <summary>
         /// <c>LobbyApiAllowInsecureTransport</c> - set to "true" to permit plaintext off loopback.

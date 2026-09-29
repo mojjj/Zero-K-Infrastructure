@@ -10,6 +10,11 @@
 # RenderedViewRecorder in ZeroKWeb.Host/Program.cs. This runs the harness with it set and diffs the
 # result against the tracked .cshtml files.
 #
+# It measures the harness, which runs with NO lobby server attached - deliberately, because the
+# site has to render without one. Planetwars/PwMatchMaker.cshtml cannot be reached that way at
+# all: its action asks Global.LobbyApi before choosing a view. tools/stack.sh renders it, against
+# a real lobby server in another container, and says so.
+#
 # **A view in the "never rendered" list is not broken.** Most render perfectly well when something
 # asks for them; /Home, /Forum and /Clans did, which is how they came to be in the harness at all.
 # The list is a coverage measurement, not a defect report.

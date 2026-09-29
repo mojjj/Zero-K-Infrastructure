@@ -16,7 +16,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 IMAGE=zk-lobby
 NAME=zk-lobby-check
-API_PORT=8200
+API_PORT=8300
 BUILD="${ZK_BUILD_DIR:-$HOME/.cache/zk-website-build}"
 CONTEXT="${TMPDIR:-/tmp}/zk-lobby-context"
 
