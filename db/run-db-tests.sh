@@ -19,11 +19,16 @@ PASS="${MSSQL_SA_PASSWORD:-ZkLocal!Dev2026}"
 CS="${ZK_CONNECTION_STRING:-Data Source=127.0.0.1,14330;Initial Catalog=${DB};User ID=sa;Password=${PASS};MultipleActiveResultSets=true;TrustServerCertificate=true}"
 mkdir -p "$CACHE"
 
-# ZkLobbyServer is watched because Tests.Database LINKS the lobby API transport out of it. It
-# was not, and the omission was silent in the worst way: a positive control that deliberately
-# broke the client still passed, because the stale binary did not contain the break.
+# Everything Tests.Database compiles, transitively, is watched - and the list is the whole point.
+# ZkLobbyServer was missing once, because Tests.Database LINKS the lobby API transport out of it,
+# and the omission was silent in the worst way: a positive control that deliberately broke the
+# client still passed, because the stale binary did not contain the break.
+#
+# Shared/ was missing for the same reason and found the same way: PlasmaShared and LobbyClient are
+# project references, so a change to GlobalConst or MetaDataCache rebuilt nothing and a control
+# that reverted a fix in one of them passed against a binary that still had the fix in it.
 if [ ! -f "$WORK/Tests.Database/bin/x64/Debug/net48/Tests.Database.exe" ] \
-   || [ -n "$(find "$REPO/Tests.Database" "$REPO/ZkData" "$REPO/ZkLobbyServer" -newer "$WORK/Tests.Database/bin/x64/Debug/net48/Tests.Database.exe" -name '*.cs' -print -quit 2>/dev/null)" ]; then
+   || [ -n "$(find "$REPO/Tests.Database" "$REPO/ZkData" "$REPO/ZkLobbyServer" "$REPO/Shared" -newer "$WORK/Tests.Database/bin/x64/Debug/net48/Tests.Database.exe" -name '*.cs' -print -quit 2>/dev/null)" ]; then
     echo "building Tests.Database..."
     [ -d "$WORK" ] && docker run --rm -v "$(dirname "$WORK")":/w alpine rm -rf "/w/$(basename "$WORK")"
     mkdir -p "$WORK"
