@@ -64,6 +64,22 @@ namespace ZeroKWeb.Host
 
             var app = builder.Build();
 
+            // ZK_RENDERED_VIEWS: append the path of every Razor view that actually RENDERS.
+            //
+            // 123 views compile. That is checked, and it is not the same claim as any of them
+            // having executed - News/Index.cshtml compiled for weeks and threw on its first
+            // request. This is how the difference gets counted rather than guessed at: run the
+            // harness with the variable set and diff what comes out against the inventory.
+            //
+            // Off unless the variable is set, so it costs a request nothing in normal runs.
+            var renderedLog = Environment.GetEnvironmentVariable("ZK_RENDERED_VIEWS");
+            if (!string.IsNullOrEmpty(renderedLog))
+            {
+                var seen = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>();
+                var listener = app.Services.GetRequiredService<System.Diagnostics.DiagnosticListener>();
+                listener.Subscribe(new RenderedViewRecorder(seen, renderedLog));
+            }
+
             // The ambient Global the views read. Nothing signs anyone in yet, so it answers
             // the same as it does for an anonymous request - see Mvc5Compat/GlobalCompat.cs.
             ZeroKWeb.Global.Configure(app.Services.GetRequiredService<IHttpContextAccessor>());
@@ -1562,13 +1578,51 @@ namespace ZeroKWeb.Host
         ///
         ///     So these assert what came back, not that something did.
         /// </summary>
+        /// <summary>
+        ///     Records which views render, for ZK_RENDERED_VIEWS.
+        ///
+        ///     A plain IObserver rather than SubscribeWithAdapter: Microsoft.Extensions
+        ///     .DiagnosticAdapter, which that needs, does not exist on .NET 9. The payload of
+        ///     BeforeViewPage is an anonymous type, so its `Page` comes out by reflection. The
+        ///     property is capitalised; `page`, which the older adapter API used, silently finds
+        ///     nothing and the log comes out empty.
+        /// </summary>
+        private sealed class RenderedViewRecorder : IObserver<KeyValuePair<string, object>>
+        {
+            private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> seen;
+            private readonly string path;
+
+            public RenderedViewRecorder(System.Collections.Concurrent.ConcurrentDictionary<string, byte> seen, string path)
+            {
+                this.seen = seen;
+                this.path = path;
+            }
+
+            public void OnNext(KeyValuePair<string, object> item)
+            {
+                if (item.Key != "Microsoft.AspNetCore.Mvc.Razor.BeforeViewPage" || item.Value == null) return;
+
+                var page = item.Value.GetType().GetProperty("Page")?.GetValue(item.Value);
+                var viewPath = page?.GetType().GetProperty("Path")?.GetValue(page) as string;
+                if (viewPath != null && seen.TryAdd(viewPath, 0))
+                    lock (seen) System.IO.File.AppendAllText(path, viewPath + Environment.NewLine);
+            }
+
+            public void OnCompleted() { }
+            public void OnError(Exception error) { }
+        }
+
         private static async Task<int> CheckPagesNobodyHadRequested(HttpClient client)
         {
             Console.WriteLine();
             Console.WriteLine("pages no request had ever reached:");
             var failures = 0;
 
-            foreach (var path in new[] { "/Factions", "/Missions", "/Mods", "/Contributions", "/LobbyNews", "/Download", "/Images" })
+            // /Home, /Forum and /Clans are not from the untouched sixteen - their controllers were
+            // already reached by other checks. Their INDEX views were not rendered by anything,
+            // which the ZK_RENDERED_VIEWS measurement made visible: a controller being exercised
+            // says nothing about which of its views ever execute.
+            foreach (var path in new[] { "/Factions", "/Missions", "/Mods", "/Contributions", "/LobbyNews", "/Download", "/Images", "/Home", "/Forum", "/Clans" })
             {
                 var response = await client.GetAsync(Url + path);
                 var html = await response.Content.ReadAsStringAsync();
