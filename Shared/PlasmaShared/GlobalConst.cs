@@ -89,7 +89,7 @@ namespace ZkData
             var siteUrlOverride = Environment.GetEnvironmentVariable("ZK_BASE_SITE_URL");
             if (!string.IsNullOrEmpty(siteUrlOverride)) BaseSiteUrl = siteUrlOverride.TrimEnd('/');
 
-            ResourceBaseUrl = string.Format("{0}/Resources", BaseSiteUrl);
+            ResourceBaseUrl = string.Format("{0}/{1}", BaseSiteUrl, ResourceFolder);
             BaseImageUrl = string.Format("{0}/img/", BaseSiteUrl);
             SelfUpdaterBaseUrl = string.Format("{0}/lobby", BaseSiteUrl);
 

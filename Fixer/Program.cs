@@ -933,7 +933,7 @@ namespace Fixer
 
                 foreach (var resource in db.Resources.Where(x => x.TypeID == ResourceType.Map))//&&x.MapSizeSquared == null))
                 {
-                    var file = String.Format("{0}/{1}.metadata.xml.gz", GlobalConst.SiteDiskPath + @"\Resources", resource.InternalName.EscapePath());
+                    var file = Path.Combine(GlobalConst.SiteDiskPath, GlobalConst.ResourceFolder, resource.InternalName.EscapePath() + ".metadata.xml.gz");
                     var map = (Map)new XmlSerializer(typeof(Map)).Deserialize(new MemoryStream(File.ReadAllBytes(file).Decompress()));
 
                     resource.MapWidth = map.Size.Width / 512;

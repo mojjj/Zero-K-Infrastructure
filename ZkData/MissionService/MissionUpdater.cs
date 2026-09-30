@@ -1,4 +1,4 @@
-//because SharpCompress fails here for some reason
+﻿//because SharpCompress fails here for some reason
 
 using System.Configuration;
 using System.IO;
@@ -123,14 +123,14 @@ namespace ZkData
             });
 
 
-            var basePath = GlobalConst.SiteDiskPath + @"\resources\";
+            var basePath = Path.Combine(GlobalConst.SiteDiskPath, GlobalConst.ResourceFolder);
             if (!Directory.Exists(basePath)) Directory.CreateDirectory(basePath);
-            File.WriteAllBytes(string.Format(@"{2}\{0}_{1}.torrent", resource.InternalName.EscapePath(), md5, basePath), torrentStream.ToArray());
+            File.WriteAllBytes(Path.Combine(basePath, $"{resource.InternalName.EscapePath()}_{md5}.torrent"), torrentStream.ToArray());
             
-            File.WriteAllBytes(string.Format(@"{1}\{0}.metadata.xml.gz", resource.InternalName.EscapePath(), basePath),
+            File.WriteAllBytes(Path.Combine(basePath, $"{resource.InternalName.EscapePath()}.metadata.xml.gz"),
                                    MetaDataCache.SerializeAndCompressMetaData(modInfo));
             
-            var imgPath = GlobalConst.SiteDiskPath + @"\img\missions\";
+            var imgPath = Path.Combine(GlobalConst.SiteDiskPath, "img", "missions");
             if (!Directory.Exists(imgPath)) Directory.CreateDirectory(imgPath);
             
             File.WriteAllBytes(string.Format(imgPath + "{0}.png", mission.MissionID, basePath), mission.Image.ToArray());

@@ -190,7 +190,7 @@ namespace ZeroKWeb
                                   byte[] metalMap,
                                   byte[] heightMap)
         {
-            var resPath = Global.MapPath("~/Resources");
+            var resPath = Global.MapPath("~/" + GlobalConst.ResourceFolder);
             if (!Directory.Exists(resPath)) Directory.CreateDirectory(resPath);
             var file = String.Format("{0}/{1}", resPath, resource.InternalName.EscapePath());
 

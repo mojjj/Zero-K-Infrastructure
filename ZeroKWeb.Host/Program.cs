@@ -216,7 +216,7 @@ namespace ZeroKWeb.Host
                 // The directory is not in the repository - AutoRegistrator writes it on a
                 // deployment - and the loop below skips what is not there, so this costs a
                 // checkout nothing.
-                foreach (var assets in new[] { "img", "Scripts", "Styles", "Resources" })
+                foreach (var assets in new[] { "img", "Scripts", "Styles", GlobalConst.ResourceFolder })
                 {
                     var directory = System.IO.Path.Combine(FindSiteRoot(), assets);
                     if (!System.IO.Directory.Exists(directory)) continue;
