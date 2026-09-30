@@ -30,7 +30,8 @@ namespace LobbyClientProbe
         {
             if (args.Length < 4)
             {
-                Console.Error.WriteLine("usage: LobbyClientProbe <host> <port> <name> <password> [expected-map-option]");
+                Console.Error.WriteLine(
+                    "usage: LobbyClientProbe <host> <port> <name> <password> [map expected-text]");
                 return 2;
             }
 
@@ -126,7 +127,7 @@ namespace LobbyClientProbe
             await client.OpenBattle(new BattleHeader
             {
                 Title = "probe battle",
-                Map = "test_map_1",
+                Map = args.Length >= 6 ? args[4] : "test_map_1",
                 Game = "test_mod_1",
                 Engine = "105.1.1-2511-g2c4d0a1",
                 MaxPlayers = 2,
@@ -144,9 +145,9 @@ namespace LobbyClientProbe
             // Only when asked for. Without the argument this probe behaves exactly as before, so
             // tools/lobby-core-start.sh - which runs against a server that does not even compile
             // the battle commands - is untouched.
-            if (args.Length >= 5)
+            if (args.Length >= 6)
             {
-                var expected = args[4];
+                var expected = args[5];
                 var answered = new TaskCompletionSource<string>();
                 // BattlePrivate, not Battle. ServerBattle.Respond passes the asking user to
                 // SayBattle, and that addresses the reply to them - a battle command answers
@@ -172,12 +173,11 @@ namespace LobbyClientProbe
 
                 if (reply == null)
                 {
-                    Console.WriteLine($"   FAIL  !listmapoptions never mentioned '{expected}' - "
-                                      + "the server has no metadata for the map");
+                    Console.WriteLine($"   FAIL  !listmapoptions for {args[4]} never mentioned '{expected}'");
                     return 1;
                 }
 
-                Console.WriteLine($"   ok    !listmapoptions answered with the map's own option ({reply.Trim()})");
+                Console.WriteLine($"   ok    !listmapoptions for {args[4]} answered '{reply.Trim()}'");
             }
 
             // A login that must FAIL, and fail cleanly - on its own connection, because a refused
