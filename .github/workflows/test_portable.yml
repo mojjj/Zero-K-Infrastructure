@@ -80,8 +80,8 @@ jobs:
       # and neither half complains: the lobby server's disk lookup just misses and falls back to
       # HTTP, and a mission upload writes where nothing is served. A test cannot see a literal,
       # so this reads the source.
-      - name: Check the resource directory is named once
-        run: ./tools/check-resource-folder.py
+      - name: Check the site's published directories are named once
+        run: ./tools/check-site-folders.py
 
       # A P/Invoke compiles everywhere and only fails when it runs. kernel32 in
       # TcpTransportServerListener.Bind threw on Linux, Bind retried 120 times and gave up, and the

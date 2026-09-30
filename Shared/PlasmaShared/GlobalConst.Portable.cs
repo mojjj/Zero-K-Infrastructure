@@ -164,6 +164,26 @@ namespace ZkData
         /// </summary>
         public const string ResourceFolder = "Resources";
 
+        /// <summary>
+        /// The avatar images directory under img/, and the URL segment they are served from.
+        ///
+        /// Lower case, which is what the site itself emits everywhere - HtmlHelperExtensions,
+        /// its ported twin and Unlock.ImageUrl all write /img/avatars/{code}.png. Two consumers
+        /// disagreed: the game client downloaded img/Avatars/{id}.png and AutoRegistrator read
+        /// img/Avatars off the site. IIS does not care and neither did anyone, until the port -
+        /// PhysicalFileProvider on Linux is case-sensitive, so one of the two spellings becomes a
+        /// 404 and avatars stop appearing in the lobby.
+        ///
+        /// SteamDepotGenerator is the tell: the same method already reads img/clans and img/factions
+        /// in lower case, and both of those directories exist that way in the repository. Only
+        /// Avatars was capitalised.
+        ///
+        /// This is the SITE's directory. The game's own LuaUI/Configs/Avatars, which
+        /// SteamDepotGenerator copies into, is a different directory named by the game and keeps
+        /// its capital.
+        /// </summary>
+        public const string AvatarFolder = "avatars";
+
         public const string SessionTokenVariable = "asmallcake";
 
         public const string ModeratorChannel = "zkadmin";

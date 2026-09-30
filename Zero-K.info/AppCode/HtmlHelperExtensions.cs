@@ -29,7 +29,7 @@ namespace System.Web.Mvc
     {
         public static MvcHtmlString AccountAvatar(this HtmlHelper helper, Account account) {
             if (account.IsDeleted) return null;
-            return new MvcHtmlString(string.Format("<img src='/img/avatars/{0}.png' class='avatar'>", account.Avatar));
+            return new MvcHtmlString(string.Format("<img src='/img/{0}/{1}.png' class='avatar'>", GlobalConst.AvatarFolder, account.Avatar));
         }
 
         /// <summary>
