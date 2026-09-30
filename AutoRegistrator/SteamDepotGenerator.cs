@@ -129,7 +129,9 @@ namespace AutoRegistrator
             var tpath = Path.Combine(configs, "Avatars");
             Utils.CheckPath(tpath);
             Trace.TraceInformation("Copying avatars");
-            var spath = Path.Combine(siteBase, "img", "Avatars");
+            // The site's directory, lower case like img/clans and img/factions below. tpath
+            // above is the GAME's, named by its own Lua, and keeps its capital.
+            var spath = Path.Combine(siteBase, "img", GlobalConst.AvatarFolder);
             Utils.CheckPath(spath);
             foreach (var file in Directory.GetFiles(spath)) File.Copy(file, Path.Combine(tpath, Path.GetFileName(file)), true);
 

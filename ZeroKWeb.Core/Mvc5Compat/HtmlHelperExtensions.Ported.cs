@@ -93,7 +93,7 @@ namespace System.Web.Mvc
         {
             // no null check on account in the original - it dereferences straight away
             if (account.IsDeleted) return null;
-            return new MvcHtmlString(string.Format("<img src='/img/avatars/{0}.png' class='avatar'>", account.Avatar));
+            return new MvcHtmlString(string.Format("<img src='/img/{0}/{1}.png' class='avatar'>", GlobalConst.AvatarFolder, account.Avatar));
         }
 
         public static MvcHtmlString PrintBadges(this IHtmlHelper helper, Account account,

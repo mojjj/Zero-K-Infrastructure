@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
-"""The site's resource directory is named in one place.
+"""The site's published directories are each named in one place.
 
-    ./tools/check-resource-folder.py
+    ./tools/check-site-folders.py
 
-`GlobalConst.ResourceFolder` is the directory published resource files live in - metadata,
-torrents, minimaps - and the URL segment they are served under. It exists because the name used
-to be written out by hand in four files and two of them spelled it differently:
+`GlobalConst.ResourceFolder` and `GlobalConst.AvatarFolder` are the directories published files
+live in and the URL segments they are served under. They exist because each name used to be
+written out by hand in several files, and some of them spelled it differently:
 
     PlasmaServer.StoreMetadata   MapPath("~/Resources")          the writer
     MetaDataCache                Path.Combine(.., "resources")   the lobby server's disk read
     MissionUpdater               SiteDiskPath + @"\\resources\\"   and it CREATED that directory
     Fixer                        SiteDiskPath + @"\\Resources"
 
+    HtmlHelperExtensions, Unlock  /img/avatars/{code}.png         what the SITE emits
+    ZeroKLobby                    img/Avatars/{id}.png            what the game client asked for
+    SteamDepotGenerator           Path.Combine(.., "img", "Avatars")
+
 On NTFS those are one directory, so the spread was invisible for years. Off Windows they are
-three, and neither half reports it: the lobby server's disk lookup simply misses and falls back to
-HTTP, and a mission upload writes into a directory the site does not serve.
+separate, and nothing reports it: the lobby server's disk lookup simply misses and falls back to
+HTTP, a mission upload writes into a directory the site does not serve, and avatars 404 in the
+lobby because PhysicalFileProvider is case-sensitive where IIS was not.
 
 **A test cannot catch this.** By the time code runs, a literal has already become a path; what has
 to be checked is that nobody wrote the name down again. So this reads the source.
@@ -38,6 +43,14 @@ PATTERNS = [
     re.compile(r'"/[Rr]esources/'),
     re.compile(r'@?"\\+[Rr]esources'),
     re.compile(r'Path\.Combine\([^)]*"[Rr]esources"'),
+    # img/avatars, which the site emits in lower case and two consumers asked for in upper.
+    # NOT Path.Combine(configs, "Avatars"): that is the GAME's own directory inside a Steam
+    # depot, named by its Lua, and it is right to be capitalised - so the patterns below only
+    # match the folder when it is qualified by img or by a URL.
+    re.compile(r'"/img/[Aa]vatars'),
+    re.compile(r'"~/img/[Aa]vatars'),
+    re.compile(r'"img",\s*"[Aa]vatars"'),
+    re.compile(r'"[Aa]vatars/\{'),
 ]
 
 COMMENT = re.compile(r'^\s*(///|//|\*|/\*)')
@@ -66,16 +79,17 @@ def main():
                 offenders.append("%s:%d: %s" % (name, number, line.strip()))
 
     if offenders:
-        print("The resource directory is named outside GlobalConst.ResourceFolder:")
+        print("A published directory is named outside its GlobalConst constant:")
         print()
         for line in offenders:
             print("  " + line)
         print()
-        print("Use GlobalConst.ResourceFolder. On Windows a second spelling is the same directory;")
+        print("Use GlobalConst.ResourceFolder or GlobalConst.AvatarFolder. On Windows a second")
+        print("spelling is the same directory;")
         print("off Windows it is a different one, and nothing fails - the file is just never found.")
         return 1
 
-    print("the resource directory is named once, in GlobalConst.ResourceFolder")
+    print("each published directory is named once, in its GlobalConst constant")
     return 0
 
 
