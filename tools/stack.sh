@@ -36,18 +36,21 @@ harness_log="$(mktemp)"
 # metadata when it cannot read the website's disk - and out of process it never can.
 RESOURCES="$(mktemp -d)"
 probe_log="$(mktemp)"
+control_log="$(mktemp)"
 # GlobalConst.LobbyServerPort in Local mode - the port players connect to, not the API port.
 PLAYER_PORT=8200
 PROBE_PASS="${ZK_PROBE_PASS:-probe-pass-not-a-real-one}"
 MAP=test_map_1
 MAP_OPTION=stackprobeopt
+# In the fixture like $MAP, and deliberately left out of $RESOURCES.
+UNSERVED_MAP=test_map_2
 cleanup() {
     docker rm -f zk-lobby-up zk-site-up >/dev/null 2>&1 || true
     docker run --rm --network host -e ZK_CONNECTION_STRING="$CS" \
         --entrypoint dotnet zk-site bin/ZeroKWeb.Host.dll --remove-planetwars-round >/dev/null 2>&1 || true
     rm -f "$harness_log"
     rm -rf "$RESOURCES"
-    rm -f "$probe_log"
+    rm -f "$probe_log" "$control_log"
     [ "${1:-}" = "keep-config" ] || ./tools/lobby-config.sh clear
 }
 trap 'cleanup' EXIT
@@ -154,7 +157,7 @@ if [ "${lobby:-}" = "1" ] && [ "${site:-}" = "1" ]; then
     check "$([ "$code" = "200" ] && echo 0 || echo 1)" "the site serves the map's metadata ($code)"
 
     if ./tools/dotnet.sh run --project tools/lobby-client-probe -- \
-            127.0.0.1 "$PLAYER_PORT" MetaProbe "$PROBE_PASS" "$MAP_OPTION" > "$probe_log" 2>&1; then
+            127.0.0.1 "$PLAYER_PORT" MetaProbe "$PROBE_PASS" "$MAP" "$MAP_OPTION" > "$probe_log" 2>&1; then
         meta=0
     else
         meta=1
@@ -162,6 +165,24 @@ if [ "${lobby:-}" = "1" ] && [ "${site:-}" = "1" ]; then
     grep -E "listmapoptions|opened a battle" "$probe_log" | sed 's/^/     /' || true
     check "$meta" "a battle in the lobby server has the map options only the site could have given it"
     [ "$meta" = "0" ] || tail -20 "$probe_log"
+
+    # THE CONTROL for the check above. A second map, from the same fixture, that the site is NOT
+    # publishing metadata for - same lobby server, same command, same code path, one file
+    # different. Without it "the options were there" could mean the server had them all along.
+    #
+    # A second map rather than a second lobby server: the fetch is cached per resource name, so
+    # a name nothing has fetched is a cold path, and starting another container would cost the
+    # ninety seconds of WHR this server needs before it says anything.
+    if ./tools/dotnet.sh run --project tools/lobby-client-probe -- \
+            127.0.0.1 "$PLAYER_PORT" MetaProbe2 "$PROBE_PASS" "$UNSERVED_MAP" "this map has no map options" \
+            > "$control_log" 2>&1; then
+        control=0
+    else
+        control=1
+    fi
+    grep -E "listmapoptions" "$control_log" | sed 's/^/     /' || true
+    check "$control" "and a map the site publishes nothing for comes back empty, as a player would see it"
+    [ "$control" = "0" ] || tail -20 "$control_log"
 
     # THE CONTROL, and the only reason the check above means anything: stop the lobby server and
     # the same page must stop working. Without this, a 200 proves the page rendered - not that it
