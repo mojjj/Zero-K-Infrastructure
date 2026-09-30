@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Threading;
@@ -125,8 +125,8 @@ namespace Tests.Database
         public void The_disk_is_used_when_it_has_the_file_and_the_site_is_not_asked()
         {
             var root = Path.Combine(Path.GetTempPath(), "zk-meta-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path.Combine(root, "resources"));
-            File.WriteAllBytes(Path.Combine(root, "resources", ModName.EscapePath() + ".metadata.xml.gz"),
+            Directory.CreateDirectory(Path.Combine(root, GlobalConst.ResourceFolder));
+            File.WriteAllBytes(Path.Combine(root, GlobalConst.ResourceFolder, ModName.EscapePath() + ".metadata.xml.gz"),
                 AMod("from-disk"));
             try
             {

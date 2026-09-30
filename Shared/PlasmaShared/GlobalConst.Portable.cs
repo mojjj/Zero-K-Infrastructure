@@ -147,6 +147,23 @@ namespace ZkData
             return Path.Combine(home, ".local", "share", "zk-springie");
         }
 
+        /// <summary>
+        /// The directory the site keeps published resource files in - metadata, torrents,
+        /// minimaps - and the URL segment they are served under. One constant because it is one
+        /// directory, and it was previously spelled three ways:
+        ///
+        ///   PlasmaServer.StoreMetadata   MapPath("~/Resources")      the writer, so authoritative
+        ///   MetaDataCache                Path.Combine(.., "resources")
+        ///   MissionUpdater               SiteDiskPath + @"\resources\"   and it CREATES it
+        ///   Fixer                        SiteDiskPath + @"\Resources"
+        ///
+        /// On NTFS those are one directory and the spread was invisible. Off Windows they are
+        /// three, and the lobby server's disk lookup - the fast path it takes when it is beside
+        /// the website - would never have found anything, while a mission upload would have
+        /// created a second directory the site does not serve.
+        /// </summary>
+        public const string ResourceFolder = "Resources";
+
         public const string SessionTokenVariable = "asmallcake";
 
         public const string ModeratorChannel = "zkadmin";

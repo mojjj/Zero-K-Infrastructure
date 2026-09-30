@@ -382,7 +382,7 @@ namespace ZkData
 
             if (!string.IsNullOrEmpty(GlobalConst.SiteDiskPath))
             {
-                var file = Path.Combine(GlobalConst.SiteDiskPath, "resources", $"{escaped}.metadata.xml.gz");
+                var file = Path.Combine(GlobalConst.SiteDiskPath, GlobalConst.ResourceFolder, $"{escaped}.metadata.xml.gz");
                 if (File.Exists(file))
                 {
                     var bytes = File.ReadAllBytes(file);
