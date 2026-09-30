@@ -75,6 +75,13 @@ jobs:
       - name: Check every C# file is in a project
         run: ./tools/check-orphaned-sources.py
 
+      # A .resx names files by relative path, and msbuild reads them at build time. On Windows the
+      # case need not match what is on disk, so a designer wrote 67 entries into ZeroKLobby that
+      # pointed at `resources\ranks\...` while the directory is `Resources\Ranks` - correct
+      # forever on Windows, MSB3103 anywhere else. This answers it without a build.
+      - name: Check every .resx points at a file that exists
+        run: ./tools/check-resx-paths.py
+
       # The site's resource directory, named once. It used to be written out by hand in four
       # files, two of which spelled it in lower case - one directory on NTFS, two off Windows,
       # and neither half complains: the lobby server's disk lookup just misses and falls back to
