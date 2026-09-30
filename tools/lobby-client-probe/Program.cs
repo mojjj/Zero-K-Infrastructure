@@ -30,7 +30,7 @@ namespace LobbyClientProbe
         {
             if (args.Length < 4)
             {
-                Console.Error.WriteLine("usage: LobbyClientProbe <host> <port> <name> <password>");
+                Console.Error.WriteLine("usage: LobbyClientProbe <host> <port> <name> <password> [expected-map-option]");
                 return 2;
             }
 
@@ -135,6 +135,50 @@ namespace LobbyClientProbe
             });
             if (!await Within(battleOpened.Task, "open battle")) return 1;
             Console.WriteLine($"   ok    the server opened a battle and announced it");
+
+            // Opening the battle is what makes the server look up the map's metadata, and
+            // !listmapoptions is the only place that lookup is visible from outside: it answers
+            // "this map has no map options" when HostedMapInfo is null, which is what a player
+            // sees when the server cannot reach the metadata at all.
+            //
+            // Only when asked for. Without the argument this probe behaves exactly as before, so
+            // tools/lobby-core-start.sh - which runs against a server that does not even compile
+            // the battle commands - is untouched.
+            if (args.Length >= 5)
+            {
+                var expected = args[4];
+                var answered = new TaskCompletionSource<string>();
+                // BattlePrivate, not Battle. ServerBattle.Respond passes the asking user to
+                // SayBattle, and that addresses the reply to them - a battle command answers
+                // the person who ran it, not the room. Filtering on Battle alone waits forever.
+                client.Said += (s, e) =>
+                {
+                    if ((e.Place == SayPlace.Battle || e.Place == SayPlace.BattlePrivate)
+                        && e.Text != null && e.Text.Contains(expected))
+                        answered.TrySetResult(e.Text);
+                };
+
+                // Asked repeatedly, because a battle say is dropped outright unless the sender is
+                // already in the battle - and the founder is joined by the server AFTER it has
+                // broadcast BattleAdded, which is the event this probe waited on. One ask races
+                // that join and loses silently; the command is a read, so asking again is free.
+                string reply = null;
+                for (var attempt = 0; attempt < 15 && reply == null; attempt++)
+                {
+                    await client.Say(SayPlace.Battle, "", "!listmapoptions", false);
+                    if (await Task.WhenAny(answered.Task, Task.Delay(TimeSpan.FromSeconds(2))) == answered.Task)
+                        reply = answered.Task.Result;
+                }
+
+                if (reply == null)
+                {
+                    Console.WriteLine($"   FAIL  !listmapoptions never mentioned '{expected}' - "
+                                      + "the server has no metadata for the map");
+                    return 1;
+                }
+
+                Console.WriteLine($"   ok    !listmapoptions answered with the map's own option ({reply.Trim()})");
+            }
 
             // A login that must FAIL, and fail cleanly - on its own connection, because a refused
             // login leaves the server-side user unauthenticated and everything after it on that

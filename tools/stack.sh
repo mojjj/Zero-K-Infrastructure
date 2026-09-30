@@ -32,11 +32,22 @@ docker build -q -t zk-site . >/dev/null
 
 docker rm -f zk-lobby-up zk-site-up >/dev/null 2>&1 || true
 harness_log="$(mktemp)"
+# Served by the site container as /Resources/*, which is where the lobby server looks for map
+# metadata when it cannot read the website's disk - and out of process it never can.
+RESOURCES="$(mktemp -d)"
+probe_log="$(mktemp)"
+# GlobalConst.LobbyServerPort in Local mode - the port players connect to, not the API port.
+PLAYER_PORT=8200
+PROBE_PASS="${ZK_PROBE_PASS:-probe-pass-not-a-real-one}"
+MAP=test_map_1
+MAP_OPTION=stackprobeopt
 cleanup() {
     docker rm -f zk-lobby-up zk-site-up >/dev/null 2>&1 || true
     docker run --rm --network host -e ZK_CONNECTION_STRING="$CS" \
         --entrypoint dotnet zk-site bin/ZeroKWeb.Host.dll --remove-planetwars-round >/dev/null 2>&1 || true
     rm -f "$harness_log"
+    rm -rf "$RESOURCES"
+    rm -f "$probe_log"
     [ "${1:-}" = "keep-config" ] || ./tools/lobby-config.sh clear
 }
 trap 'cleanup' EXIT
@@ -45,6 +56,10 @@ trap 'cleanup' EXIT
 # faction list in its CONSTRUCTOR and gives up on both if there is no galaxy yet, and MiscVar
 # caches per process - so a round seeded after it starts is a round it never hears about, and
 # the symptom is nothing rather than an error.
+echo "publishing one map's metadata from the site..."
+./tools/stack-metadata/make-map-metadata.py "$MAP" "$MAP_OPTION" \
+    "$RESOURCES/$MAP.metadata.xml.gz" | sed 's/^/   /'
+
 echo "seeding a PlanetWars round..."
 docker run --rm --network host -e ZK_CONNECTION_STRING="$CS" \
     --entrypoint dotnet zk-site bin/ZeroKWeb.Host.dll --seed-planetwars-round | sed 's/^/   /'
@@ -53,7 +68,10 @@ echo "starting the lobby server..."
 # No --rm: a container that removes itself takes its log with it the instant it exits, and
 # this one exits precisely when something is worth reading. The cleanup trap below force-
 # removes it either way.
-docker run -d --name zk-lobby-up --network host -e ZK_CONNECTION_STRING="$CS" zk-lobby >/dev/null
+# ZK_BASE_SITE_URL, because the mode's BaseSiteUrl is localhost:44301 - the Local mode's address
+# for a site that is not there. Without it the lobby server would ask the wrong host for metadata.
+docker run -d --name zk-lobby-up --network host -e ZK_CONNECTION_STRING="$CS" \
+    -e ZK_BASE_SITE_URL="http://127.0.0.1:$SITE_PORT" zk-lobby >/dev/null
 for _ in $(seq 1 240); do
     docker logs zk-lobby-up 2>&1 | grep -q "lobby server running" && { lobby=1; break; }
     docker inspect -f '{{.State.Running}}' zk-lobby-up 2>/dev/null | grep -q true || break
@@ -79,7 +97,10 @@ if [ "${lobby:-}" != "1" ]; then
 fi
 
 echo "starting the website..."
+# The resources directory is mounted rather than baked in: it is deployment content that
+# AutoRegistrator writes, so a checkout has none and the image ships none.
 docker run -d --rm --name zk-site-up --network host \
+    -v "$RESOURCES":/app/Zero-K.info/Resources:ro \
     -e ZK_CONNECTION_STRING="$CS" -e ZK_HOST_URLS="http://0.0.0.0:$SITE_PORT" zk-site >/dev/null
 for _ in $(seq 1 120); do
     curl -fsS -o /dev/null "http://127.0.0.1:$SITE_PORT/Home/NotLoggedIn" 2>/dev/null && { site=1; break; }
@@ -118,6 +139,29 @@ if [ "${lobby:-}" = "1" ] && [ "${site:-}" = "1" ]; then
     grep -E "MatchMaker rendered|options loop|faction beside|Join form|needs a lobby server|needs a seeded round" "$harness_log" | sed 's/^/     /' || true
     check "$harness" "the site's own checks pass with a lobby server attached"
     [ "$harness" = "0" ] || grep -E "^\s+(FAIL|note)" "$harness_log" | head -20
+
+    # THE THING THE TWO HALVES CANNOT DO SEPARATELY: the lobby server reading a file that only
+    # the website has.
+    #
+    # ServerBattle asks for the map's metadata every time a battle opens. That used to be a local
+    # file read, which worked only because the lobby server ran inside the website's IIS worker
+    # and shared its disk. Here they are different containers, so the only way is the URL the
+    # website already publishes - and !listmapoptions is where the answer becomes visible: it
+    # says "this map has no map options" when the lookup came back empty, which is exactly what a
+    # player saw before this worked.
+    code=$(curl -sS -o /dev/null -w '%{http_code}' \
+        "http://127.0.0.1:$SITE_PORT/Resources/$MAP.metadata.xml.gz" 2>/dev/null)
+    check "$([ "$code" = "200" ] && echo 0 || echo 1)" "the site serves the map's metadata ($code)"
+
+    if ./tools/dotnet.sh run --project tools/lobby-client-probe -- \
+            127.0.0.1 "$PLAYER_PORT" MetaProbe "$PROBE_PASS" "$MAP_OPTION" > "$probe_log" 2>&1; then
+        meta=0
+    else
+        meta=1
+    fi
+    grep -E "listmapoptions|opened a battle" "$probe_log" | sed 's/^/     /' || true
+    check "$meta" "a battle in the lobby server has the map options only the site could have given it"
+    [ "$meta" = "0" ] || tail -20 "$probe_log"
 
     # THE CONTROL, and the only reason the check above means anything: stop the lobby server and
     # the same page must stop working. Without this, a 200 proves the page rendered - not that it
