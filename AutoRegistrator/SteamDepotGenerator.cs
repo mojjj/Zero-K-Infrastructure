@@ -157,7 +157,7 @@ namespace AutoRegistrator
             }
 
 
-            spath = Path.Combine(siteBase, "Resources");
+            spath = Path.Combine(siteBase, GlobalConst.ResourceFolder);
             tpath = Path.Combine(targetFolder, "LuaMenu", "configs", "gameConfig", "zk");
 
             Utils.CheckPath(Path.Combine(tpath, "minimapThumbnail"));

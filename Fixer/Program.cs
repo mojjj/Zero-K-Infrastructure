@@ -957,7 +957,7 @@ namespace Fixer
                     resource.MapSizeSquared = (map.Size.Width / 512) * (map.Size.Height / 512);
                     resource.MapSizeRatio = (float)map.Size.Width / map.Size.Height;
 
-                    var minimap = String.Format("{0}/{1}.minimap.jpg", GlobalConst.SiteDiskPath + @"\Resources", resource.InternalName.EscapePath());
+                    var minimap = Path.Combine(GlobalConst.SiteDiskPath, GlobalConst.ResourceFolder, resource.InternalName.EscapePath() + ".minimap.jpg");
 
                     using (var im = Image.FromFile(minimap))
                     {
@@ -986,7 +986,7 @@ namespace Fixer
                             var encoderParams = new EncoderParameters(1);
                             encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 100L);
 
-                            var target = String.Format("{0}/{1}.thumbnail.jpg", GlobalConst.SiteDiskPath + @"\Resources", resource.InternalName.EscapePath());
+                            var target = Path.Combine(GlobalConst.SiteDiskPath, GlobalConst.ResourceFolder, resource.InternalName.EscapePath() + ".thumbnail.jpg");
                             correctMinimap.Save(target, jgpEncoder, encoderParams);
                         }
                     }

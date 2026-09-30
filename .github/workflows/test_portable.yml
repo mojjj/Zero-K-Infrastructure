@@ -75,6 +75,14 @@ jobs:
       - name: Check every C# file is in a project
         run: ./tools/check-orphaned-sources.py
 
+      # The site's resource directory, named once. It used to be written out by hand in four
+      # files, two of which spelled it in lower case - one directory on NTFS, two off Windows,
+      # and neither half complains: the lobby server's disk lookup just misses and falls back to
+      # HTTP, and a mission upload writes where nothing is served. A test cannot see a literal,
+      # so this reads the source.
+      - name: Check the resource directory is named once
+        run: ./tools/check-resource-folder.py
+
       # A P/Invoke compiles everywhere and only fails when it runs. kernel32 in
       # TcpTransportServerListener.Bind threw on Linux, Bind retried 120 times and gave up, and the
       # server came up with its API listening and no player port - invisible to every build here.

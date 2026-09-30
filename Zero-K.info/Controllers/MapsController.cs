@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -395,7 +395,7 @@ namespace ZeroKWeb.Controllers
             var cachedEntry = this.ApplicationState()["mapinfo_" + res.ResourceID] as Map;
             if (cachedEntry != null) data.MapInfo = cachedEntry;
             else {
-                var path = this.MapPath("~/Resources/") + res.MetadataName;
+                var path = Path.Combine(this.MapPath("~/" + GlobalConst.ResourceFolder), res.MetadataName);
 
                 if (System.IO.File.Exists(path)) {
                     try {

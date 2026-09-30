@@ -160,7 +160,7 @@ namespace ZeroKWeb
 
         public static void RemoveResourceFiles(Resource resource)
         {
-            var file = String.Format("{0}/{1}", Global.MapPath("~/Resources"), resource.InternalName.EscapePath());
+            var file = Path.Combine(Global.MapPath("~/" + GlobalConst.ResourceFolder), resource.InternalName.EscapePath());
             Utils.SafeDelete(String.Format("{0}.minimap.jpg", file));
             Utils.SafeDelete(String.Format("{0}.thumbnail.jpg", file));
             Utils.SafeDelete(String.Format("{0}.heightmap.jpg", file));
@@ -235,7 +235,7 @@ namespace ZeroKWeb
                     // the map thumbnails looked soft.
                     var thumbnailSize = ImageSizing.ScaledToFit(resource.MapSizeRatio, ThumbnailSize);
                     var target = String.Format("{0}/{1}.thumbnail.jpg",
-                                               Global.MapPath("~/Resources"),
+                                               Global.MapPath("~/" + GlobalConst.ResourceFolder),
                                                resource.InternalName.EscapePath());
                     Images.Processor.SaveResizedJpeg(minimap, thumbnailSize, target, 100);
                 }

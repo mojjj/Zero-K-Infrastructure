@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using PlasmaShared;
 using ZkData;
@@ -38,7 +38,7 @@ namespace ZeroKWeb
 
         public static string GetTorrentPath(string name, string md5)
         {
-            return Global.MapPath(String.Format("~/Resources/{0}", (object)GetTorrentFileName(name, md5)));
+            return Global.MapPath($"~/{GlobalConst.ResourceFolder}/{GetTorrentFileName(name, md5)}");
         }
 
         public static string GetTorrentPath(ResourceContentFile cf)
