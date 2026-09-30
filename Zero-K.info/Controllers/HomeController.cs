@@ -34,7 +34,7 @@ namespace ZeroKWeb.Controllers
 			if (r.MapIsSpecial == true) sb.AppendFormat("<img src='/img/map_tags/special.png' class='icon32' />");
 			if (r.MapIsAssymetrical == true) sb.AppendFormat("<img src='/img/map_tags/assymetrical.png' class='icon32' />");
 			sb.Append("<br/>");
-			sb.AppendFormat("<img src='/Resources/{0}' /><br/>", r.ThumbnailName);
+			sb.AppendFormat("<img src='/{0}/{1}' /><br/>", GlobalConst.ResourceFolder, r.ThumbnailName);
 			sb.AppendFormat("Rating: {0}", HtmlHelperExtensions.Stars(null, StarType.GreenStarSmall, r.MapRating).ToHtmlString());
 
 			sb.Append("</span>");
