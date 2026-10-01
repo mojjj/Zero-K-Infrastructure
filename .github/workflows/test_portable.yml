@@ -114,6 +114,14 @@ jobs:
       # This runs each check with a `git` that returns nothing for ls-files and requires it to
       # fail. Seconds, no container. A check that does not work that way says so in itself, with
       # a `blinding-exempt: <why>` line.
+      # The eleven views that exist twice. port-views.props compiles the PortedViews/ copy for
+      # .NET 9 and excludes the original, which MVC 5 still serves, so the two drift apart in
+      # silence: view-port-report --check fails when the SET changes and nothing compared the
+      # contents. An edit to the original that was not mirrored into the copy would have left the
+      # live site serving the new markup and the port serving the old, green all the way.
+      - name: Check the diverged views still differ the way they are recorded to
+        run: ./tools/check-diverged-views.py
+
       - name: Check that the checks fail when they can see nothing
         run: ./tools/check-the-checks.sh
 
