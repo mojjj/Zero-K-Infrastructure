@@ -373,12 +373,18 @@ jobs:
       # The teardown is part of what is being checked, not housekeeping. stack.sh seeds a galaxy,
       # two planets, a link, a faction and a MiscVar, and a run that left any of them behind would
       # quietly change what every later run of this fixture measures.
+      #
+      # It has to name every table the harness seeds, and it did not: WithFactionAndClan seeds a
+      # clan as well as a faction and only the faction was counted, and WithPoll and WithForumThread
+      # came later still. A cleanup that stopped working in those tables would have left the rows
+      # and the count at zero. Tables the fixture leaves empty are counted whole; ForumCategories
+      # is not one - the fixture has 23 - so that term asks for the harness's own row by name.
       - name: The fixture is as it was found
         run: |
           set -euo pipefail
           left=$(docker exec zk-db /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa \
               -P 'ZkLocal!Dev2026' -C -d zk_test -h -1 -W \
-              -Q "SET NOCOUNT ON; SELECT (SELECT COUNT(*) FROM Galaxies) + (SELECT COUNT(*) FROM Planets) + (SELECT COUNT(*) FROM Links) + (SELECT COUNT(*) FROM Factions) + (SELECT COUNT(*) FROM MiscVars WHERE VarName IN ('planetWarsMode', 'LobbyApiUrl', 'LobbyApiSecret'))")
+              -Q "SET NOCOUNT ON; SELECT (SELECT COUNT(*) FROM Galaxies) + (SELECT COUNT(*) FROM Planets) + (SELECT COUNT(*) FROM Links) + (SELECT COUNT(*) FROM Factions) + (SELECT COUNT(*) FROM Clans) + (SELECT COUNT(*) FROM Polls) + (SELECT COUNT(*) FROM PollOptions) + (SELECT COUNT(*) FROM ForumThreads) + (SELECT COUNT(*) FROM ForumPosts) + (SELECT COUNT(*) FROM ForumCategories WHERE Title = 'Harness Category') + (SELECT COUNT(*) FROM MiscVars WHERE VarName IN ('planetWarsMode', 'LobbyApiUrl', 'LobbyApiSecret'))")
           echo "rows the stack could have left behind: $left"
           [ "$left" = "0" ] || { echo "the stack did not clean up after itself"; exit 1; }
 
