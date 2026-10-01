@@ -57,6 +57,7 @@ work, project = sys.argv[1], sys.argv[2]
 
 ITEM = re.compile(r'<(Content|None|Compile|EmbeddedResource)\s+Include="([^"*$]+)"')
 BUILDABLE = re.compile(r'<Buildable\s+Include="([^"]+)"')
+SDK = re.compile(r'<Project[^>]*Sdk\s*=\s*"', re.IGNORECASE)
 
 
 def read(path):
@@ -100,16 +101,22 @@ if listed:
 else:
     projects = [project]
 
-missing, checked = [], 0
+missing, checked, expected = [], 0, False
 for name in projects:
     base = os.path.dirname(os.path.join(work, name))
-    for item, include in ITEM.findall(read(os.path.join(work, name))):
+    text = read(os.path.join(work, name))
+    # An SDK-style project globs its own sources and names no items, so zero here is correct
+    # for it - ZkLobbyServer.Standalone and Tests are both like that. An old-style project
+    # listing nothing means the file was not read the way this guard thinks it was.
+    expected = expected or not SDK.search(text)
+    for item, include in ITEM.findall(text):
         checked += 1
         if not exists(base, include):
             missing.append('%s: %s: %s' % (name, item, include))
 
-if not checked:
-    print('%s: the item guard checked nothing, which is never right.' % project)
+if expected and not checked:
+    print('%s: the item guard checked nothing, and at least one of these projects lists its'
+          ' files explicitly, so it should have checked something.' % project)
     sys.exit(1)
 
 if missing:
