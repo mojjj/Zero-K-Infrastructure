@@ -57,6 +57,22 @@ namespace ZkData.Core
                 Console.WriteLine("   " + tables + " tables read, " + tablesWithRows + " of them with rows (" +
                                   rows + " rows materialised)");
                 Console.WriteLine("   the empty ones prove their columns exist and are selectable, not their conversions");
+
+                // A fixture that failed to load reads every table cleanly and materialises nothing,
+                // which passes by seeing nothing: the conversions this check exists to exercise never
+                // run. The floor is simply "any", so no fixture change can move it.
+                //
+                // The queries below are the same story one at a time. Each returned a cheerful string
+                // on an empty result - "no battles", "no accounts", "no named account" - and counted
+                // as ok, so against a schema-only database this whole command printed "the EF Core
+                // model reads this database" and exited 0. They throw now. The one exception is the
+                // navigation probe, which prints "empty" rather than "ok" and is listed in the summary
+                // under "not exercised by this fixture": that one reports itself.
+                if (rows == 0)
+                    failures.Add("materialised no rows at all - every table read cleanly because every "
+                                 + "table was empty, so no conversion was exercised. Load the fixture "
+                                 + "with db/load-fixture.sh and run this again.");
+
                 foreach (var failure in failures) Console.WriteLine("   FAILED " + failure);
 
                 Console.WriteLine();
@@ -101,7 +117,11 @@ namespace ZkData.Core
             {
                 var battle = db.SpringBattles.Include(x => x.SpringBattlePlayers).AsNoTracking()
                     .FirstOrDefault(x => x.SpringBattlePlayers.Any(p => !p.IsSpectator));
-                if (battle == null) return "no battle with a non-spectator in the fixture";
+                // Returned as a pass until 2026-10-01, which let an empty fixture read as a
+                // verified one. This check has nothing to say unless it finds a battle.
+                if (battle == null)
+                    throw new InvalidOperationException(
+                        "no battle with a non-spectator in the fixture - nothing to read the flags off");
                 var teams = battle.SpringBattlePlayers.Where(p => !p.IsSpectator)
                     .Select(p => p.AllyNumber).Distinct().Count();
                 var winners = battle.SpringBattlePlayers.Count(p => p.IsInVictoryTeam && !p.IsSpectator);
@@ -122,7 +142,9 @@ namespace ZkData.Core
                     .OrderByDescending(a => a.SpringBattlePlayers.Count())
                     .Select(a => new { a.AccountID, Battles = a.SpringBattlePlayers.Count() })
                     .FirstOrDefault();
-                return top == null ? "no accounts" : "busiest account " + top.AccountID + " with " + top.Battles + " battles";
+                if (top == null)
+                    throw new InvalidOperationException("no accounts - the aggregate translated, but nothing ran through it");
+                return "busiest account " + top.AccountID + " with " + top.Battles + " battles";
             });
 
             // EF6's SqlFunctions.PatIndex, which ClansController uses four times to reject a
@@ -163,7 +185,8 @@ namespace ZkData.Core
                     .GroupBy(x => 1)
                     .Select(g => new { Min = g.Min(x => x.StartTime), Max = g.Max(x => x.StartTime) })
                     .FirstOrDefault();
-                if (span == null) return "no battles";
+                if (span == null)
+                    throw new InvalidOperationException("no battles - nothing to round-trip a datetime through");
                 if (span.Min.Year < 2000 || span.Max > DateTime.Now.AddDays(1))
                     throw new Exception("implausible range " + span.Min + " .. " + span.Max);
                 return span.Min.ToString("yyyy-MM-dd") + " .. " + span.Max.ToString("yyyy-MM-dd");
@@ -172,7 +195,8 @@ namespace ZkData.Core
             Check("string facets read back (varchar and nvarchar)", failures, () =>
             {
                 var account = db.Accounts.AsNoTracking().FirstOrDefault(a => a.Name != null);
-                if (account == null) return "no named account";
+                if (account == null)
+                    throw new InvalidOperationException("no named account - no varchar or nvarchar facet was read back");
                 return "account " + account.AccountID + " name length " + account.Name.Length;
             });
 

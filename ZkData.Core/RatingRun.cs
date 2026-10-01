@@ -69,6 +69,16 @@ namespace ZkData.Core
             var accounts = db.Accounts.AsNoTracking().Select(a => a.AccountID).ToList();
             accounts.Sort();
 
+            // The battle guard above does not cover this one: battles with no accounts to rate
+            // writes a file holding nothing but a header, and db/compare-ratings.sh then diffs it
+            // against an equally empty EF6 dump and reports the two stacks agreeing. An export of
+            // nothing is not a result, so it is refused here as well as compared there.
+            if (accounts.Count == 0)
+            {
+                Console.Error.WriteLine("no accounts in this database - there would be nothing to rate");
+                return 2;
+            }
+
             var lines = WaitForStableRatings(() => Snapshot(casual, accounts), TimeSpan.FromMinutes(3));
             if (lines == null)
             {
