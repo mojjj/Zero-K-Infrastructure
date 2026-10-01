@@ -9,6 +9,8 @@
 //
 // It loads the real file rather than a copy. site_main.js is browser code, so the few globals it
 // touches at load time are stubbed; nothing in BuildHistoryUrl uses them.
+// blinding-exempt: loads Zero-K.info/Scripts/site_main.js directly. If the file moves,
+// require throws and the check fails; there is no list for it to find empty.
 const path = require("path");
 const Module = require("module");
 

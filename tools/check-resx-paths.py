@@ -46,6 +46,14 @@ def main():
                             capture_output=True, text=True, check=True).stdout
     files = [name for name in listed.splitlines() if name]
 
+# A check that looks at nothing passes. These scripts find their subjects through
+# git ls-files, so a directory rename, a project move or a glob that stops matching
+# leaves them scanning an empty list and reporting success - which is how a 314-item
+# guard in tools/build-website.sh ran as a 0-item guard, green, for one commit.
+    if not files:
+        print("found no .resx files - the check would pass by seeing nothing", file=sys.stderr)
+        return 2
+
     missing = []
     checked = 0
     for name in files:
