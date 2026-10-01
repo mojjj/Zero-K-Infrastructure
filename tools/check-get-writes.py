@@ -79,9 +79,9 @@ def attributes_above(text, start):
     return found
 
 
-def scan():
+def scan(paths):
     writing, by_design, not_yet = [], [], []
-    for path in controllers():
+    for path in paths:
         with open(path, encoding="utf-8-sig") as handle:
             text = handle.read()
         for match in SIGNATURE.finditer(text):
@@ -104,8 +104,17 @@ def scan():
     return writing, by_design, not_yet
 
 
+# A check that looks at nothing passes. These scripts find their subjects through
+# git ls-files, so a directory rename, a project move or a glob that stops matching
+# leaves them scanning an empty list and reporting success - which is how a 314-item
+# guard in tools/build-website.sh ran as a 0-item guard, green, for one commit.
 def main():
-    unmarked, by_design, not_yet = scan()
+    paths = controllers()
+    if not paths:
+        print("found no controllers - the check would pass by seeing nothing", file=sys.stderr)
+        return 2
+
+    unmarked, by_design, not_yet = scan(paths)
 
     for path, line, name, in unmarked:
         print("%s:%d: %s writes to the database and a GET can reach it" % (path, line, name))
@@ -115,8 +124,8 @@ def main():
         print("- or say why it is right, with [WritesOnGetByDesign(\"...\")] on the method.")
         return 1
 
-    print("no action writes on a GET without saying why (%d by design, %d not yet fixed)"
-          % (len(by_design), len(not_yet)))
+    print("no action writes on a GET without saying why in %d controller(s)"
+          " (%d by design, %d not yet fixed)" % (len(paths), len(by_design), len(not_yet)))
     if not_yet:
         print("\nstill reachable by GET, and should not be:")
         for path, line, name, reason in not_yet:

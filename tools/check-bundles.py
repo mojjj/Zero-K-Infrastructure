@@ -16,6 +16,9 @@ port makes the ported pages quietly miss it; one removed from the site and left 
 the port render a tag for a file that is gone - and the host harness asserts only that the bundle
 renders SOMETHING, so neither shows up as a failure.
 """
+# blinding-exempt: parses BundleConfig.cs and the port's bundle list directly rather than
+# through git ls-files, and already refuses an empty parse - "could not find any bundles in
+# %s - has its shape changed?", exit 2.
 import re
 import sys
 from pathlib import Path

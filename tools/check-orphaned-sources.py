@@ -70,6 +70,14 @@ def main():
                if f.endswith(".cs")
                and "/obj/" not in f and "/bin/" not in f}
 
+# A check that looks at nothing passes. These scripts find their subjects through
+# git ls-files, so a directory rename, a project move or a glob that stops matching
+# leaves them scanning an empty list and reporting success - which is how a 314-item
+# guard in tools/build-website.sh ran as a 0-item guard, green, for one commit.
+    if not sources:
+        print("found no tracked C# files - the check would pass by seeing nothing", file=sys.stderr)
+        return 2
+
     covered = set()
     for project in [f for f in files if f.endswith((".csproj", ".props"))]:
         text = Path(project).read_text(encoding="utf-8-sig", errors="replace")

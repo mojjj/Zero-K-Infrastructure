@@ -78,9 +78,18 @@ def exemptions():
     return out
 
 
+# A check that looks at nothing passes. These scripts find their subjects through
+# git ls-files, so a directory rename, a project move or a glob that stops matching
+# leaves them scanning an empty list and reporting success - which is how a 314-item
+# guard in tools/build-website.sh ran as a 0-item guard, green, for one commit.
 def main():
+    scanned = views()
+    if not scanned:
+        print("found no .cshtml files - the check would pass by seeing nothing", file=sys.stderr)
+        return 2
+
     bad = 0
-    for path in views():
+    for path in scanned:
         for line, why in failures_in(path):
             print("%s:%d: %s" % (path, line, why))
             bad += 1
@@ -92,7 +101,8 @@ def main():
         return 1
 
     waived = exemptions()
-    print("every hand-written form that POSTs carries an anti-forgery token")
+    print("every hand-written form that POSTs carries an anti-forgery token (%d views read)"
+          % len(scanned))
     if waived:
         print("\n%d exempted as changing nothing:" % len(waived))
         for path, line, reason in waived:

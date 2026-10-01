@@ -62,9 +62,19 @@ def tracked_sources():
     return [line for line in out.splitlines() if line]
 
 
+# A check that looks at nothing passes. These scripts find their subjects through
+# git ls-files, so a directory rename, a project move or a glob that stops matching
+# leaves them scanning an empty list and reporting success - which is how a 314-item
+# guard in tools/build-website.sh ran as a 0-item guard, green, for one commit.
 def main():
+    scanned = tracked_sources()
+    if not scanned:
+        print("found no tracked C# or Razor files - the check would pass by seeing nothing",
+              file=sys.stderr)
+        return 2
+
     offenders = []
-    for name in tracked_sources():
+    for name in scanned:
         if name == DECLARATION or name.startswith("tools/"):
             continue
         path = ROOT / name
@@ -89,7 +99,8 @@ def main():
         print("off Windows it is a different one, and nothing fails - the file is just never found.")
         return 1
 
-    print("each published directory is named once, in its GlobalConst constant")
+    print("each published directory is named once, in its GlobalConst constant (%d files read)"
+          % len(scanned))
     return 0
 
 
