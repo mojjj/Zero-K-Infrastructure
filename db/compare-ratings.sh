@@ -46,8 +46,20 @@ echo "== .NET Framework over EF6"
 cp "$WORK/ratings-ef6.tsv" "$OUT/ef6.tsv"
 
 echo
+
+# An empty file matches an empty file. Both exports losing their rows - a fixture that did not
+# load, a filter that stopped matching - produced "identical ratings for all -1 accounts" and
+# exit 0, which is the strongest claim this repository makes about the port passing on no data
+# at all. The floor is simply that there are some, so no fixture change can move it.
+accounts=$(( $(wc -l < "$OUT/ef6.tsv") - 1 ))
+if [ "$accounts" -lt 1 ]; then
+    echo "the EF6 export holds no accounts, so there is nothing to compare and any result" >&2
+    echo "would agree with any other. Load the fixture with db/load-fixture.sh." >&2
+    exit 2
+fi
+
 if diff -q "$OUT/ef6.tsv" "$OUT/efcore.tsv" >/dev/null; then
-    echo "the two stacks produced identical ratings for all $(( $(wc -l < "$OUT/ef6.tsv") - 1 )) accounts."
+    echo "the two stacks produced identical ratings for all $accounts accounts."
     echo "G9 round-trips a float exactly, so identical text means identical bits."
     exit 0
 fi
