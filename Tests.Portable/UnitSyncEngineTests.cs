@@ -55,10 +55,22 @@ namespace Tests.Portable
             if (File.Exists(source) && !File.Exists(target)) File.Copy(source, target);
         }
 
+        /// <summary>
+        /// Inconclusive is right on a machine with no engine - these are the only tests that need
+        /// a 42MB download, and failing without one would make the suite unrunnable. It is wrong
+        /// where an engine was supposed to be mounted: a mount that silently did not arrive turns
+        /// every test here into a skip, and the step reports "Passed!" having called nothing.
+        /// ZK_REQUIRE_FULL_RUN=1, which the workflow sets on the step that mounts the engine,
+        /// says the engine is meant to be there and a skip is a failure.
+        /// </summary>
         private static bool Skip()
         {
             if (!string.IsNullOrEmpty(EngineDir) && File.Exists(Path.Combine(EngineDir, "libunitsync.so"))) return false;
-            Assert.Inconclusive("no engine: set ZK_UNITSYNC_DIR (see ./tools/fetch-engine.sh)");
+
+            const string why = "no engine: set ZK_UNITSYNC_DIR (see ./tools/fetch-engine.sh)";
+            if (Environment.GetEnvironmentVariable("ZK_REQUIRE_FULL_RUN") == "1")
+                Assert.Fail(why + " - and ZK_REQUIRE_FULL_RUN=1 says one was meant to be mounted");
+            Assert.Inconclusive(why);
             return true;
         }
 
