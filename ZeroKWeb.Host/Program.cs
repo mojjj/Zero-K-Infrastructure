@@ -1947,6 +1947,45 @@ namespace ZeroKWeb.Host
         /// The account is joined to both, and put back afterwards, because a clan page with no
         /// members renders a different and much shorter view of itself.
         /// </summary>
+        /// <summary>
+        /// Seeds one poll with two options, the way WithFactionAndClan seeds a faction and a clan,
+        /// and removes them again. The fixture has no Polls rows - no forum threads, news, missions
+        /// or clans either - which is the whole reason 55 of the site's 119 views are never
+        /// rendered by any run here. Seeding is how that gets fixed one view at a time without
+        /// committing data to the fixture, where it would move every count the other checks assert.
+        /// </summary>
+        private static async Task<int> WithPoll(Func<int, Task<int>> body)
+        {
+            int pollID;
+            using (var db = new ZkDataContext())
+            {
+                var poll = new Poll { QuestionText = "Harness Poll", IsHeadline = false, IsVisible = true };
+                poll.PollOptions.Add(new PollOption { OptionText = "Harness Option One" });
+                poll.PollOptions.Add(new PollOption { OptionText = "Harness Option Two" });
+                db.Polls.Add(poll);
+                db.SaveChanges();
+                pollID = poll.PollID;
+            }
+
+            try
+            {
+                return await body(pollID);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var poll = db.Polls.FirstOrDefault(x => x.PollID == pollID);
+                    if (poll != null)
+                    {
+                        db.PollOptions.RemoveRange(db.PollOptions.Where(o => o.PollID == pollID));
+                        db.Polls.Remove(poll);
+                        db.SaveChanges();
+                    }
+                }
+            }
+        }
+
         private static async Task<int> WithFactionAndClan(Func<int, int, Task<int>> body)
         {
             int factionID, clanID, accountID;
@@ -2139,6 +2178,29 @@ namespace ZeroKWeb.Host
                 seeded += Check(clan.Contains("Harness Clan"), "and the clan's name is in it");
                 var faction = await (await client.GetAsync(Url + "/Factions/Detail/" + factionID)).Content.ReadAsStringAsync();
                 seeded += Check(faction.Contains("Harness Faction"), "and the faction's name is in it");
+
+                return seeded;
+            });
+
+            // Poll/PollView.cshtml, which no run had ever rendered. Two requests, because the
+            // interesting one is the miss: PollController.Index returned a bare null when the poll
+            // was not there, MVC 5 turned that into EmptyResult and answered 200 with nothing, and
+            // ASP.NET Core throws "Cannot return null from an action method" - so the port answered
+            // 500 where the site answered 200. Nothing requested the action, so nothing said so.
+            failures += await WithPoll(async pollID =>
+            {
+                var seeded = 0;
+
+                var hit = await client.GetAsync(Url + "/Poll?pollID=" + pollID);
+                var html = await hit.Content.ReadAsStringAsync();
+                seeded += Check(hit.IsSuccessStatusCode, "/Poll renders a poll that exists ("
+                                                         + (int)hit.StatusCode + ", " + html.Length + " bytes)");
+                seeded += Check(html.Contains("Harness Poll"), "and the question text is in it");
+
+                var miss = await client.GetAsync(Url + "/Poll?pollID=2147483647");
+                seeded += Check((int)miss.StatusCode == 200,
+                    "and a poll that is not there is an empty 200, not a 500 ("
+                    + (int)miss.StatusCode + ") - MVC 5 answers 200 here");
 
                 return seeded;
             });

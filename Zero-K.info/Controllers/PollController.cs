@@ -18,7 +18,13 @@ namespace ZeroKWeb.Controllers
             var db = new ZkDataContext();
             var poll = db.Polls.FirstOrDefault(x => x.PollID == pollID);
             if (poll != null) return PartialView("PollView", poll);
-            return null;
+
+            // EmptyResult, not null. MVC 5 substitutes EmptyResult.Instance for a null action
+            // result, so asking for a poll that is not there rendered nothing and answered 200.
+            // ASP.NET Core throws instead - "Cannot return null from an action method with a
+            // return type of 'ActionResult'" - so the same request answers 500 on the port.
+            // This is what MVC 5 did implicitly, written out, and it reads the same on both.
+            return new EmptyResult();
         }
 
         [HttpPost]
