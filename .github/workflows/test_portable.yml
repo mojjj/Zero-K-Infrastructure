@@ -131,6 +131,15 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
 
+      # The thirty Html helpers that exist twice. MVC 5 compiles HtmlHelperExtensions.cs and
+      # ASP.NET Core compiles HtmlHelperExtensions.Ported.cs - two copies, because MVC 5 has
+      # HtmlHelper where ASP.NET Core has IHtmlHelper, so the file cannot simply be linked the way
+      # HtmlHelperExtensions.Portable.cs is. They drifted: 4d1be43d1 encoded a map's InternalName
+      # and a wiki page title where they are rendered, and neither fix reached the ported copy, so
+      # the .NET 9 site carried two vulnerabilities the site it replaces had already fixed.
+      - name: Check the ported Html helpers still differ the way they are recorded to
+        run: ./tools/check-ported-helpers.py
+
       # The eleven views that exist twice. port-views.props compiles the PortedViews/ copy for
       # .NET 9 and excludes the original, which MVC 5 still serves, so the two drift apart in
       # silence: view-port-report --check fails when the SET changes and nothing compared the

@@ -159,14 +159,34 @@ namespace System.Web.Mvc
         /// <summary>Verbatim from HtmlHelperExtensions.cs; Home/HomeIndex.cshtml is the only caller.</summary>
         public static MvcHtmlString PrintMediaWikiEdit(this IHtmlHelper helper, MediaWikiRecentChanges.MediaWikiEdit edit)
         {
-            return new MvcHtmlString(string.Format("<a href=\"//zero-k.info/mediawiki/index.php?title={0}\">{0}</a> by {1} <small>{2}</small>",
-                    edit.Title, edit.Username, edit.AgoString
+            // Title and Username come from the wiki's recent-changes feed - written by whoever
+            // edits the wiki - and went into both an href and the page unencoded. The href needs
+            // URL encoding and the text needs HTML encoding; they are different jobs and the
+            // original did neither. HtmlHelperExtensions.cs got this in 4d1be43d1; this copy did not.
+            return new MvcHtmlString(string.Format("<a href=\"//zero-k.info/mediawiki/index.php?title={0}\">{1}</a> by {2} <small>{3}</small>",
+                    System.Uri.EscapeDataString(edit.Title ?? ""),
+                    System.Net.WebUtility.HtmlEncode(edit.Title),
+                    System.Net.WebUtility.HtmlEncode(edit.Username),
+                    System.Net.WebUtility.HtmlEncode(edit.AgoString)
                     ));
         }
 
         public static MvcHtmlString PrintMap(this IHtmlHelper helper, string name)
-            => new MvcHtmlString(string.Format("<a href='{0}' title='$map${1}'>{1}</a>",
-                Url(helper).Action("DetailName", "Maps", new { name }), name));
+        {
+            // Encoded, because a map's InternalName is not restricted. Resource.InternalName has
+            // [Required] and [StringLength(255)] and nothing else, RegisterResource only null-checks
+            // it, and the name comes out of an uploaded map archive - so it is user-supplied text
+            // going into an attribute and into element content. Compare PrintAccount, which does not
+            // encode and does not need to: Account.IsValidLobbyName is enforced server-side at both
+            // registration and rename, so a player name cannot carry markup.
+            //
+            // Url(helper).Action encodes the query string itself, so only the two literal positions
+            // matter. HtmlHelperExtensions.cs got this in 4d1be43d1 and this copy did not, because
+            // the two are twins and nothing compared them - tools/check-ported-helpers.py now does.
+            var encoded = System.Net.WebUtility.HtmlEncode(name);
+            return new MvcHtmlString(string.Format("<a href='{0}' title='$map${1}'>{1}</a>",
+                Url(helper).Action("DetailName", "Maps", new { name }), encoded));
+        }
 
         public static MvcHtmlString PrintBattle(this IHtmlHelper helper, SpringBattlePlayer battlePlayer)
         {
