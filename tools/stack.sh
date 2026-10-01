@@ -139,7 +139,12 @@ if [ "${lobby:-}" = "1" ] && [ "${site:-}" = "1" ]; then
     else
         harness=1
     fi
-    grep -E "MatchMaker rendered|options loop|faction beside|Join form|needs a lobby server|needs a seeded round" "$harness_log" | sed 's/^/     /' || true
+    # A hand-kept list of the lines worth showing, which means a check added later is run here and
+    # invisible until its line is added - /Tourney was, for one commit. "rendered against a real
+    # lobby server" is the shared wording, so a new lobby-dependent check that uses it shows up on
+    # its own; the rest are named because they do not.
+    grep -E "against a real lobby server|options loop|faction beside|Join form|needs a lobby server|needs a seeded round" \
+        "$harness_log" | sed 's/^/     /' || true
     check "$harness" "the site's own checks pass with a lobby server attached"
     [ "$harness" = "0" ] || grep -E "^\s+(FAIL|note)" "$harness_log" | head -20
 
