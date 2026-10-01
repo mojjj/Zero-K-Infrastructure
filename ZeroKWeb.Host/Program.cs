@@ -2397,6 +2397,42 @@ namespace ZeroKWeb.Host
                 var faction = await (await client.GetAsync(Url + "/Factions/Detail/" + factionID)).Content.ReadAsStringAsync();
                 seeded += Check(faction.Contains("Harness Faction"), "and the faction's name is in it");
 
+                // The hover tooltips, which the site fetches by AJAX and no check had ever asked
+                // for. They are partial views returning a fragment, which is the shape that broke
+                // in Autocomplete - so each asserts the content it should carry, not the status.
+                // An empty fragment is a 200, and 200 is what a tooltip that lost its model gives.
+                int accountID;
+                using (var db = new ZkDataContext()) accountID = db.Accounts.OrderBy(a => a.AccountID).First().AccountID;
+
+                foreach (var probe in new[]
+                         {
+                             new { Key = "user$" + accountID, Expect = "player", What = "Home/UserTooltip" },
+                             new { Key = "clan$" + clanID, Expect = "Harness Clan", What = "Clans/Tooltip" },
+                             new { Key = "faction$" + factionID, Expect = "Harness Faction", What = "Factions/FactionTooltip" },
+                         })
+                {
+                    var response = await client.GetAsync(Url + "/Home/GetTooltip?key=" + Uri.EscapeDataString(probe.Key));
+                    var fragment = await response.Content.ReadAsStringAsync();
+                    seeded += Check(response.IsSuccessStatusCode, "tooltip " + probe.Key + " answered ("
+                                                                  + (int)response.StatusCode + ", " + fragment.Length + " bytes)");
+                    seeded += Check(fragment.Contains(probe.Expect),
+                        "and " + probe.What + ".cshtml put something in it");
+                }
+
+                // UserDetail renders Users/UserRoleList.cshtml only for an account that HAS one -
+                // @if (Model.Faction != null || Model.Clan != null) - and this is the one place
+                // where it does, because WithFactionAndClan put both on it. The admin sweep asks
+                // for the same page with neither, and that request walks straight past the partial.
+                // Asserted through the clan link rather than any text of its own, because
+                // UserRoleList renders NOTHING visible for an account with no roles seen by a
+                // visitor who shares neither its clan nor its faction - which is this one. The link
+                // is emitted by the same @if that gates the partial, so it is the evidence that the
+                // gate opened; the first version of this looked for "Harness Clan" in the page and
+                // failed, because the clan is drawn as an icon and never written out.
+                var detail = await (await client.GetAsync(Url + "/Users/Detail/" + accountID)).Content.ReadAsStringAsync();
+                seeded += Check(detail.Contains("/Clans/Detail/" + clanID),
+                    "/Users/Detail took the branch that renders Users/UserRoleList.cshtml");
+
                 return seeded;
             });
 
