@@ -81,6 +81,12 @@ jobs:
           /p:DefineConstants="TEST" 
           Zero-K.sln
 
+      # TestCategory=Basic selects the four tests that need nothing but a CPU: the RSA signatures
+      # and the three RGB565/bitmap ones, which are the only place the port's unpacking is compared
+      # against real GDI+. The four it leaves out each call an external service - an IP lookup, a
+      # currency conversion, the engine list, a whois - and each says so in its own file now. One of
+      # them was written [TestMethod("Basic")], which is a display NAME and not a category, so it
+      # read as selected and was not; keep the distinction in mind before "fixing" one.
       - name: Run VSTest
         run: vstest.console.exe /Platform:x64 /Framework:Framework45 /TestCaseFilter:TestCategory=Basic /Parallel /Logger:trx;LogFileName=test-results.trx ./Tests/bin/release/net48/Tests.dll
         shell: cmd
