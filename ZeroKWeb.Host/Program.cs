@@ -646,6 +646,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckPlanetwarsActionSurface();
                 failures += await CheckClanActionSurface();
                 failures += await CheckFormPostsAreGuarded();
+                failures += await CheckPagesOnlyASignedInVisitorSees();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -1982,6 +1983,171 @@ namespace ZeroKWeb.Host
                         db.Polls.Remove(poll);
                         db.SaveChanges();
                     }
+                }
+            }
+        }
+
+        /// <summary>
+        /// The pages an anonymous request never reaches. /Charts, /My/Commanders, /Wiki and the
+        /// rest answer 302 to a visitor who is not signed in, so every check here had only ever
+        /// seen the logged-out half of the site - and the half that breaks is the other one. The
+        /// layout is the proof: TopMenu calls a child action for authenticated visitors ONLY, so
+        /// it was 200 anonymous and 500 signed in, on every page at once, and nothing anonymous
+        /// could have found it.
+        ///
+        /// Each page is asserted to be a whole page with no unprocessed Razor left in it, which is
+        /// what separates "the view ran" from "the layout ran and the view threw".
+        /// </summary>
+        private static async Task<int> CheckPagesOnlyASignedInVisitorSees()
+        {
+            Console.WriteLine();
+            Console.WriteLine("pages only a signed-in visitor sees:");
+
+            return await WithSignedInClient(async client => await WithForumThread(async (threadID, postID) =>
+            {
+                var failures = 0;
+                foreach (var path in new[]
+                         {
+                             "/My/Commanders", "/My/UnlockList", "/Clans/Create", "/Wiki", "/MapBans",
+                             // Needs a thread to post into, which is what WithForumThread is for.
+                             "/Forum/NewPost?threadID=" + threadID,
+                             // And the thread itself. A thread is only reachable with a forum
+                             // category attached: ForumPostListViewComponent reads
+                             // thread.ForumCategory.ForumMode without a null check, exactly as
+                             // ForumController.cs:177 does on MVC 5, so a category-less thread is
+                             // a NullReferenceException on both stacks and not a port defect.
+                             "/Forum/Thread/" + threadID,
+                             "/PostHistory/Index/" + postID,
+                         })
+                {
+                    var response = await client.GetAsync(Url + path);
+                    var html = await response.Content.ReadAsStringAsync();
+                    failures += Check(response.IsSuccessStatusCode && html.Contains("</html>"),
+                        "  " + path + " is a whole page (" + (int)response.StatusCode + ", " + html.Length + " bytes)");
+                    failures += Check(!html.Contains("@Html.") && !html.Contains("@Model"),
+                        "  and no unprocessed Razor survived in it");
+                }
+
+                // The seeded post reaches the page rather than only its chrome - the same
+                // distinction WithFactionAndClan draws, and the one an "is it 200" check misses.
+                var thread = await (await client.GetAsync(Url + "/Forum/Thread/" + threadID)).Content.ReadAsStringAsync();
+                failures += Check(thread.Contains("Harness post body one"), "  and the thread shows its posts");
+
+                return failures;
+            }));
+        }
+
+        /// <summary>
+        /// Signs in as the first account and hands the body a client carrying the cookie, putting
+        /// the password and admin level back afterwards. The same setup CheckSignIn does, factored
+        /// out so a check can ask for a signed-in page without re-doing it.
+        /// </summary>
+        private static async Task<int> WithSignedInClient(Func<HttpClient, Task<int>> body)
+        {
+            const string password = "harness-signed-in-password";
+            string name;
+            int accountID;
+            string originalHash;
+
+            using (var db = new ZkDataContext())
+            {
+                var account = db.Accounts.OrderBy(a => a.AccountID).First();
+                name = account.Name;
+                accountID = account.AccountID;
+                originalHash = account.PasswordBcrypt;
+                account.SetPasswordPlain(password);
+                db.SaveChanges();
+            }
+
+            try
+            {
+                var handler = new HttpClientHandler
+                {
+                    UseCookies = true,
+                    CookieContainer = new System.Net.CookieContainer(),
+                    AllowAutoRedirect = false,
+                };
+                using (var client = new HttpClient(handler))
+                {
+                    await client.PostAsync(Url + "/Harness/Login", new FormUrlEncodedContent(
+                        new[] { new KeyValuePair<string, string>("login", name),
+                                new KeyValuePair<string, string>("password", password) }));
+
+                    // If the cookie did not take, every page below answers 302 and each check
+                    // fails with a number that does not say why. Said once, here.
+                    var whoami = await (await client.GetAsync(Url + "/Harness/Whoami")).Content.ReadAsStringAsync();
+                    if (!whoami.Contains("signed in as " + name))
+                        return Check(false, "  could not sign in, so none of this ran (" + whoami.Trim() + ")");
+
+                    return await body(client);
+                }
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var account = db.Accounts.Single(a => a.AccountID == accountID);
+                    account.PasswordBcrypt = originalHash;
+                    db.SaveChanges();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Seeds a forum category, a thread in it and two posts, and removes them again. The
+        /// fixture has no ForumThreads rows, which is why Forum/Thread.cshtml, Forum/PostList.cshtml,
+        /// Shared/DisplayTemplates/ForumPost.cshtml and PostHistory/PostHistoryIndex.cshtml were
+        /// among the views no run here renders.
+        /// </summary>
+        private static async Task<int> WithForumThread(Func<int, int, Task<int>> body)
+        {
+            int categoryID, threadID, postID;
+
+            using (var db = new ZkDataContext())
+            {
+                var category = new ForumCategory { Title = "Harness Category", ForumMode = ForumMode.General };
+                db.ForumCategories.Add(category);
+                db.SaveChanges();
+                categoryID = category.ForumCategoryID;
+
+                var author = db.Accounts.OrderBy(a => a.AccountID).First();
+                var thread = new ForumThread
+                {
+                    Title = "Harness Thread",
+                    Created = DateTime.UtcNow,
+                    LastPost = DateTime.UtcNow,
+                    CreatedAccountID = author.AccountID,
+                    LastPostAccountID = author.AccountID,
+                    ForumCategoryID = categoryID,
+                    PostCount = 2,
+                };
+                db.ForumThreads.Add(thread);
+                db.SaveChanges();
+                threadID = thread.ForumThreadID;
+
+                var first = new ForumPost { AuthorAccountID = author.AccountID, ForumThreadID = threadID, Text = "Harness post body one" };
+                var second = new ForumPost { AuthorAccountID = author.AccountID, ForumThreadID = threadID, Text = "Harness post body two" };
+                db.ForumPosts.Add(first);
+                db.ForumPosts.Add(second);
+                db.SaveChanges();
+                postID = first.ForumPostID;
+            }
+
+            try
+            {
+                return await body(threadID, postID);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    db.ForumThreadLastReads.RemoveRange(db.ForumThreadLastReads.Where(x => x.ForumThreadID == threadID));
+                    db.ForumPosts.RemoveRange(db.ForumPosts.Where(x => x.ForumThreadID == threadID));
+                    var thread = db.ForumThreads.FirstOrDefault(x => x.ForumThreadID == threadID);
+                    if (thread != null) db.ForumThreads.Remove(thread);
+                    var category = db.ForumCategories.FirstOrDefault(x => x.ForumCategoryID == categoryID);
+                    if (category != null) db.ForumCategories.Remove(category);
+                    db.SaveChanges();
                 }
             }
         }
