@@ -18,10 +18,12 @@ Off Windows the same entries stop the build outright:
     Ranks.resx(123,5): error MSB3103: Invalid Resx file. Could not find a part of the path
     "/src/ZeroKLobby/resources/ranks/0_0.png"
 
-That is a better failure than most in this repository - it is loud, and it names the file - but
-nothing here builds ZeroKLobby off Windows, so it was reached only by someone trying. This check
-is the part that does not need a build: it compares every entry against the filesystem, which
-answers the same question in a second and on any machine.
+That is a better failure than most in this repository - it is loud, and it names the file - and
+since 2026-10-01 CI reaches it, because tools/mono-buildable.proj builds ZeroKLobby under mono.
+When this check was written nothing did, which is how 67 of them accumulated. It is still worth
+keeping ahead of the build: it compares every entry against the filesystem in a second, on any
+machine, with no container, and it covers every .resx in the repository rather than the sixteen
+projects mono can build.
 
 Paths are resolved relative to the .resx file's own directory, which is how msbuild resolves them.
 Entries without a path separator are inline data, not files, and are skipped.
