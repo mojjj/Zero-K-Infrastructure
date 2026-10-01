@@ -245,22 +245,34 @@ jobs:
 
       # Everything the port does with a real engine, which until now ran only on a developer
       # machine: resolve libunitsync, call it, read a real minimap out of it, and make a downloaded
-      # binary executable. Skipped by each test when no engine is mounted, so a failed fetch is not
-      # a failed build.
+      # binary executable.
+      #
+      # These tests go Inconclusive without an engine, which is right on a laptop and wrong here,
+      # and the fetch failing used to print "skipped" and leave the step green. Both were silent:
+      # the step reported "Passed!" having called no engine at all. ZK_REQUIRE_FULL_RUN=1 makes a
+      # skip a failure, and a fetch that fails is a failure in its own right.
+      #
+      # The cost is that this step now depends on an external 42MB download. The cache above makes
+      # that a cold-cache-only risk, and a cold cache that cannot reach the engine is worth being
+      # told about. Drop the env line to get the tolerant behaviour back.
       - name: Call a real Spring engine from .NET 9
+        env:
+          ZK_REQUIRE_FULL_RUN: "1"
         run: |
           set -euo pipefail
-          if ENGINE="$(./tools/fetch-engine.sh)"; then
-            ZK_DOTNET_MOUNT="$ENGINE" ./tools/dotnet.sh test Tests.Portable/Tests.Portable.csproj -v q --nologo
-          else
-            echo "skipped: no engine could be fetched"
-          fi
+          ENGINE="$(./tools/fetch-engine.sh)" || {
+            echo "no engine could be fetched, so nothing below was exercised" >&2; exit 1; }
+          ZK_DOTNET_MOUNT="$ENGINE" ./tools/dotnet.sh test Tests.Portable/Tests.Portable.csproj -v q --nologo
 
       # The whole game chain: DedicatedServer starts spring-dedicated, a headless client joins it,
       # the autohost stream reaches Talker, and the finished context is stored through
       # BattleResultHandler. This is the only check that covers any of it.
       - name: Host a game, join it, and store the result
         env:
+          # tools/dedicated-server-check.sh skips itself without curl, without an engine or
+          # without a database, and exits 0 doing it. Here all three are present, so a skip means
+          # the only check covering the game chain stopped running and said nothing.
+          ZK_REQUIRE_FULL_RUN: "1"
           ZK_CONNECTION_STRING: "Data Source=127.0.0.1,14330;Initial Catalog=zk_test;User ID=sa;Password=ZkLocal!Dev2026;MultipleActiveResultSets=true;TrustServerCertificate=true"
         run: ./tools/dedicated-server-check.sh
 
