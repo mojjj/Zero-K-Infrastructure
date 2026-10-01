@@ -647,6 +647,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckClanActionSurface();
                 failures += await CheckFormPostsAreGuarded();
                 failures += await CheckPagesOnlyASignedInVisitorSees();
+                failures += await CheckPagesOnlyAnAdminSees();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -1663,7 +1664,18 @@ namespace ZeroKWeb.Host
         /// <summary>The password AsModerator sets, named so a check inside it can send it back.</summary>
         private const string ModeratorPassword = "harness-moderator-password";
 
-        private static async Task<int> AsModerator(Func<HttpClient, Task<int>> body)
+        private static Task<int> AsModerator(Func<HttpClient, Task<int>> body)
+        {
+            return AsAccount(AdminLevel.Moderator, body);
+        }
+
+        /// <summary>
+        /// Signs in as the first account at the level asked for, hands the body a client carrying
+        /// the cookie, and puts the password and admin level back afterwards. The level is SET
+        /// rather than assumed: `ZkData.Core -- grant` can have left the account with one, which
+        /// turned a 403 assertion into a 200 and the check into a puzzle, so this owns that state.
+        /// </summary>
+        private static async Task<int> AsAccount(AdminLevel level, Func<HttpClient, Task<int>> body)
         {
             const string password = ModeratorPassword;
             string name;
@@ -1676,7 +1688,7 @@ namespace ZeroKWeb.Host
                 name = account.Name;
                 originalHash = account.PasswordBcrypt;
                 originalAdminLevel = account.AdminLevel;
-                account.AdminLevel = AdminLevel.Moderator;
+                account.AdminLevel = level;
                 account.SetPasswordPlain(password);
                 db.SaveChanges();
             }
@@ -1694,6 +1706,13 @@ namespace ZeroKWeb.Host
                     await client.PostAsync(Url + "/Harness/Login", new FormUrlEncodedContent(
                         new[] { new KeyValuePair<string, string>("login", name),
                                 new KeyValuePair<string, string>("password", password) }));
+
+                    // If the cookie did not take, every page below answers 302 or 403 and each
+                    // line fails with a number that does not say why. Said once, here.
+                    var whoami = await (await client.GetAsync(Url + "/Harness/Whoami")).Content.ReadAsStringAsync();
+                    if (!whoami.Contains("signed in as " + name))
+                        return Check(false, "  could not sign in, so none of this ran (" + whoami.Trim() + ")");
+
                     return await body(client);
                 }
             }
@@ -2003,7 +2022,7 @@ namespace ZeroKWeb.Host
             Console.WriteLine();
             Console.WriteLine("pages only a signed-in visitor sees:");
 
-            return await WithSignedInClient(async client => await WithForumThread(async (threadID, postID) =>
+            return await AsAccount(AdminLevel.None, async client => await WithForumThread(async (threadID, postID) =>
             {
                 var failures = 0;
                 foreach (var path in new[]
@@ -2038,59 +2057,92 @@ namespace ZeroKWeb.Host
         }
 
         /// <summary>
-        /// Signs in as the first account and hands the body a client carrying the cookie, putting
-        /// the password and admin level back afterwards. The same setup CheckSignIn does, factored
-        /// out so a check can ask for a signed-in page without re-doing it.
+        /// The pages behind [Auth(Role = AdminLevel.SuperAdmin)] and the moderator surface. Nothing
+        /// here had ever rendered them: CheckSignIn deliberately sets AdminLevel.None, because its
+        /// own assertion is that a 403 means "recognised, then refused", so the whole admin half of
+        /// the site was reachable by no check at all. These are the least-visited pages on the site
+        /// and the ones a port breaks most quietly.
         /// </summary>
-        private static async Task<int> WithSignedInClient(Func<HttpClient, Task<int>> body)
+        private static async Task<int> CheckPagesOnlyAnAdminSees()
         {
-            const string password = "harness-signed-in-password";
-            string name;
+            Console.WriteLine();
+            Console.WriteLine("pages only an admin sees:");
+
             int accountID;
-            string originalHash;
+            using (var db = new ZkDataContext()) accountID = db.Accounts.OrderBy(a => a.AccountID).First().AccountID;
 
-            using (var db = new ZkDataContext())
+            var failures = await AsAccount(AdminLevel.SuperAdmin, async client =>
             {
-                var account = db.Accounts.OrderBy(a => a.AccountID).First();
-                name = account.Name;
-                accountID = account.AccountID;
-                originalHash = account.PasswordBcrypt;
-                account.SetPasswordPlain(password);
-                db.SaveChanges();
-            }
-
-            try
-            {
-                var handler = new HttpClientHandler
+                var admin = 0;
+                foreach (var path in new[]
+                         {
+                             "/Admin/EditDynamicConfig", "/Users", "/Users/Detail/" + accountID,
+                             "/Charts", "/Lobby/BlockedVPNs", "/LobbyNews/Edit", "/Mods/Edit",
+                         })
                 {
-                    UseCookies = true,
-                    CookieContainer = new System.Net.CookieContainer(),
-                    AllowAutoRedirect = false,
-                };
-                using (var client = new HttpClient(handler))
-                {
-                    await client.PostAsync(Url + "/Harness/Login", new FormUrlEncodedContent(
-                        new[] { new KeyValuePair<string, string>("login", name),
-                                new KeyValuePair<string, string>("password", password) }));
-
-                    // If the cookie did not take, every page below answers 302 and each check
-                    // fails with a number that does not say why. Said once, here.
-                    var whoami = await (await client.GetAsync(Url + "/Harness/Whoami")).Content.ReadAsStringAsync();
-                    if (!whoami.Contains("signed in as " + name))
-                        return Check(false, "  could not sign in, so none of this ran (" + whoami.Trim() + ")");
-
-                    return await body(client);
+                    var response = await client.GetAsync(Url + path);
+                    var html = await response.Content.ReadAsStringAsync();
+                    admin += Check(response.IsSuccessStatusCode && html.Contains("</html>"),
+                        "  " + path + " is a whole page (" + (int)response.StatusCode + ", " + html.Length + " bytes)");
+                    admin += Check(!html.Contains("@Html.") && !html.Contains("@Model"),
+                        "  and no unprocessed Razor survived in it");
                 }
+                return admin;
+            });
+
+            // Which proves nothing unless these pages are actually shut to everyone else. Without
+            // this, an [Auth] attribute that stopped being applied in the port would make the whole
+            // sweep above pass more easily, not less - the failure would look like success.
+            // AllowAutoRedirect = false matters more than it looks. A plain HttpClient follows the
+            // 302 to the login page and reports ITS 200, so the first version of this check failed
+            // against a site that was shutting the page correctly. Checked with curl before
+            // believing it, which is the only reason it reads as a redirect here and not a finding.
+            using (var anonymous = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }))
+            {
+                var shut = await anonymous.GetAsync(Url + "/Admin/EditDynamicConfig");
+                failures += Check(shut.StatusCode == System.Net.HttpStatusCode.Redirect,
+                    "  and /Admin/EditDynamicConfig redirects a visitor who is not signed in ("
+                    + (int)shut.StatusCode + ")");
             }
-            finally
+
+            // /Tourney is the admin page this cannot reach. TourneyController.Index calls
+            // Global.LobbyApi.GetTourneyBattles() with no null check, so with no lobby server
+            // configured it is a NullReferenceException on BOTH stacks rather than a port defect -
+            // the same shape as /Planetwars/MatchMaker, and it runs for real under tools/stack.sh.
+            if (ZeroKWeb.Global.LobbyApi == null)
+            {
+                Console.WriteLine("   ....  /Tourney needs a lobby server and none is configured - "
+                                  + "run tools/stack.sh, which starts one");
+                return failures;
+            }
+
+            return failures + await AsAccount(AdminLevel.SuperAdmin, async client =>
             {
                 using (var db = new ZkDataContext())
                 {
                     var account = db.Accounts.Single(a => a.AccountID == accountID);
-                    account.PasswordBcrypt = originalHash;
+                    account.IsTourneyController = true;
                     db.SaveChanges();
                 }
-            }
+
+                try
+                {
+                    var response = await client.GetAsync(Url + "/Tourney");
+                    var html = await response.Content.ReadAsStringAsync();
+                    return Check(response.IsSuccessStatusCode && html.Contains("</html>"),
+                        "  /Tourney rendered against a real lobby server ("
+                        + (int)response.StatusCode + ", " + html.Length + " bytes)");
+                }
+                finally
+                {
+                    using (var db = new ZkDataContext())
+                    {
+                        var account = db.Accounts.Single(a => a.AccountID == accountID);
+                        account.IsTourneyController = false;
+                        db.SaveChanges();
+                    }
+                }
+            });
         }
 
         /// <summary>
