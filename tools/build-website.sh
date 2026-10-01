@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Compile-checks the website on Linux, with no .NET Framework and no Visual Studio.
 #
-#   ./tools/build-website.sh
+#   ./tools/build-website.sh                              # Zero-K.info alone
+#   ./tools/build-website.sh tools/mono-buildable.proj     # every project mono can build
+#   ./tools/build-website.sh Fixer/Fixer.csproj            # one project
 #
-# Builds Zero-K.info with msbuild under mono in Docker. It is the only way to know whether
-# a change to the website compiles without a Windows machine, and it is what every
-# modernization change in this repository has been checked with.
+# Builds with msbuild under mono in Docker. It is the only way to know whether a change
+# compiles without a Windows machine, and it is what every modernization change in this
+# repository has been checked with. The argument is any msbuild project; CI passes
+# tools/mono-buildable.proj, which names the sixteen of the solution's twenty projects
+# that mono can build - Zero-K.sln itself cannot be used, because the other four are WPF.
 #
 # Works on a copy of the tracked files, so the repository never collects root-owned obj/
 # and packages/ directories from the container.

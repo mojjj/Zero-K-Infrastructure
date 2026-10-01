@@ -79,18 +79,25 @@ jobs:
       - name: Load the test fixture
         run: ./db/load-fixture.sh
 
-      # The Framework build, which nothing in CI did until now. It compiles eight projects -
-      # the website, ZkLobbyServer, ZkData, PlasmaShared, LobbyClient and the rest - so it is
-      # what catches a change that compiles on .NET 9 and not on .NET Framework, or the
-      # reverse. The port edits production C# in both directions, so both sides need a build.
+      # The Framework build. It is what catches a change that compiles on .NET 9 and not on
+      # .NET Framework, or the reverse; the port edits production C# in both directions, so
+      # both sides need a build.
+      #
+      # It builds the sixteen projects of the twenty in Zero-K.sln that mono can build, listed
+      # in tools/mono-buildable.proj along with the four it cannot and why. Naming asp.net
+      # here instead - which is what this step did until now - built seven of them, because a
+      # project is built only if something references it. ZeroKLobby was referenced by nothing,
+      # was therefore compiled by nobody, and had accumulated 67 dead .resx paths and two
+      # guards written for a compiler nobody uses by the time anyone tried (#219, #220).
       #
       # It does NOT compile Razor views: mono ships no aspnet_compiler.exe. That gap is
       # covered as far as it can be by tools/view-port-report.sh in the other workflow.
       #
       # Placed here rather than in test_portable.yml because this job already pulls the
-      # mono:6.12 image for the steps above, so the image is warm.
-      - name: Build the .NET Framework solution under mono
-        run: ./tools/build-website.sh
+      # mono:6.12 image for the steps above, so the image is warm. Sixteen projects cost no
+      # measurable time over seven - about 17 seconds either way, against a cold NuGet restore.
+      - name: Build the .NET Framework projects under mono
+        run: ./tools/build-website.sh tools/mono-buildable.proj
 
       - name: Run the WHR pipeline tests
         run: ./db/run-db-tests.sh
@@ -105,11 +112,6 @@ jobs:
       # build-website.sh above has already pulled Razor 3 into the NuGet cache.
       - name: Check every view still parses as Razor v3 (MVC 5)
         run: ./tools/razor-v3-check/check.sh --all
-
-      # The standalone lobby server is a new project and nothing else builds it, so without this
-      # it would rot quietly. build-website.sh takes a project as its argument.
-      - name: Build the standalone lobby server
-        run: ./tools/build-website.sh ZkLobbyServer.Standalone/ZkLobbyServer.Standalone.csproj
 
       - name: Check the EF Core model against the EF6 schema
         run: ./db/efcore-schema.sh --check
