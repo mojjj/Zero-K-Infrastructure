@@ -659,6 +659,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckContentService();
                 failures += await CheckMissionDownloads();
                 failures += await CheckReplayDownload();
+                failures += await CheckGameModeAndInfolog();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2154,6 +2155,114 @@ namespace ZeroKWeb.Host
                     }
                 }
             });
+        }
+
+        /// <summary>
+        /// The last two endpoints that name a content type and had never been called: the game
+        /// mode's JSON download, and the infolog page.
+        ///
+        /// The second one does not work, and cannot be made to from here. BattlesController.Logs
+        /// calls ReplayStorage.GetFileContent, which dereferences the Azure container client
+        /// without checking it - and that client is NULL whenever replay storage is not configured,
+        /// which the constructor already warns about before returning early. So on any deployment
+        /// without blob storage the infolog page is a 500 for the moderators who are the only ones
+        /// who can see it.
+        ///
+        /// Its sibling handles the same case: ReplaysController.Download wraps the blob call in a
+        /// try/catch and falls back to local disk. Logs has neither the catch nor the fallback.
+        /// Same code on both stacks, so it is not a port defect, and the note records it rather
+        /// than asserting it.
+        /// </summary>
+        private static async Task<int> CheckGameModeAndInfolog()
+        {
+            Console.WriteLine();
+            Console.WriteLine("game mode download, and the infolog page:");
+
+            var failures = await WithGameMode(async (gameModeID, shortName, json) =>
+            {
+                var seeded = 0;
+                using (var client = new HttpClient())
+                {
+                    var detail = await client.GetAsync(Url + "/Mods/Detail/" + gameModeID);
+                    var detailHtml = await detail.Content.ReadAsStringAsync();
+                    seeded += Check(detail.IsSuccessStatusCode && detailHtml.Contains("</html>"),
+                        "  /Mods/Detail is a whole page (" + (int)detail.StatusCode + ", "
+                        + detailHtml.Length + " bytes)");
+
+                    var download = await client.GetAsync(Url + "/Mods/Download/" + gameModeID);
+                    var body = await download.Content.ReadAsStringAsync();
+                    seeded += Check(download.IsSuccessStatusCode
+                                    && download.Content.Headers.ContentType?.MediaType == "application/json",
+                        "  /Mods/Download is application/json ("
+                        + (download.Content.Headers.ContentType?.MediaType ?? "none") + ")");
+                    seeded += Check(body == json, "  and the body is that game mode's JSON");
+
+                    // The filename is built from ShortName. A download whose name is lost is still
+                    // a 200 of the right bytes, so nothing else here would notice.
+                    var disposition = download.Content.Headers.ContentDisposition;
+                    seeded += Check(disposition?.FileName?.Contains(shortName) == true,
+                        "  offered as " + shortName + ".json (" + (disposition?.FileName ?? "no filename") + ")");
+                }
+                return seeded;
+            });
+
+            // Recorded, not asserted - there is no blob storage here and the endpoint needs one.
+            failures += await AsModerator(async moderator =>
+            {
+                int battleID;
+                using (var db = new ZkDataContext()) battleID = db.SpringBattles.OrderBy(x => x.SpringBattleID).First().SpringBattleID;
+
+                var logs = await moderator.GetAsync(Url + "/Battles/Logs/" + battleID);
+                Console.WriteLine("   note  /Battles/Logs answers " + (int)logs.StatusCode
+                                  + " with no blob storage configured - ReplayStorage.GetFileContent "
+                                  + "dereferences a null container client, on both stacks. "
+                                  + "ReplaysController.Download catches and falls back to disk; this does not.");
+                return 0;
+            });
+
+            return failures;
+        }
+
+        /// <summary>
+        /// Seeds one game mode and removes it. ForumThreadID is nullable here and Detail reaches it
+        /// with ?., so unlike the mission and news helpers this one needs no thread behind it.
+        /// </summary>
+        private static async Task<int> WithGameMode(Func<int, string, string, Task<int>> body)
+        {
+            const string shortName = "harnessmode";
+            const string json = "{\"harness\":true}";
+            int gameModeID;
+
+            using (var db = new ZkDataContext())
+            {
+                var maintainer = db.Accounts.OrderBy(a => a.AccountID).First();
+                var mode = new GameMode
+                {
+                    ShortName = shortName,
+                    DisplayName = "Harness Game Mode",
+                    GameModeJson = json,
+                    IsFeatured = false,
+                    Created = DateTime.UtcNow,
+                    LastModified = DateTime.UtcNow,
+                    MaintainerAccountID = maintainer.AccountID,
+                };
+                db.GameModes.Add(mode);
+                db.SaveChanges();
+                gameModeID = mode.GameModeID;
+            }
+
+            try
+            {
+                return await body(gameModeID, shortName, json);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var mode = db.GameModes.FirstOrDefault(x => x.GameModeID == gameModeID);
+                    if (mode != null) { db.GameModes.Remove(mode); db.SaveChanges(); }
+                }
+            }
         }
 
         /// <summary>
