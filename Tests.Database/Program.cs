@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -20,7 +20,7 @@ namespace Tests.Database
             if (args.FirstOrDefault() == "--dump-ratings") return RatingDump.Run(args.Skip(1).FirstOrDefault());
 
             var filter = args.FirstOrDefault();
-            int passed = 0, failed = 0, skipped = 0;
+            int passed = 0, failed = 0, skipped = 0, matched = 0;
 
             foreach (var type in Assembly.GetExecutingAssembly().GetTypes()
                          .Where(t => t.GetCustomAttribute<TestClassAttribute>() != null)
@@ -32,6 +32,7 @@ namespace Tests.Database
                     .OrderBy(m => m.Name)
                     .ToList();
                 if (!methods.Any()) continue;
+                matched += methods.Count;
 
                 Console.WriteLine();
                 Console.WriteLine(type.Name);
@@ -77,6 +78,19 @@ namespace Tests.Database
             }
 
             Console.WriteLine();
+
+            // A filter that matches no test printed "0 passed, 0 failed, 0 skipped" and exited 0.
+            // That is indistinguishable from a clean run, and the filter is how somebody points
+            // ONE check at a database that is not this fixture - a typo there would answer the
+            // question with a green tick and no test having run. The filter matches METHOD names,
+            // not class names, which is the typo it is easiest to make.
+            if (filter != null && matched == 0)
+            {
+                Console.WriteLine(string.Format("no test method's name contains \"{0}\" - nothing ran.", filter));
+                Console.WriteLine("The filter matches method names. Run with no argument to list them.");
+                return 2;
+            }
+
             Console.WriteLine(string.Format("{0} passed, {1} failed, {2} skipped", passed, failed, skipped));
             return failed == 0 ? 0 : 1;
         }
