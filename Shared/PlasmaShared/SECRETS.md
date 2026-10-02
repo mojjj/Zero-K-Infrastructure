@@ -23,8 +23,8 @@ already knows how to do this.
 one consumer, `ChobbyLauncher/CrashReportHelper.cs`, which files crash reports with it.
 
 It is assembled from two string literals rather than written as one, which is what a secret scanner
-looks for. That is probably why it has survived: the scanners have not flagged it, so nothing has
-forced the issue.
+looks for. That is why it went four years without anybody noticing — not why it is still here. It is
+still here because it was looked at in October 2026 and deliberately kept; see the decision below.
 
 ### Do not "fix" this by deleting the line
 
@@ -37,15 +37,34 @@ than leaving it alone:
 - So you would end up with a token that is still valid, still published, and no longer visible to
   anyone reading the code — which removes the only thing currently prompting anyone to deal with it.
 
-**The step that closes this is revoking the token at GitHub.** Nothing done in this repository
-substitutes for that.
+**Revoking the token at GitHub is the only thing that would close this.** Nothing done in this
+repository substitutes for that — which is exactly why the decision below is to leave it rather than
+to perform a change that would look like closing it.
 
 ### It cannot be closed from this fork
+
+## Decided: kept, knowingly (2026-10-02)
+
+**This was assessed with the repository's owner and the token is staying as it is.** The reasoning,
+recorded so that it can be re-examined rather than re-litigated:
+
+- The token can file issues in **one isolated repository** and reach nothing else. The exposure is
+  therefore **issue spam in that repository**, not access to code, releases or any other account.
+- It is compiled into a client that ships to players, so it is public whatever the source does.
+  Rotating and re-embedding would restart that clock rather than stop it - see "Why `MiscVar` is
+  not available here" below - and the alternatives that would actually close it cost a new endpoint
+  and a client release for a risk whose worst case is spam.
+
+**What would change the assessment**, and is worth checking if either happens: the target
+repository ceasing to be isolated, or the token's scopes widening beyond creating issues there.
+
+The rest of this section is kept because it is the analysis behind that decision, and because the
+same questions arise for the next secret somebody is tempted to compile in.
 
 The token belongs to a GitHub account this repository does not control. Rotation is upstream's to
 do — `ZeroK-RTS/Zero-K-Infrastructure` — and this fork can only carry the note.
 
-If you are upstream, the order that avoids a window where crash reporting is broken:
+If it is ever rotated, the order that avoids a window where crash reporting is broken:
 
 1. **Issue a replacement**, scoped as narrowly as filing crash reports needs. If the current one is a
    classic PAT with broad scopes, make the replacement fine-grained and limited to the one repository.
