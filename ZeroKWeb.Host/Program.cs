@@ -656,6 +656,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckPagesOnlyAnAdminSees();
                 failures += await CheckTheNewsFeed();
                 failures += await CheckContentService();
+                failures += await CheckMissionDownloads();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2151,6 +2152,149 @@ namespace ZeroKWeb.Host
                     }
                 }
             });
+        }
+
+        /// <summary>
+        /// The two file downloads a mission serves, and the resumable one in particular.
+        ///
+        /// CheckResumableDownload already exercises ResumingFileContentResult - but through
+        /// /Harness/Resumable, an endpoint written for it, over ten bytes this process made up.
+        /// That checks the SHIM. It does not check that a production action wires it up, or that it
+        /// survives a byte array that came out of a varbinary column. This does, over
+        /// MissionsController.File, which is what a player's client actually downloads.
+        ///
+        /// Note the URL: the action takes `name`, and the default route calls its third segment
+        /// `id`, so /Missions/File/1 binds NOTHING and ends in a 500 from Single(). ?name=1 is the
+        /// shape that works - the parameter accepts an id or a name, which is why it parses. That
+        /// is true on MVC 5 as well; it is routing, not a port defect, and it is written down here
+        /// because it looks exactly like one.
+        /// </summary>
+        private static async Task<int> CheckMissionDownloads()
+        {
+            Console.WriteLine();
+            Console.WriteLine("mission downloads:");
+
+            return await WithMission(async (missionID, name, mutator) =>
+            {
+                var failures = 0;
+                using (var client = new HttpClient())
+                {
+                    var detail = await client.GetAsync(Url + "/Missions/Detail/" + missionID);
+                    var detailHtml = await detail.Content.ReadAsStringAsync();
+                    failures += Check(detail.IsSuccessStatusCode && detailHtml.Contains("</html>"),
+                        "  /Missions/Detail is a whole page (" + (int)detail.StatusCode + ", "
+                        + detailHtml.Length + " bytes)");
+                    failures += Check(detailHtml.Contains(name), "  and the mission reached it");
+
+                    var script = await client.GetAsync(Url + "/Missions/Script/" + missionID);
+                    failures += Check(script.IsSuccessStatusCode
+                                      && script.Content.Headers.ContentType?.MediaType == "application/octet-stream",
+                        "  /Missions/Script is an octet-stream ("
+                        + (script.Content.Headers.ContentType?.MediaType ?? "none") + ")");
+
+                    var whole = await client.GetAsync(Url + "/Missions/File?name=" + missionID);
+                    var wholeBytes = await whole.Content.ReadAsByteArrayAsync();
+                    failures += Check(whole.IsSuccessStatusCode && wholeBytes.Length == mutator.Length,
+                        "  /Missions/File returns the mutator whole (" + (int)whole.StatusCode + ", "
+                        + wholeBytes.Length + " of " + mutator.Length + " bytes)");
+                    failures += Check(whole.Headers.AcceptRanges.Contains("bytes"),
+                        "  advertising Accept-Ranges: bytes");
+
+                    // The part the harness endpoint cannot tell you: a real action, a real column.
+                    var request = new HttpRequestMessage(HttpMethod.Get, Url + "/Missions/File?name=" + missionID);
+                    request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(1, 3);
+                    var partial = await client.SendAsync(request);
+                    var partialBytes = await partial.Content.ReadAsByteArrayAsync();
+
+                    failures += Check((int)partial.StatusCode == 206,
+                        "  a Range request is 206 Partial Content (" + (int)partial.StatusCode + ")");
+                    failures += Check(partial.Content.Headers.ContentRange?.ToString()
+                                      == "bytes 1-3/" + mutator.Length,
+                        "  Content-Range names the slice and the total ("
+                        + partial.Content.Headers.ContentRange + ")");
+                    failures += Check(partialBytes.Length == 3 && partialBytes[0] == mutator[1]
+                                      && partialBytes[2] == mutator[3],
+                        "  and the bytes are the slice asked for, not the first three");
+                }
+                return failures;
+            });
+        }
+
+        /// <summary>
+        /// Seeds one mission, and the thread and category its NOT NULL ForumThreadID needs. The
+        /// mutator is six bytes whose values differ, so a check that returned the wrong slice cannot
+        /// pass by accident.
+        /// </summary>
+        private static async Task<int> WithMission(Func<int, string, byte[], Task<int>> body)
+        {
+            const string name = "Harness Mission";
+            var mutator = new byte[] { 10, 20, 30, 40, 50, 60 };
+            int missionID, threadID, categoryID;
+
+            using (var db = new ZkDataContext())
+            {
+                var author = db.Accounts.OrderBy(a => a.AccountID).First();
+
+                var category = new ForumCategory { Title = "Harness Mission Category", ForumMode = ForumMode.Missions };
+                db.ForumCategories.Add(category);
+                db.SaveChanges();
+                categoryID = category.ForumCategoryID;
+
+                var thread = new ForumThread
+                {
+                    Title = name,
+                    Created = DateTime.UtcNow,
+                    LastPost = DateTime.UtcNow,
+                    CreatedAccountID = author.AccountID,
+                    LastPostAccountID = author.AccountID,
+                    ForumCategoryID = categoryID,
+                };
+                db.ForumThreads.Add(thread);
+                db.SaveChanges();
+                threadID = thread.ForumThreadID;
+
+                var mission = new Mission
+                {
+                    Name = name,
+                    Image = new byte[] { 1, 2, 3, 4 },
+                    Mutator = mutator,
+                    Script = "seeded by the harness",
+                    CreatedTime = DateTime.UtcNow,
+                    ModifiedTime = DateTime.UtcNow,
+                    Revision = 1,
+                    AccountID = author.AccountID,
+                    MinHumans = 1,
+                    MaxHumans = 2,
+                    IsScriptMission = true,
+                    MissionRunCount = 0,
+                    IsDeleted = false,
+                    IsCoop = false,
+                    ForumThreadID = threadID,
+                    RequiredForMultiplayer = false,
+                };
+                db.Missions.Add(mission);
+                db.SaveChanges();
+                missionID = mission.MissionID;
+            }
+
+            try
+            {
+                return await body(missionID, name, mutator);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var mission = db.Missions.FirstOrDefault(x => x.MissionID == missionID);
+                    if (mission != null) db.Missions.Remove(mission);
+                    db.ForumThreadLastReads.RemoveRange(db.ForumThreadLastReads.Where(x => x.ForumThreadID == threadID));
+                    var thread = db.ForumThreads.FirstOrDefault(x => x.ForumThreadID == threadID);
+                    if (thread != null) db.ForumThreads.Remove(thread);
+                    var category = db.ForumCategories.FirstOrDefault(x => x.ForumCategoryID == categoryID);
+                    if (category != null) db.ForumCategories.Remove(category);
+                    db.SaveChanges();
+                }
+            }
         }
 
         /// <summary>
