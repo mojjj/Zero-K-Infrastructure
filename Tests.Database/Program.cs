@@ -75,6 +75,30 @@ namespace Tests.Database
                         }
                     }
                 }
+
+                // [TestCleanup] was declared and never called, which is worse than not
+                // supporting it: a test author writes the teardown, reads it back, and gets
+                // none. RegistrationFixupTests noticed and hedged - its RemoveTheProbeRows
+                // carries BOTH attributes - so its two probe accounts were cleared before it
+                // ran and left behind afterwards, for every later test in the run. Harmless
+                // there, and it still skewed a number: UsernameLengthTests reported the
+                // longest stored name as 22 characters, which is fixup_probe_navigation and
+                // not anything in the fixture.
+                //
+                // Once per type, after its methods, to match the [TestInitialize] above.
+                // That is NOT MSTest's per-method granularity, and a test written expecting
+                // per-method teardown will not get it here - said out loud because the
+                // attribute names promise otherwise.
+                try
+                {
+                    var cleanup = type.GetMethods().FirstOrDefault(m => m.GetCustomAttribute<TestCleanupAttribute>() != null);
+                    if (cleanup != null) cleanup.Invoke(instance, null);
+                }
+                catch (Exception ex)
+                {
+                    // Not a failure of any test, but it leaves rows behind for the next one.
+                    Console.WriteLine("  ! could not clean up: " + Unwrap(ex).Message);
+                }
             }
 
             Console.WriteLine();
