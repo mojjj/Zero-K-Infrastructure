@@ -225,6 +225,44 @@ Suggested order for whoever does: `minimaps` to list the affected maps, re-regis
 its images and its thumbnail on the site, then decide between doing the rest that way and running
 the in-place `backfill-minimaps` for the ones not worth a download.
 
+### Doing it on demand, one map at a time, as people open them
+
+`LegacyMinimapUpdater` (2026-10-02) is re-registration driven by traffic rather than by an
+operator. `MapsController.GetMapDetailData` - the one place both `Detail` and `DetailName` come
+through - hands the map's name to a queue and returns; a worker then checks whether that map is
+still legacy and, if it is, re-registers it. Two workers at most.
+
+This is what makes the lossless option affordable at all. Variant B costs an archive download and
+a unitsync scan per map, which is why the manual procedure above is "do one and look". Spread over
+the maps people actually open, in the order they open them, that cost stops being a project and
+becomes background noise - and the maps nobody looks at never cost anything.
+
+**A job checks at the moment it starts that the map has not already been corrected**, so it is
+safe to mix with everything else here: a map corrected by `backfill-minimaps`, by a manual
+`/Admin/ReregisterResource`, by an earlier run of the web process, or by the other worker while
+this key was queued, is skipped. Three things make that hold.
+
+1. The check is the first thing the job does, and the job runs when a worker **starts** rather
+   than when the name was queued - so it reads current state, not state from when somebody opened
+   the page. `BoundedWorkQueueTests.Work_sees_the_state_at_start_not_at_enqueue` pins it, and
+   fails if the queue is made to run work eagerly.
+2. It measures the stored minimap and reads `MapSizeRatio` on the spot. Nothing is cached.
+3. A corrected image stops being recognised as legacy -
+   `ImageSizingTests.Correcting_a_legacy_image_gives_it_the_maps_own_ratio`, over seven ratios in
+   both orientations. Without that this would re-register the same map on every process start.
+
+For re-registration the third point holds because unitsync's images go back through the same
+`ToBytes` the 2026-09-25 fix corrected, so what returns carries the map's ratio **R** and not **R
+squared**. That step is reasoned from the fix rather than measured, because measuring it needs
+unitsync and a map archive - the first real run is where it gets confirmed, which is the same
+caveat the manual procedure carries.
+
+**Two limits worth knowing.** The queue's seen-set and the lock inside `ReregisterResource` are
+both per-process, so a second web process can re-register a map this one is already doing; the
+result is the same either way, so the cost is duplicated work rather than a wrong image. And the
+whole feature is inert on .NET 9 - `LegacyMinimapUpdaterCore` is a deliberate no-op, because
+re-registration needs unitsync and the ported site has none.
+
 Note what the defect actually did, since it was never a cosmetic rounding: for a 2:1 map the
 stored minimap, metal map and height map were squashed to 4:1, and the thumbnail
 `PlasmaServer` derives from them was then stretched back to 2:1 - correct dimensions, distorted

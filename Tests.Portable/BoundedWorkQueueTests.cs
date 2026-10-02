@@ -110,6 +110,34 @@ namespace Tests
 
         [TestMethod]
         [TestCategory("Basic")]
+        public void Work_sees_the_state_at_start_not_at_enqueue()
+        {
+            // This is what lets LegacyMinimapUpdater ask "is this map STILL legacy?" inside the
+            // worker and trust the answer. The body runs when a slot comes free, not when the key
+            // was offered, and between those two moments the map may have been corrected by the
+            // other worker, by a bulk backfill-minimaps run, or by somebody pressing the admin
+            // button. A queue that bound its work to the state at enqueue time would re-register a
+            // map that no longer needed it.
+            var alreadyDone = new HashSet<string>();
+            var skipped = new List<string>();
+            var manual = new Manual();
+            var queue = new BoundedWorkQueue(1,
+                key => { if (alreadyDone.Contains(key)) skipped.Add(key); },
+                null, manual.Start);
+
+            queue.Notice("Small_Divide");
+            queue.Notice("Tabula");                 // waits behind it, the limit is one
+            alreadyDone.Add("Tabula");              // corrected by something else while it waits
+
+            manual.FinishOne();                     // Small_Divide runs, Tabula starts
+            manual.FinishOne();                     // Tabula runs - against the CURRENT state
+
+            CollectionAssert.AreEqual(new[] { "Tabula" }, skipped,
+                "the worker did not see a change made after its key was queued");
+        }
+
+        [TestMethod]
+        [TestCategory("Basic")]
         public void A_failure_does_not_leak_the_slot_it_was_using()
         {
             var manual = new Manual();
