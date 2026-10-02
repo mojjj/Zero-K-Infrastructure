@@ -345,6 +345,12 @@ namespace ZeroKWeb.Host
                 failures += Check(listBody.Contains("Missions"),
                     "  the response envelope carries its Missions field");
 
+                // The header, which six assertions on the body do not cover. MissionServiceController
+                // returns Content(response, "application/json"); nothing said so until /ContentService
+                // got the same assertion and the omission here became obvious.
+                failures += Check(list.Content.Headers.ContentType?.MediaType == "application/json",
+                    "  as application/json (" + (list.Content.Headers.ContentType?.MediaType ?? "none") + ")");
+
                 var missing = await client.PostAsync(Url + "/MissionService",
                     new StringContent(
                         "DeleteMissionRequest {\"MissionID\":999999,\"Delete\":true,\"Author\":\"nobody\",\"Password\":\"x\"}",
@@ -649,6 +655,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckPagesOnlyASignedInVisitorSees();
                 failures += await CheckPagesOnlyAnAdminSees();
                 failures += await CheckTheNewsFeed();
+                failures += await CheckContentService();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2144,6 +2151,92 @@ namespace ZeroKWeb.Host
                     }
                 }
             });
+        }
+
+        /// <summary>
+        /// /ContentService, the other .svc replacement - and the one nothing here had ever called.
+        /// /MissionService has had six assertions since it was ported; this had none, although it is
+        /// the endpoint the GAME CLIENT uses to resolve a map or a game before downloading it.
+        ///
+        /// Two defects turned up on the first call, both in linked production code and therefore on
+        /// BOTH stacks - neither is a port regression, and neither is fixed here. They are recorded
+        /// as notes rather than asserted, because pinning a defect as expected behaviour is how it
+        /// stops being one:
+        ///
+        /// 1. GetResourceDataRequest for a name that does not exist answers **HTTP 500 with an empty
+        ///    body**. The handler returns null and CommandJsonSerializer.SerializeToLine(null)
+        ///    dereferences it. A client asking about a map this server has never heard of is the
+        ///    ordinary case, not an exceptional one.
+        /// 2. FindResourceDataRequest's exact-name fast path is dead: it builds a
+        ///    FindResourceDataResponse and never returns it - `new FindResourceDataResponse() {...};`
+        ///    with no `return` - so execution falls through to the search below it, which
+        ///    additionally requires a resource to have a content file with LinkCount > 0. The two
+        ///    paths do not answer the same question, which is why the dead one was written.
+        /// </summary>
+        private static async Task<int> CheckContentService()
+        {
+            Console.WriteLine();
+            Console.WriteLine("/ContentService (the client's resource lookup):");
+
+            var failures = 0;
+            string mapName;
+            int resourceID;
+            using (var db = new ZkDataContext())
+            {
+                var map = db.Resources.OrderBy(x => x.ResourceID).First();
+                mapName = map.InternalName;
+                resourceID = map.ResourceID;
+            }
+
+            using (var client = new HttpClient())
+            {
+                async Task<HttpResponseMessage> Post(string line) =>
+                    await client.PostAsync(Url + "/ContentService",
+                        new StringContent(line, System.Text.Encoding.UTF8, "text/plain"));
+
+                // An empty body is the documented hint, and it is how you find out the protocol.
+                var hint = await Post("");
+                var hintBody = await hint.Content.ReadAsStringAsync();
+                failures += Check(hint.IsSuccessStatusCode && hintBody.Contains("ClassName JsonSerializedClassContent"),
+                    "  an empty request answers with the format hint (" + (int)hint.StatusCode + ")");
+
+                // The real thing: resolve a map by the name a client holds.
+                var hit = await Post("GetResourceDataRequest {\"InternalName\":\"" + mapName + "\"}");
+                var hitBody = await hit.Content.ReadAsStringAsync();
+                failures += Check(hit.IsSuccessStatusCode, "  GetResourceDataRequest answered ("
+                                                           + (int)hit.StatusCode + ", " + hitBody.Length + " bytes)");
+                failures += Check(hitBody.StartsWith("ResourceData "),
+                    "  dispatched by request class, and answered with the matching response");
+                failures += Check(hitBody.Contains("\"InternalName\":\"" + mapName + "\"")
+                                  && hitBody.Contains("\"ResourceID\":" + resourceID),
+                    "  carrying that resource and not an empty envelope");
+                failures += Check(hit.Content.Headers.ContentType?.MediaType == "application/json",
+                    "  as application/json (" + (hit.Content.Headers.ContentType?.MediaType ?? "none") + ")");
+
+                // The search shape. Against this fixture it finds nothing and that is CORRECT - see
+                // the note below - so the assertion is on the envelope, not on the rows.
+                var find = await Post("FindResourceDataRequest {\"Words\":[\"test\"],\"Type\":0}");
+                var findBody = await find.Content.ReadAsStringAsync();
+                failures += Check(find.IsSuccessStatusCode && findBody.StartsWith("FindResourceDataResponse "),
+                    "  FindResourceDataRequest answered with its own response type");
+
+                using (var db = new ZkDataContext())
+                {
+                    var downloadable = db.ResourceContentFiles.Count(x => x.LinkCount > 0);
+                    Console.WriteLine("   note  it returned no rows, and should: the search requires a content file "
+                                      + "with LinkCount > 0 and this fixture has " + downloadable + " of them");
+                }
+
+                // Recorded, not asserted. Fixing it is a production behaviour change and belongs in
+                // its own review, not in a line inside a port branch.
+                var miss = await Post("GetResourceDataRequest {\"InternalName\":\"no_such_map_at_all\"}");
+                Console.WriteLine("   note  a resource that does not exist answers " + (int)miss.StatusCode
+                                  + " with " + (await miss.Content.ReadAsStringAsync()).Length
+                                  + " bytes - the handler returns null and the serializer dereferences it, "
+                                  + "on both stacks");
+            }
+
+            return failures;
         }
 
         /// <summary>
