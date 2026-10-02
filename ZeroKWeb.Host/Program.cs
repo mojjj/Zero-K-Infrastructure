@@ -61,6 +61,24 @@ namespace ZeroKWeb.Host
                 ? Environment.GetEnvironmentVariable("ZK_HOST_URLS") ?? Url
                 : Url;
             builder.WebHost.UseUrls(urls);
+
+            // Upload size, which Web.config sets for IIS and nothing set here.
+            //
+            //     <httpRuntime maxRequestLength="5000000" />          ASP.NET, in KILOBYTES
+            //     <requestLimits maxAllowedContentLength="500000000" />   IIS, in BYTES
+            //
+            // The smaller of those binds, so the live site accepts roughly 477MB. Kestrel defaults
+            // to 30,000,000 bytes and the multipart form reader to 128MB, so without this the port
+            // answered 413 to anything over ~30MB - measured, not assumed. Map archives are
+            // routinely larger than that, and UploadResource is how they arrive.
+            //
+            // Both limits are needed and they are different things: Kestrel's is the outer one on
+            // the request body, FormOptions' applies when a multipart form is parsed, which is the
+            // shape an actual upload arrives in.
+            const long uploadLimit = 500_000_000;
+            builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = uploadLimit);
+            builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(
+                options => options.MultipartBodyLengthLimit = uploadLimit);
             // The HttpPostedFileBase binder. Without it an upload action compiles and always
             // receives null - see ZeroKWeb.Core/Mvc5Compat/HttpPostedFileCompat.cs. Inserted at 0
             // so it is consulted before the built-in providers, none of which know the type.
@@ -698,6 +716,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckReplayDownload();
                 failures += await CheckGameModeAndInfolog();
                 failures += await CheckContentArchivesAreServed();
+                failures += await CheckUploadSizeLimit();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2193,6 +2212,57 @@ namespace ZeroKWeb.Host
                     }
                 }
             });
+        }
+
+        /// <summary>
+        /// A body larger than Kestrel's default is accepted, because Web.config says IIS accepts
+        /// one and the port has to match.
+        ///
+        ///     <httpRuntime maxRequestLength="5000000" />              ASP.NET, in KILOBYTES
+        ///     <requestLimits maxAllowedContentLength="500000000" />   IIS, in BYTES
+        ///
+        /// The smaller binds, so the live site takes roughly 477MB. Kestrel defaults to 30,000,000
+        /// bytes, so the port answered 413 to anything larger - and map archives, which arrive
+        /// through UploadResource, are routinely larger than that.
+        ///
+        /// It posts to Harness/BodyLength, which reads the body and answers with the count and
+        /// nothing else. Posting to a real endpoint instead put 31MB of zeroes through an exception
+        /// message and into the harness log - a 31MB log file on every run, measured the hard way.
+        /// Counting the bytes back is also a stronger assertion than "not a 413": it says the whole
+        /// body arrived, not merely that the request was not rejected outright.
+        /// </summary>
+        private static async Task<int> CheckUploadSizeLimit()
+        {
+            Console.WriteLine();
+            Console.WriteLine("upload size:");
+
+            // Just over Kestrel's 30,000,000-byte default: enough to prove the limit moved,
+            // small enough not to make every run carry half a gigabyte.
+            var body = new byte[31_000_000];
+
+            using (var client = new HttpClient())
+            {
+                client.Timeout = TimeSpan.FromMinutes(2);
+                try
+                {
+                    var response = await client.PostAsync(Url + "/Harness/BodyLength", new ByteArrayContent(body));
+                    var answer = (await response.Content.ReadAsStringAsync()).Trim();
+
+                    return Check(response.IsSuccessStatusCode && answer == "read " + body.Length,
+                        "  a " + (body.Length / 1_000_000) + "MB body arrives whole ("
+                        + (int)response.StatusCode + ", " + answer + ") - Kestrel's default would make this 413");
+                }
+                catch (Exception ex)
+                {
+                    // Refusing an oversized body does not always arrive as a 413. Kestrel can reset
+                    // the connection while the client is still writing, which surfaces here as an
+                    // HttpRequestException - and an uncaught one took the whole harness down with
+                    // SIGABRT instead of failing this one line. Found by running the control for
+                    // this check, which is the point of running controls.
+                    return Check(false, "  a " + (body.Length / 1_000_000) + "MB body was refused: "
+                                        + ex.GetType().Name + " - the request limit is not configured");
+                }
+            }
         }
 
         /// <summary>

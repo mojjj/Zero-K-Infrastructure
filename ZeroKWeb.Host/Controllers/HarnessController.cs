@@ -170,6 +170,25 @@ namespace ZeroKWeb.Host.Controllers
         ///     fixture has no news, and a check built on that would break the moment someone adds a
         ///     news row for an unrelated reason.
         /// </summary>
+        /// <summary>
+        /// Reads the whole request body and answers with its length and nothing else.
+        ///
+        /// For the upload-size check, which has to send more than Kestrel's default limit to prove
+        /// the limit moved. Every other endpoint that reads a body puts it somewhere: ContentService
+        /// fails to parse it and the text lands in the exception and then in the log - 31MB of it,
+        /// measured - and Harness/Upload hex-encodes what it is given, which doubles it into the
+        /// response. Neither is a thing to do on every pull request.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> BodyLength()
+        {
+            var counted = 0L;
+            var buffer = new byte[81920];
+            int read;
+            while ((read = await Request.Body.ReadAsync(buffer, 0, buffer.Length)) > 0) counted += read;
+            return Content("read " + counted);
+        }
+
         public ActionResult Throw() => throw new InvalidOperationException("harness-deliberate-failure");
 
         /// <summary>
