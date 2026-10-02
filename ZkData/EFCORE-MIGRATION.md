@@ -3799,9 +3799,25 @@ Ordered smallest-first, that is defence in depth rather than drift: nothing can 
 that the entry points would refuse. The port is already correct here - the facets say 2000, which
 is why the schema diffs clean.
 
-**So nothing is being changed.** Narrowing the column would be a migration whose only benefit is
-tidiness, against data nobody here can inspect; widening the attribute would remove a net that
-costs nothing.
+**So nothing is being changed, and that is a decision rather than a deferral** (2026-10-02).
+Narrowing the column would be a migration whose only benefit is tidiness, against data nobody here
+can inspect; widening the attribute would remove a net that costs nothing. The three numbers stay
+as they are and the tests below keep them in order.
+
+One read-only question is left over, and it is one command against whatever database the
+connection string names:
+
+    ZK_CONNECTION_STRING="...a restored copy of production..." ./db/run-db-tests.sh stored_name
+
+    UsernameLengthTests
+            longest stored name: 10 characters (limit 200, entry points 25)
+      pass  No_stored_name_is_longer_than_validation_allows
+
+A failure names the offending length and means that row cannot be saved again without being
+renamed - which is a latent "this account can never be modified", not a security problem. A pass
+closes the item outright. **Mind the filter**: it matches METHOD names, not class names, so
+`UsernameLength` selects nothing. That used to print "0 passed, 0 failed, 0 skipped" and exit 0 -
+a typo answering the question with a green tick - and the runner refuses an empty filter now.
 
 **What was missing is a guard on the order.** Raise `MaxUsernameLength` past 200 and registration
 starts accepting names that `SaveChanges` then rejects - a failure at the wrong layer, with a
