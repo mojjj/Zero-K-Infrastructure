@@ -211,12 +211,29 @@ namespace DedicatedProbe
                 Console.WriteLine("   ok    SERVER_STARTPLAYING parsed: BattleStarted, replay=" + startedContext?.ReplayName
                                   + ", engineBattleID=" + startedContext?.EngineBattleID);
 
-                // SERVER_GAMEOVER stays synthesised, and this is the reason rather than an excuse:
-                // the game runs, but nothing in it can ever end. Spring does not decide winners -
-                // the GAME does, in Lua, and "Probe Game" is six lines of modinfo.lua with no
-                // gadgets and no units. Waited 75 seconds for a real one; none comes, and none can.
-                // A real game archive would provide the victory condition and is the multi-gigabyte
-                // download this whole setup exists to avoid.
+                // SERVER_GAMEOVER stays synthesised, and the reason recorded here was WRONG, which
+                // is worth more than the reason was. It said a real GAMEOVER needs a real game
+                // archive and the multi-gigabyte download this setup exists to avoid, because
+                // "Spring does not decide winners - the GAME does, in Lua". The premise is right.
+                // The conclusion is not: Spring loads LuaRules/main.lua out of whatever archive it
+                // is handed, and a victory condition is ten lines of it calling Spring.GameOver at
+                // a fixed frame. That was written, and the archive picked it up (its checksum
+                // changed), and the game still did not end.
+                //
+                // Measured on 2026-10-02, because the real blocker is somewhere else entirely:
+                // NOTHING IS SIMULATING. spring-dedicated relays a game, it does not play one, so
+                // LuaRules never runs in it. The only thing that could run the victory condition is
+                // the spring-headless client - and it is killed here as soon as PlayerJoined
+                // arrives, several steps before the game starts. Kept alive through ForceStart it
+                // stays up and idle: infolog reaches "Loading LuaUI" and stops at frame -1, never
+                // advancing a single simulation frame, with the client process alive and the server
+                // alive beside it. The host script sets StartPosType=2, so the engine is still
+                // waiting on a start position this client will never place; /forcestart starts the
+                // SERVER, which is why SERVER_STARTPLAYING above is real, and does not make a
+                // client that never readied up begin stepping frames.
+                //
+                // So the next person to try this should start at the host script and the client
+                // pregame, not at the game archive. The archive was never the problem.
                 Send(autohostPort, GameOver(0, new byte[] { 0 }));
                 if (!gameOver.Wait(TimeSpan.FromSeconds(15)))
                 {
