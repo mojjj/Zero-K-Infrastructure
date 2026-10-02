@@ -79,10 +79,41 @@ namespace ZeroKWeb
         }
 
         /// <summary>
-        /// One map, on a worker. Checks first and does nothing for the many maps that are already
-        /// correct; re-registers the ones that are not. A throw here stops the queue for the life
-        /// of the process - see BoundedWorkQueue for why that is the right policy.
+        /// One map, on a worker.
         /// </summary>
+        /// <remarks>
+        /// **A job checks, at the moment it starts, that the map has not already been corrected,**
+        /// and does nothing if it has - whether that was an earlier run of this process, a bulk
+        /// `backfill-minimaps`, somebody pressing /Admin/ReregisterResource, or the other worker
+        /// finishing with it while this key sat in the queue. Three things make that true, and all
+        /// three are load-bearing:
+        ///
+        /// 1. **The check is the first statement here, and here runs at START.** BoundedWorkQueue
+        ///    calls this body when a slot comes free, not when the key was offered, so the state it
+        ///    reads is current rather than whatever was true when somebody opened the page. That is
+        ///    pinned by Work_sees_the_state_at_start_not_at_enqueue, which fails if the queue is
+        ///    made to run work eagerly - checked by doing it.
+        /// 2. **IsLegacy reads the disk and the database, not a cache.** The stored minimap is
+        ///    measured and MapSizeRatio is queried on the spot. Nothing is remembered from enqueue.
+        /// 3. **A corrected image stops looking legacy.** ImageSizing.LooksLikeLegacyToBytes is
+        ///    asserted over seven ratios, landscape and portrait, to say yes before correction and
+        ///    no after it - Correcting_a_legacy_image_gives_it_the_maps_own_ratio. Without that this
+        ///    would re-register the same map on every process start, forever.
+        ///
+        /// For re-registration specifically, point 3 holds because unitsync's images go through the
+        /// same ToBytes the 2026-09-25 fix corrected, so what comes back carries the map's own ratio
+        /// R rather than R squared. That last step is reasoned from the fix rather than measured
+        /// here, because measuring it needs unitsync and a map archive, which this repository has
+        /// neither of - the first real run is where it gets confirmed.
+        ///
+        /// **What it does not protect against is two processes.** Both the seen-set in the queue and
+        /// the lock inside ReregisterResource are per-process, so a second web process can re-register
+        /// a map this one is already doing. The result is the same either way - RegisterResource
+        /// replaces a resource's images whichever call gets there - so the cost is duplicated work,
+        /// not a wrong image.
+        ///
+        /// A throw here stops the queue for the life of the process; see BoundedWorkQueue for why.
+        /// </remarks>
         private static void Correct(string internalName)
         {
             if (!IsLegacy(internalName)) return;
