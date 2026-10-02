@@ -131,6 +131,16 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
 
+      # Shared/PlasmaShared/SECRETS.md says secrets live in MiscVar and never enter source control.
+      # That was written down and nothing held it - and it has already been broken once and survived
+      # four years, because GlobalConst.CrashReportGithubToken is spelled in two literals rather than
+      # one and GitHub's scanning looks for one. This joins adjacent literals before judging them, so
+      # the trick that worked does not. It does NOT fail on that token: deleting the line is worse
+      # than leaving it, for the reasons SECRETS.md gives, so it is recorded as outstanding and
+      # printed on every run until somebody revokes it at GitHub.
+      - name: Check no new secret is compiled in
+        run: ./tools/check-secrets.py
+
       # The thirty Html helpers that exist twice. MVC 5 compiles HtmlHelperExtensions.cs and
       # ASP.NET Core compiles HtmlHelperExtensions.Ported.cs - two copies, because MVC 5 has
       # HtmlHelper where ASP.NET Core has IHtmlHelper, so the file cannot simply be linked the way
