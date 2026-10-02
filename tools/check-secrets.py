@@ -124,7 +124,12 @@ def main():
 
     known = accepted()
     new = [f for f in found if f[2] not in known]
-    outstanding = [known[f[2]] for f in found if f[2] in known and "OUTSTANDING" in known[f[2]]]
+
+    # Counted and named in one line rather than printed in full on every run. These were printed
+    # as "STILL OPEN" until 2026-10-02, when the exposure they describe was assessed with the
+    # repository's owner and kept deliberately - see SECRETS.md. Repeating a closed decision as an
+    # alarm on every build is how people learn to read past this check's output.
+    decided = [known[f[2]] for f in found if f[2] in known and known[f[2]].startswith("ACCEPTED")]
 
     if new:
         print("%d secret-shaped literal(s) nothing accounts for:" % len(new))
@@ -140,8 +145,9 @@ def main():
 
     print("%d secret-shaped literal(s), all accounted for, in %d tracked file(s)"
           % (len(found), len(files)))
-    for reason in outstanding:
-        print("   STILL OPEN  " + reason)
+    if decided:
+        print("   %d of them are a known exposure, assessed and accepted - tools/secrets-baseline.txt"
+              % len(decided))
     return 0
 
 
