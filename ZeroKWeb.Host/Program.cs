@@ -107,7 +107,7 @@ namespace ZeroKWeb.Host
             // The website reads Ratings.RatingSystems and Ratings.MapRatings as STATICS, in
             // eight files - ChartsController, HomeController, AdminController,
             // PlanetwarsAdminController, WhrController, HtmlHelperExtensions.Portable,
-            // Ladders/ladders.cshtml and Factions/FactionBox.cshtml - and nothing in the website
+            // Ladders/Ladders.cshtml and Factions/FactionBox.cshtml - and nothing in the website
             // ever fills them. The only caller of either Init() is ZkLobbyServer.ZkLobbyServer,
             // which the live site starts IN ITS OWN PROCESS. So these pages work today because
             // the lobby server happens to share their memory.

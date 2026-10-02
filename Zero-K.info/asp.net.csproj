@@ -387,7 +387,7 @@
     <Content Include="Views\Home\UnlockTooltip.cshtml" />
     <Content Include="Views\Poll\PollView.cshtml" />
     <Content Include="Views\Poll\PollVoteList.cshtml" />
-    <Content Include="Views\Ladders\ladders.cshtml" />
+    <Content Include="Views\Ladders\Ladders.cshtml" />
     <Content Include="Views\Home\NotLoggedIn.cshtml" />
     <Content Include="Views\Shared\LoginBar.cshtml" />
     <Content Include="Views\Clans\Detail.cshtml" />

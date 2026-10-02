@@ -131,6 +131,14 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
 
+      # `return View("Ladders")` is a string, and neither build checks it: a view that is not
+      # there under that name is a 500 the first time the action runs, and 35 of the site's 120
+      # views are rendered by no check here, which is where such a name would sit unnoticed.
+      # Case is the half that only breaks off Windows - LaddersController asked for "Ladders"
+      # against a file called ladders.cshtml, which NTFS does not care about.
+      - name: Check every view a controller names is on disk as written
+        run: ./tools/check-view-names.py
+
       # Shared/PlasmaShared/SECRETS.md says secrets live in MiscVar and never enter source control.
       # That was written down and nothing held it - and it has already been broken once and survived
       # four years, because GlobalConst.CrashReportGithubToken is spelled in two literals rather than
