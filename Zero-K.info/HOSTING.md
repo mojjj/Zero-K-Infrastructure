@@ -466,6 +466,49 @@ port does not have it at all. It needs trying on a Windows staging site.
 Both are one query each against the live database, and both have to come back empty before
 `requestPathInvalidCharacters` is worth touching.
 
+## What IIS does for this site that the .NET 9 host does not (2026-10-02)
+
+`Web.config` is not only build configuration: several of its settings are IIS *behaviour*, and a
+cutover that moves to Kestrel loses them unless something else provides them. Every line of both
+`system.web` and `system.webServer` was walked for this; most are reproduced in
+`ZeroKWeb.Host/Program.cs` now, and the ones that are not are listed here because they need a
+decision from whoever deploys rather than a commit.
+
+### Reproduced in the host
+
+| Web.config | what the host does |
+|---|---|
+| `<forms timeout="2880">` | `ExpireTimeSpan = TimeSpan.FromMinutes(2880)`, asserted by the sign-in check |
+| `<globalization culture="en-US" uiCulture="en">` | culture pinned at startup, asserted through its *effect* on a formatted number and date |
+| `<httpRuntime maxRequestLength>` and `<requestLimits maxAllowedContentLength>` | `MaxRequestBodySize` and `MultipartBodyLengthLimit` at 500,000,000 - without them Kestrel refuses anything over 30MB |
+| `<staticContent>` mimeMap for `.sd7`, `.sdz` | a `FileExtensionContentTypeProvider` with those two extensions; without it an unknown extension is **404**, not "served untyped" |
+| `<customErrors mode="RemoteOnly">` | the host logs to `Trace` and rethrows, so Kestrel answers an empty 500. A check asserts the response carries no exception text - there is no `RemoteOnly` here, so **nothing but that check stops `UseDeveloperExceptionPage` leaking stack traces in production** |
+
+### Not reproduced, and they are deployment's problem
+
+Measured against the running host, not assumed:
+
+- **`www` is not redirected to the apex.** The `Remove WWW` rewrite rule issues a permanent
+  redirect; the host answers `200` to both `Host: zero-k.info` and `Host: www.zero-k.info`. Cookies
+  are issued per host, so a visitor who lands on `www` is signed in separately from one who lands
+  on the apex. **This belongs in the reverse proxy or ingress in front of Kestrel.**
+- **The wiki's pretty URLs are not rewritten.** `RewriteUserFriendlyURL1` turns
+  `/mediawiki/Foo` into `/mediawiki/index.php?title=Foo`; the host answers `404`. This matters less
+  than it looks, because the **site itself only ever emits the `index.php?title=` form** - checked,
+  every `mediawiki` URL in the C# and the views is the long one. What breaks is inbound links and
+  bookmarks. It also only arises at all if mediawiki is still co-hosted: the PHP wiki is a separate
+  application and this host does not serve it under any URL.
+- **`<applicationInitialization>` has no equivalent and may not need one.** It exists because the
+  lobby server runs inside the IIS worker process, so an app-pool start is what brings multiplayer
+  back - which is the entire problem Phase 1 removes. Once the lobby server is its own process,
+  warming the website is an ordinary concern rather than a multiplayer outage.
+
+`<modules runAllManagedModulesForAllRequests>`, `<handlers><remove name="UrlRoutingHandler"/>`,
+`<compilation>` and `<pages>` are System.Web plumbing with no meaning off that stack.
+`<pages validateRequest="false">` is reproduced by absence: ASP.NET Core has no request validation
+to turn off. `requestPathInvalidCharacters` and `requestValidationMode` have their own section
+above.
+
 ## Related work in progress
 
 `ILobbyServerApi` (see `ZkLobbyServer/ILobbyServerApi.cs`) is the seam introduced so the
