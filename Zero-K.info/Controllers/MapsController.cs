@@ -377,6 +377,12 @@ namespace ZeroKWeb.Controllers
         }
 
         MapDetailData GetMapDetailData(Resource res, ZkDataContext db) {
+            // Both Detail and DetailName come through here, which is why the hook is here and
+            // not in either of them. It returns immediately: if this map still has the
+            // doubly-squashed images described in IMAGING-MIGRATION.md, correcting them is
+            // queued and happens on a worker, and this page is served either way.
+            LegacyMinimapUpdater.Notice(res.InternalName);
+
             // opportunistically reconcile mirror state on each view. Local file check is a cheap stat;
             // springfiles probe is gated by the 24 h cache + dedup so this only HEADs once a day at most.
             // Fixes the case where a file is on disk in content/maps but LinkCount is stale 0 — see #3057.
