@@ -175,6 +175,52 @@ namespace ZeroKWeb.Host
 
             app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
 
+            // content/ is the fifth, and it is the one a GAME CLIENT follows rather than a
+            // browser. ResourceLinkProvider hands out {BaseSiteUrl}/content/{maps|games}/{file}
+            // as a download link whenever that file is on the site's disk - so the site
+            // advertises these URLs itself, and until this they answered 404 on the port while
+            // IIS served them.
+            //
+            // Map and game archives also need their media type spelled out. Web.config does it
+            // for IIS:
+            //
+            //     <mimeMap fileExtension=".sd7" mimeType="application/octet-stream" />
+            //     <mimeMap fileExtension=".sdz" mimeType="application/octet-stream" />
+            //
+            // ASP.NET Core's FileExtensionContentTypeProvider knows neither, and
+            // ServeUnknownFileTypes is false by default - which does not mean "serve it with no
+            // type", it means 404. So the same two extensions are added here and no others:
+            // .sdp is scanned by PlasmaResourceChecker but has no mimeMap either, so IIS does
+            // not serve it today and neither should this. Reproduce, do not improve.
+            var archives = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+            archives.Mappings[".sd7"] = "application/octet-stream";
+            archives.Mappings[".sdz"] = "application/octet-stream";
+
+            foreach (var assets in new[] { "img", "Scripts", "Styles", GlobalConst.ResourceFolder, "content" })
+            {
+                // CREATED rather than skipped, and that is a fix rather than a convenience. The
+                // mapping is decided once at startup, so skipping a directory that is not there
+                // yet means it stays unserved for the life of the process - and content/ and
+                // Resources/ are written by AutoRegistrator ON a deployment, after the site is
+                // already running. A deploy in that order advertised download links that answered
+                // 404 until somebody restarted the site, with nothing to say why.
+                //
+                // It costs a checkout nothing, which is what the previous comment here was
+                // protecting: git does not track empty directories, so creating them leaves no
+                // untracked noise. PhysicalFileProvider throws if its root is missing, which is
+                // why the old code skipped rather than mapped.
+                var directory = System.IO.Path.Combine(FindSiteRoot(), assets);
+                System.IO.Directory.CreateDirectory(directory);
+
+                app.UseStaticFiles(new StaticFileOptions
+                {
+                    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(directory),
+                    RequestPath = "/" + assets,
+                    ContentTypeProvider = archives,
+                });
+            }
+
+
             if (serving)
             {
                 // Static content, and ONLY these three directories. WebRootPath above is the site
@@ -182,8 +228,11 @@ namespace ZeroKWeb.Host
                 // Web.config and every .cs file in the project. Named folders, mapped one at a
                 // time, is the difference between serving a site and publishing its source.
                 //
-                // Not done for the checks: they assert HTML, and this is the kind of thing that
-                // should differ between "serve it" and "test it" only deliberately.
+                // The bundles stay serve-only, and that part IS deliberate: registering them sets
+                // Bundles.BuiltPath, which changes the page from eleven script tags to one per
+                // bundle - and eleven is what the harness asserts. The asset directories moved
+                // above this block, because "the checks assert HTML" stopped being true the moment
+                // /content/maps had something worth asserting that is not HTML.
                 // The built bundles, when tools/build-assets.mjs has produced them. Without them
                 // the page lists eleven scripts individually, which is the developer answer and
                 // what the harness asserts; with them it is one tag per bundle, which is what the
@@ -217,18 +266,6 @@ namespace ZeroKWeb.Host
                 // The directory is not in the repository - AutoRegistrator writes it on a
                 // deployment - and the loop below skips what is not there, so this costs a
                 // checkout nothing.
-                foreach (var assets in new[] { "img", "Scripts", "Styles", GlobalConst.ResourceFolder })
-                {
-                    var directory = System.IO.Path.Combine(FindSiteRoot(), assets);
-                    if (!System.IO.Directory.Exists(directory)) continue;
-
-                    app.UseStaticFiles(new StaticFileOptions
-                    {
-                        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(directory),
-                        RequestPath = "/" + assets,
-                    });
-                }
-
                 Console.WriteLine("serving on " + urls + " - try /Home/NotLoggedIn, /Tourney, /Harness/ForumPath/3");
                 await app.RunAsync();
                 return 0;
@@ -660,6 +697,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckMissionDownloads();
                 failures += await CheckReplayDownload();
                 failures += await CheckGameModeAndInfolog();
+                failures += await CheckContentArchivesAreServed();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2155,6 +2193,62 @@ namespace ZeroKWeb.Host
                     }
                 }
             });
+        }
+
+        /// <summary>
+        /// Map and game archives download from the site itself, and until 2026-10-02 they did not.
+        ///
+        /// ResourceLinkProvider hands a client {BaseSiteUrl}/content/{maps|games}/{file} as a
+        /// download link whenever that file is on the site's disk - so the site advertises these
+        /// URLs. IIS serves them, with the media type Web.config spells out in a mimeMap. The port
+        /// served neither: `content` was not among the mapped directories, and ASP.NET Core's
+        /// content-type provider knows neither .sd7 nor .sdz - and an unknown extension is not
+        /// served untyped, it is a 404.
+        ///
+        /// So a player following the site's own download link got a 404 from the ported stack
+        /// while the link kept being advertised. Both halves are fixed; this is what holds them.
+        /// </summary>
+        private static async Task<int> CheckContentArchivesAreServed()
+        {
+            Console.WriteLine();
+            Console.WriteLine("map and game archives:");
+
+            var root = FindSiteRoot();
+            var maps = System.IO.Path.Combine(root, "content", "maps");
+            var archive = System.IO.Path.Combine(maps, "harness-probe.sd7");
+            var unmapped = System.IO.Path.Combine(maps, "harness-probe.cs");
+
+            System.IO.Directory.CreateDirectory(maps);
+            System.IO.File.WriteAllText(archive, "not a real archive");
+            System.IO.File.WriteAllText(unmapped, "// not an archive either");
+
+            try
+            {
+                var failures = 0;
+                using (var client = new HttpClient())
+                {
+                    var got = await client.GetAsync(Url + "/content/maps/harness-probe.sd7");
+                    failures += Check(got.IsSuccessStatusCode,
+                        "  an .sd7 under content/maps is served (" + (int)got.StatusCode + ")");
+                    failures += Check(got.Content.Headers.ContentType?.MediaType == "application/octet-stream",
+                        "  as application/octet-stream, the type Web.config gives IIS ("
+                        + (got.Content.Headers.ContentType?.MediaType ?? "none") + ")");
+
+                    // The other half of the fix: two extensions were mapped, not "serve anything".
+                    // ServeUnknownFileTypes = true would have made the first check pass too, while
+                    // also publishing every file that lands in these directories.
+                    var denied = await client.GetAsync(Url + "/content/maps/harness-probe.cs");
+                    failures += Check(!denied.IsSuccessStatusCode,
+                        "  and an extension with no mapping is still refused ("
+                        + (int)denied.StatusCode + ")");
+                }
+                return failures;
+            }
+            finally
+            {
+                try { System.IO.File.Delete(archive); } catch { }
+                try { System.IO.File.Delete(unmapped); } catch { }
+            }
         }
 
         /// <summary>
