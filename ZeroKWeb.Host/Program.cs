@@ -648,6 +648,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckFormPostsAreGuarded();
                 failures += await CheckPagesOnlyASignedInVisitorSees();
                 failures += await CheckPagesOnlyAnAdminSees();
+                failures += await CheckTheNewsFeed();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2143,6 +2144,126 @@ namespace ZeroKWeb.Host
                     }
                 }
             });
+        }
+
+        /// <summary>
+        /// The RSS feed, which is the one place here where the CONTENT TYPE is the thing being
+        /// checked rather than the body.
+        ///
+        /// NewsController.Index sets Response.ContentType = "application/rss+xml" and then returns a
+        /// View. On MVC 5 that sticks. On ASP.NET Core a ViewResult resolves its own content type
+        /// when it executes, and only honours what the action already set because the response's
+        /// value takes precedence over the default - which is a framework detail, not something the
+        /// code here states. Nothing else in this harness would notice it becoming text/html: the
+        /// status is 200 either way, the body is the same bytes, and the only thing that breaks is
+        /// every feed reader subscribed to it.
+        ///
+        /// It also renders News/Index.cshtml and News/NewsDetail.cshtml, which no run reached before
+        /// - the fixture carries no News rows, so the feed's @Model.First() threw and the page 500d.
+        /// </summary>
+        private static async Task<int> CheckTheNewsFeed()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the news feed:");
+
+            return await WithNews(async (newsID, title) =>
+            {
+                var failures = 0;
+                using (var client = new HttpClient())
+                {
+                    var feed = await client.GetAsync(Url + "/News");
+                    var body = await feed.Content.ReadAsStringAsync();
+
+                    failures += Check(feed.IsSuccessStatusCode,
+                        "  /News was served (" + (int)feed.StatusCode + ", " + body.Length + " bytes)");
+
+                    // The assertion this check exists for.
+                    var type = feed.Content.Headers.ContentType?.MediaType;
+                    failures += Check(type == "application/rss+xml",
+                        "  and as application/rss+xml, not a page (" + (type ?? "none") + ")");
+
+                    // ...and that it is really a feed, because a 200 of the wrong thing under the
+                    // right header would pass the line above.
+                    failures += Check(body.TrimStart().StartsWith("<?xml") && body.Contains("<rss"),
+                        "  and the body is an RSS document");
+                    failures += Check(body.Contains(title), "  with the seeded item in it");
+
+                    var detail = await client.GetAsync(Url + "/News/Detail/" + newsID);
+                    var detailHtml = await detail.Content.ReadAsStringAsync();
+                    failures += Check(detail.IsSuccessStatusCode && detailHtml.Contains("</html>"),
+                        "  /News/Detail is a whole page (" + (int)detail.StatusCode + ", "
+                        + detailHtml.Length + " bytes)");
+                    failures += Check(detailHtml.Contains(title), "  and the item reached it");
+                }
+                return failures;
+            });
+        }
+
+        /// <summary>
+        /// Seeds one news item and removes it again. News.ForumThreadID is NOT NULL, so this needs a
+        /// thread, which needs a category - all three are seeded and all three are removed.
+        /// </summary>
+        private static async Task<int> WithNews(Func<int, string, Task<int>> body)
+        {
+            const string title = "Harness News Item";
+            int newsID, threadID, categoryID;
+
+            using (var db = new ZkDataContext())
+            {
+                var author = db.Accounts.OrderBy(a => a.AccountID).First();
+
+                var category = new ForumCategory { Title = "Harness News Category", ForumMode = ForumMode.News };
+                db.ForumCategories.Add(category);
+                db.SaveChanges();
+                categoryID = category.ForumCategoryID;
+
+                var thread = new ForumThread
+                {
+                    Title = title,
+                    Created = DateTime.UtcNow,
+                    LastPost = DateTime.UtcNow,
+                    CreatedAccountID = author.AccountID,
+                    LastPostAccountID = author.AccountID,
+                    ForumCategoryID = categoryID,
+                };
+                db.ForumThreads.Add(thread);
+                db.SaveChanges();
+                threadID = thread.ForumThreadID;
+
+                var news = new News
+                {
+                    // Yesterday: Index filters on Created < UtcNow, so an item stamped "now" can
+                    // lose a race with the clock and leave the feed empty.
+                    Created = DateTime.UtcNow.AddDays(-1),
+                    Title = title,
+                    Text = "Seeded by the harness to render the feed.",
+                    AuthorAccountID = author.AccountID,
+                    HeadlineUntil = DateTime.UtcNow.AddDays(1),
+                    ForumThreadID = threadID,
+                };
+                db.News.Add(news);
+                db.SaveChanges();
+                newsID = news.NewsID;
+            }
+
+            try
+            {
+                return await body(newsID, title);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var news = db.News.FirstOrDefault(x => x.NewsID == newsID);
+                    if (news != null) db.News.Remove(news);
+                    db.ForumThreadLastReads.RemoveRange(db.ForumThreadLastReads.Where(x => x.ForumThreadID == threadID));
+                    var thread = db.ForumThreads.FirstOrDefault(x => x.ForumThreadID == threadID);
+                    if (thread != null) db.ForumThreads.Remove(thread);
+                    var category = db.ForumCategories.FirstOrDefault(x => x.ForumCategoryID == categoryID);
+                    if (category != null) db.ForumCategories.Remove(category);
+                    db.SaveChanges();
+                }
+            }
         }
 
         /// <summary>
