@@ -3118,6 +3118,19 @@ namespace ZeroKWeb.Host
                 failures += Check((int)threw.StatusCode == 500, "a deliberate failure answers 500 (" + (int)threw.StatusCode + ")");
                 failures += Check(captured.ToString().Contains("harness-deliberate-failure"),
                     "and it reached Trace, which is where Admin/TraceLogs reads the site's errors from");
+
+                // ...and did NOT reach the client, which is the other half and the one with teeth.
+                // On MVC 5 that is customErrors mode="RemoteOnly" in Web.config. This host has no
+                // equivalent setting: it logs, rethrows, and lets Kestrel answer - so the only
+                // thing keeping a stack trace off the wire is that nobody has added
+                // UseDeveloperExceptionPage. That is one line away from being untrue, and unlike
+                // the MVC 5 setting it would be untrue in PRODUCTION rather than only locally,
+                // because there is no RemoteOnly to fall back on.
+                var body = await threw.Content.ReadAsStringAsync();
+                failures += Check(!body.Contains("harness-deliberate-failure")
+                                  && !body.Contains("at ZeroKWeb.") && !body.Contains("Exception"),
+                    "and NOT to the client - the response carries no exception text ("
+                    + body.Length + " bytes)");
             }
             finally
             {
