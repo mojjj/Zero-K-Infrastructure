@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -657,6 +658,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckTheNewsFeed();
                 failures += await CheckContentService();
                 failures += await CheckMissionDownloads();
+                failures += await CheckReplayDownload();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2152,6 +2154,75 @@ namespace ZeroKWeb.Host
                     }
                 }
             });
+        }
+
+        /// <summary>
+        /// Downloading a replay off local disk, which nothing here had done.
+        ///
+        /// ReplaysController.Download tries blob storage first and falls back to
+        /// ReplayStorage.GetLocalFileContent, under GlobalConst.SpringieDataDir. That path used to
+        /// be a hardcoded c:\projekty\springie_spring which off Windows was not a path at all but
+        /// an ordinary filename - which is where the 72MB of engine once in this working tree came
+        /// from. It resolves under the user profile on Unix now, and this is the first thing to
+        /// read a file back through it.
+        ///
+        /// **A replay that is not there answers 500**, and that is recorded rather than asserted.
+        /// GetLocalFileContent returns null and File(null, ...) throws ArgumentNullException, on
+        /// both stacks - MVC 5's FileContentResult rejects a null array in the same way. It is the
+        /// third instance of one shape in this harness: a lookup returns null for "not found" and
+        /// the thing handed that null does not expect one. /ContentService has the same, and
+        /// PollController had it until it was fixed. Fixing this one is a production behaviour
+        /// change and belongs in its own review.
+        /// </summary>
+        private static async Task<int> CheckReplayDownload()
+        {
+            Console.WriteLine();
+            Console.WriteLine("replay download:");
+
+            var name = "harness-probe.sdfz";
+            var contents = new byte[] { 11, 22, 33, 44, 55 };
+            var folder = Path.Combine(GlobalConst.SpringieDataDir, "demos-server");
+            var path = Path.Combine(folder, name);
+
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(path, contents);
+
+            try
+            {
+                var failures = 0;
+                using (var client = new HttpClient())
+                {
+                    var got = await client.GetAsync(Url + "/Replays/Download?name=" + name);
+                    var bytes = await got.Content.ReadAsByteArrayAsync();
+
+                    failures += Check(got.IsSuccessStatusCode,
+                        "  a replay on local disk is served (" + (int)got.StatusCode + ")");
+                    failures += Check(got.Content.Headers.ContentType?.MediaType == "application/octet-stream",
+                        "  as an octet-stream ("
+                        + (got.Content.Headers.ContentType?.MediaType ?? "none") + ")");
+
+                    // The bytes, not the length: a wrong file of the right size would pass a count.
+                    failures += Check(bytes.Length == contents.Length && bytes[0] == contents[0]
+                                      && bytes[4] == contents[4],
+                        "  and it is that file's bytes (" + bytes.Length + " of " + contents.Length + ")");
+
+                    // Which also says SpringieDataDir resolved to somewhere real: the file was
+                    // written through GlobalConst and read back through ReplayStorage, and the two
+                    // agreeing is the whole point on a platform where that used to be a filename.
+                    failures += Check(Directory.Exists(folder),
+                        "  through SpringieDataDir, which is a directory here (" + folder + ")");
+
+                    var missing = await client.GetAsync(Url + "/Replays/Download?name=not-a-replay.sdfz");
+                    Console.WriteLine("   note  a replay that is not there answers " + (int)missing.StatusCode
+                                      + " - GetLocalFileContent returns null and File(null, ...) throws, "
+                                      + "on both stacks");
+                }
+                return failures;
+            }
+            finally
+            {
+                try { File.Delete(path); } catch { }
+            }
         }
 
         /// <summary>
