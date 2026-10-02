@@ -71,6 +71,7 @@
 
   <!-- Image target sizing. Pure arithmetic, no System.Drawing.Common. -->
   <ItemGroup>
+    <Compile Include="..\Shared\PlasmaShared\BoundedWorkQueue.cs" Link="Linked\BoundedWorkQueue.cs" />
     <Compile Include="..\Shared\PlasmaShared\Imaging\ImageSizing.cs" Link="Linked\ImageSizing.cs" />
     <Compile Include="..\Shared\PlasmaShared\Imaging\PixelBuffers.cs" Link="Linked\PixelBuffers.cs" />
     <Compile Include="..\Shared\PlasmaShared\Imaging\IImageProcessor.cs" Link="Linked\IImageProcessor.cs" />

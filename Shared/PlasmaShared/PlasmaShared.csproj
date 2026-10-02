@@ -140,6 +140,7 @@
     <Compile Include="Utils.Enumerable.cs" />
     <Compile Include="Utils.Imaging.cs" />
     <Compile Include="Utils.Polyfills.cs" />
+    <Compile Include="BoundedWorkQueue.cs" />
     <Compile Include="Imaging\ImageSizing.cs" />
     <Compile Include="Imaging\PixelBuffers.cs" />
     <Compile Include="Imaging\GdiPixelBridge.cs" />
