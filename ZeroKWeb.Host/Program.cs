@@ -183,6 +183,12 @@ namespace ZeroKWeb.Host
             app.UseZkAccount();
             app.UseAuthorization();
 
+            // Global.asax's OnPostAcquireRequestState, which fires just after the one above. It
+            // carries ?weblobby= for the rest of the browsing session, and _SiteLayout reads it to
+            // decide whether to draw the site menu at all - the web lobby embeds this site, and
+            // the menu is chrome it does not want.
+            app.UseWebLobbyFlag();
+
             // Home/Index as the default, like the MVC 5 route table - not Forum. With Forum as the
             // default, Html.ActionLink("Forum index", "Index") renders as "/" because routing elides
             // the defaults, which is correct and makes the link impossible to tell apart from a
@@ -794,6 +800,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckGlobalAsaxRoutes();
                 failures += await CheckPollAutoClose();
                 failures += await CheckRateLimit();
+                failures += await CheckWebLobbyFlag();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2367,6 +2374,78 @@ namespace ZeroKWeb.Host
                 return Check(body == "No contribution with that code found",
                     "  Contributions/Redeem/{code} binds the code (\"" + body + "\")");
             });
+
+            return failures;
+        }
+
+        /// <summary>
+        /// The menu the web lobby asks not to be given.
+        ///
+        /// _SiteLayout.cshtml:114 draws the site menu unless Global.IsWebLobbyAccess, and on this
+        /// host that property was a hardcoded `false` with a comment saying session had not been
+        /// decided about. So the port drew the menu for every visitor, including the one who had
+        /// asked not to see it.
+        ///
+        /// Three requests, because the interesting one is the FIRST. The web lobby opens the site
+        /// with ?weblobby= and no cookie yet, so a port that only consulted Request.Cookies would
+        /// get every page right except the one page the web lobby actually opens.
+        ///
+        /// EVERY request here carries zk_lobby, and the first version of this check did not, which
+        /// is why it reported three failures against working code. _SiteLayout has two branches
+        /// and only the second one asks about the web lobby at all: the first draws the menu
+        /// unconditionally, and you reach the second only with ViewBag.Minimal set or the
+        /// zk_lobby cookie present - which is the cookie ZeroKLobby sets on the embedded browser
+        /// (BrowserInterop.cs:21). So a visitor who is not coming from a lobby sees the menu no
+        /// matter what they put in the query string, and that is correct.
+        /// </summary>
+        private static async Task<int> CheckWebLobbyFlag()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the web lobby's menu-less view:");
+
+            var failures = 0;
+            var cookies = new System.Net.CookieContainer();
+            cookies.Add(new Uri(Url), new System.Net.Cookie(GlobalConst.LobbyAccessCookieName, "1") { Path = "/" });
+
+            using (var handler = new HttpClientHandler { UseCookies = true, CookieContainer = cookies })
+            using (var client = new HttpClient(handler))
+            {
+                var plain = await (await client.GetAsync(Url + "/Home/NotLoggedIn"))
+                                  .Content.ReadAsStringAsync();
+                failures += Check(plain.Contains("id=\"menu\""),
+                    "  a visitor from the desktop lobby still gets the site menu");
+
+                var first = await (await client.GetAsync(Url + "/Home/NotLoggedIn?weblobby=1"))
+                                  .Content.ReadAsStringAsync();
+                failures += Check(!first.Contains("id=\"menu\""),
+                    "  and the request that CARRIES ?weblobby= already does not - "
+                    + "the first page is the one the web lobby opens");
+
+                var carried = cookies.GetCookies(new Uri(Url));
+                var stored = false;
+                foreach (System.Net.Cookie cookie in carried)
+                    if (cookie.Name == ZeroKWeb.Global.WebLobbyCookie) stored = true;
+                failures += Check(stored, "  the flag is stored, so it outlives the query string");
+
+                var later = await (await client.GetAsync(Url + "/Home/NotLoggedIn"))
+                                  .Content.ReadAsStringAsync();
+                failures += Check(!later.Contains("id=\"menu\""),
+                    "  and a later page with no query string still has no menu");
+            }
+
+            // The other half of the same condition, which nothing had asked for either: the
+            // layout also honours ?no_menu=1, through Request.Params - a MVC 5 API this port
+            // shims, and one that had never been exercised from a view.
+            var lobbyOnly = new System.Net.CookieContainer();
+            lobbyOnly.Add(new Uri(Url), new System.Net.Cookie(GlobalConst.LobbyAccessCookieName, "1") { Path = "/" });
+            using (var handler = new HttpClientHandler { UseCookies = true, CookieContainer = lobbyOnly })
+            using (var client = new HttpClient(handler))
+            {
+                var hidden = await (await client.GetAsync(Url + "/Home/NotLoggedIn?no_menu=1"))
+                                   .Content.ReadAsStringAsync();
+                failures += Check(!hidden.Contains("id=\"menu\""),
+                    "  and ?no_menu=1 hides it too, which reads Request.Params from a view");
+            }
 
             return failures;
         }
