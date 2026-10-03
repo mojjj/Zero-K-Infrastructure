@@ -154,6 +154,32 @@ namespace ZeroKWeb.Host
             // result. Putting UseZkAccount first leaves every [Auth] page redirecting a signed-in
             // visitor, which looks exactly like a broken cookie.
             app.UseAuthentication();
+
+            // Global.asax does this at the top of PostAuthenticateRequest, so it sits here, in the
+            // same place in the pipeline:
+            //
+            //     if (DateTime.UtcNow.Subtract(lastPollCheck).TotalMinutes > 60)
+            //     {
+            //         PollController.AutoClosePolls(); // this is silly here, should be a
+            //         lastPollCheck = DateTime.UtcNow; // seaprate timer/thread
+            //     }
+            //
+            // Without it a headline poll with an expiry NEVER closes on this host. That is not
+            // cosmetic: AutoClosePolls is what counts the votes on a PlanetWars role election,
+            // grants or removes the role, writes the event and PMs the winner, and then deletes
+            // the poll. An election that has ended simply stays open, forever, and the vote has
+            // no effect.
+            //
+            // The author's own comment says this belongs on a timer, and it does. It is ported as
+            // the thing it is rather than the thing it should be, because a hosted service would
+            // also run it on a site with no traffic, which is a behaviour change and somebody
+            // else's call to make.
+            app.Use(async (context, next) =>
+            {
+                PollAutoClose.TickIfDue();
+                await next();
+            });
+
             app.UseZkAccount();
             app.UseAuthorization();
 
@@ -753,6 +779,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckContentArchivesAreServed();
                 failures += await CheckUploadSizeLimit();
                 failures += await CheckGlobalAsaxRoutes();
+                failures += await CheckPollAutoClose();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2328,6 +2355,129 @@ namespace ZeroKWeb.Host
             });
 
             return failures;
+        }
+
+        /// <summary>
+        /// The hourly tick Global.asax runs, which this host did not, so an expired PlanetWars
+        /// role election stayed open forever and the vote never took effect.
+        ///
+        /// Both halves are checked, because only one of them is obvious. That the tick CLOSES an
+        /// expired poll is the fix; that it does not close one before the hour is up is the part
+        /// a careless port gets wrong in the other direction, and it is the difference between
+        /// reproducing Global.asax and running AutoClosePolls on every single request.
+        ///
+        /// The poll is seeded with no votes on purpose. AutoClosePolls applies the result only
+        /// when yes > no, and 0 > 0 is false, so it goes straight to deleting the poll - which
+        /// keeps the check off RoleType hierarchies, faction rights and Global.LobbyApi.GhostPm,
+        /// none of which are the subject here and the last of which is null on a host with no
+        /// lobby server.
+        /// </summary>
+        private static async Task<int> CheckPollAutoClose()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the hourly poll tick:");
+
+            var failures = 0;
+            int roleTypeID, expiredID, gatedID = 0;
+
+            using (var db = new ZkDataContext())
+            {
+                var role = db.RoleTypes.FirstOrDefault(x => x.Name == "Harness Role")
+                           ?? db.RoleTypes.Add(new RoleType
+                           {
+                               Name = "Harness Role",
+                               Description = "Seeded by the host harness",
+                               PollDurationDays = 1,
+                           }).Entity;
+                db.SaveChanges();
+                roleTypeID = role.RoleTypeID;
+
+                // Expired an hour ago, headline, and attached to a role - the three things
+                // AutoClosePolls selects on.
+                var expired = new Poll
+                {
+                    QuestionText = "Harness Expired Role Poll",
+                    IsHeadline = true,
+                    IsVisible = true,
+                    RoleTypeID = roleTypeID,
+                    ExpireBy = DateTime.UtcNow.AddHours(-1),
+                };
+                db.Polls.Add(expired);
+                db.SaveChanges();
+                expiredID = expired.PollID;
+            }
+
+            try
+            {
+                using (var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }))
+                {
+                    // The gate first, while the clock still says the hour has not passed - which
+                    // it does, because the process started minutes ago.
+                    PollAutoClose.LastRun = DateTime.UtcNow;
+                    await client.GetAsync(Url + "/Home/NotLoggedIn");
+                    failures += Check(PollExists(expiredID),
+                        "  an expired poll survives a request inside the hour");
+
+                    // Then move the clock back past the interval, exactly as a running site does
+                    // by waiting, and ask for one page.
+                    PollAutoClose.LastRun = DateTime.UtcNow - PollAutoClose.Interval - TimeSpan.FromMinutes(1);
+                    await client.GetAsync(Url + "/Home/NotLoggedIn");
+
+                    failures += Check(!PollExists(expiredID),
+                        "  and the tick closes it once the hour has passed");
+
+                    // And the hour is claimed again. A SECOND expired poll, created now, has to
+                    // survive the next request - otherwise the tick is running on every request
+                    // and the interval is doing nothing.
+                    //
+                    // The first version of this check seeded both polls up front and expected the
+                    // second to survive. It does not, and should not: AutoClosePolls closes every
+                    // expired poll it finds in one pass, so one tick takes both. The check was
+                    // wrong, not the tick.
+                    gatedID = SeedExpiredRolePoll(roleTypeID, "Harness Poll After The Tick");
+                    await client.GetAsync(Url + "/Home/NotLoggedIn");
+                    failures += Check(PollExists(gatedID),
+                        "  and the hour is claimed, so the next one waits for the next tick");
+                }
+                return failures;
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    foreach (var id in new[] { expiredID, gatedID })
+                    {
+                        var poll = db.Polls.FirstOrDefault(x => x.PollID == id);
+                        if (poll != null) db.Polls.Remove(poll);
+                    }
+                    var role = db.RoleTypes.FirstOrDefault(x => x.RoleTypeID == roleTypeID);
+                    if (role != null) db.RoleTypes.Remove(role);
+                    db.SaveChanges();
+                }
+            }
+        }
+
+        private static int SeedExpiredRolePoll(int roleTypeID, string question)
+        {
+            using (var db = new ZkDataContext())
+            {
+                var poll = new Poll
+                {
+                    QuestionText = question,
+                    IsHeadline = true,
+                    IsVisible = true,
+                    RoleTypeID = roleTypeID,
+                    ExpireBy = DateTime.UtcNow.AddHours(-1),
+                };
+                db.Polls.Add(poll);
+                db.SaveChanges();
+                return poll.PollID;
+            }
+        }
+
+        private static bool PollExists(int pollID)
+        {
+            using (var db = new ZkDataContext()) return db.Polls.Any(x => x.PollID == pollID);
         }
 
         /// <summary>
