@@ -3362,10 +3362,14 @@ namespace ZeroKWeb.Host
                                       + " for the same reason - ReplaysController.Index is dead on"
                                       + " both stacks, and returns an empty page anyway");
 
+                    // Was a note - "File(null, ...) throws on both stacks" - and is an assertion
+                    // now that the defect behind it has been reviewed and fixed. 404 rather than
+                    // the Content("No such ...") this codebase usually writes, because a browser
+                    // handed 200 and a sentence saves the sentence as a .sdfz.
                     var missing = await client.GetAsync(Url + "/Replays/not-a-replay.sdfz");
-                    Console.WriteLine("   note  a replay that is not there answers " + (int)missing.StatusCode
-                                      + " - GetLocalFileContent returns null and File(null, ...) throws, "
-                                      + "on both stacks");
+                    failures += Check((int)missing.StatusCode == 404,
+                        "  a replay that is not there is a 404, not a 500 ("
+                        + (int)missing.StatusCode + ")");
                 }
                 return failures;
             }
