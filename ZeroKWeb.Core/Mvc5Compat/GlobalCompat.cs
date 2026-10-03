@@ -203,9 +203,40 @@ namespace ZeroKWeb
             return System.IO.Path.Combine(root, (virtualPath ?? "").TrimStart('~', '/', '\\').Replace('/', System.IO.Path.DirectorySeparatorChar));
         }
 
-        // Session is opt-in in ASP.NET Core and the ported application has not decided about
-        // it yet. False is what an unconfigured request would answer anyway.
-        public static bool IsWebLobbyAccess => false;
+        /// <summary>
+        /// Whether this visitor arrived inside the web lobby, which _SiteLayout.cshtml:114 reads
+        /// to decide whether to draw the site menu at all. This answered a hardcoded false, so the
+        /// port drew the menu for a player who had asked not to see it - the web lobby embeds the
+        /// site, and the menu is chrome it does not want.
+        ///
+        /// **Not ASP.NET Core session, and that is a decision rather than an oversight.** On
+        /// MVC 5 Global.asax copies ?weblobby= into Session and this read it back. Reproducing
+        /// that means AddDistributedMemoryCache, AddSession and UseSession - a server-side store
+        /// behind one boolean, for a site whose Web.config configures no &lt;sessionState&gt; and
+        /// whose ONLY use of session is this flag. An in-memory store also quietly assumes one
+        /// instance, which is an odd thing to introduce to a port whose direction is containers.
+        ///
+        /// A non-persistent cookie holds the same thing with the same lifetime: set when the web
+        /// lobby opens the site, carried for the rest of that browsing session, gone when the
+        /// browser closes. It is client-supplied, which session state is not - and that changes
+        /// nothing here, because the value it replaces came from a query string the client wrote.
+        /// Forging it hides your own menu.
+        ///
+        /// If anything else ever needs session state, this is the decision to revisit, and it is
+        /// three lines in Program.cs to do so.
+        /// </summary>
+        public static bool IsWebLobbyAccess => Context?.Items.ContainsKey(WebLobbyItemKey) == true;
+
+        /// <summary>The cookie that carries the flag between requests.</summary>
+        public const string WebLobbyCookie = "weblobby";
+
+        /// <summary>
+        /// Where the middleware puts the answer for THIS request. Reading the item rather than the
+        /// cookie matters on one request: the one the web lobby actually opens, which carries
+        /// ?weblobby= and no cookie yet, and whose layout would otherwise be the single page that
+        /// still draws the menu.
+        /// </summary>
+        public const string WebLobbyItemKey = "zk.weblobby";
 
         /// <summary>
         /// The map registrar. A tripwire - see Mvc5Compat/AutoRegistratorCompat.cs for why it is
