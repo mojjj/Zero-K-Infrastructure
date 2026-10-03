@@ -878,6 +878,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckRateLimit();
                 failures += await CheckWebLobbyFlag();
                 failures += await CheckWebApi();
+                failures += await CheckTooltipsAndUnvisitedPages();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2453,6 +2454,233 @@ namespace ZeroKWeb.Host
             });
 
             return failures;
+        }
+
+        /// <summary>
+        /// Views no request had ever rendered, and the one endpoint that renders eight of them.
+        ///
+        /// tools/rendered-views.sh counts which of the site's 119 views Razor actually executes
+        /// while the harness runs. It stood at 88, and the 31 it did not name are not obscure -
+        /// they are every tooltip the site pops up, the forum search page, and the thank-you page
+        /// a donor lands on. A view nobody renders is a view whose Html helpers nobody runs, and
+        /// those helpers are where this port has been at its most dangerous: two XSS fixes once
+        /// failed to cross to the ported copies and nothing noticed.
+        ///
+        /// /Home/GetTooltip is the lever. One action, one `key` of the form `kind$id`, and a
+        /// switch that returns a different PartialView for each kind - so eight of the thirty-one
+        /// are reachable from a single endpoint, if the rows exist to point it at. Most did not:
+        /// the fixture has no Unlocks, no Planets, no StructureTypes and no FactionTreaties, which
+        /// is WHY those views never rendered rather than an accident of what the checks asked for.
+        ///
+        /// Every row seeded here is removed again. The galaxy is the exception and is borrowed
+        /// rather than seeded, for the reason WithGalaxy gives.
+        /// </summary>
+        private static async Task<int> CheckTooltipsAndUnvisitedPages()
+        {
+            Console.WriteLine();
+            Console.WriteLine("views no request had rendered:");
+
+            var failures = 0;
+            using (var client = new HttpClient())
+            {
+                // Two whole pages first, because neither needs a row of any kind - which makes
+                // "nothing asked for them" the only reason they had never run.
+                foreach (var path in new[] { "/Contributions/ThankYou", "/Forum/Search" })
+                {
+                    var response = await client.GetAsync(Url + path);
+                    var html = await response.Content.ReadAsStringAsync();
+                    failures += Check(response.IsSuccessStatusCode && html.Contains("</html>"),
+                        "  " + path + " is a whole page (" + (int)response.StatusCode + ", "
+                        + html.Length + " bytes)");
+                    failures += Check(!html.Contains("@Html.") && !html.Contains("@Model"),
+                        "  and no unprocessed Razor survived in it");
+                }
+            }
+
+            using (var client = new HttpClient())
+            {
+                // SubmitSearch, which renders SearchResults - and which is the only thing in the
+                // site that runs ForumPostIndexer.FilterPosts over a real request. The indexer is
+                // built eagerly by GlobalCompat and had never been asked a question.
+                var search = await client.GetAsync(Url + "/Forum/SubmitSearch?keywords=harness");
+                var searchHtml = await search.Content.ReadAsStringAsync();
+                failures += Check(search.IsSuccessStatusCode && searchHtml.Contains("</html>"),
+                    "  /Forum/SubmitSearch is a whole page (" + (int)search.StatusCode + ", "
+                    + searchHtml.Length + " bytes)");
+
+                // A user's poll votes. Account 1 is the one AsAccount signs in as, so it exists.
+                var votes = await client.GetAsync(Url + "/Poll/UserVotes/1");
+                var votesHtml = await votes.Content.ReadAsStringAsync();
+                failures += Check(votes.IsSuccessStatusCode && votesHtml.Contains("</html>"),
+                    "  /Poll/UserVotes is a whole page (" + (int)votes.StatusCode + ", "
+                    + votesHtml.Length + " bytes)");
+            }
+
+            // A tooltip is a PartialView: no layout, no </html>, and an empty body is exactly what
+            // a silently broken one looks like. So each is asserted on something only its OWN view
+            // could have written.
+            failures += await WithForumThread(async (threadID, postID) =>
+            {
+                var tooltip = await Tooltip("forumVotes$" + postID, "Forum/ForumVotesForPost", "<");
+
+                using (var client = new HttpClient())
+                {
+                    var prompt = await client.GetAsync(Url + "/Forum/DeletePostPrompt?postID=" + postID);
+                    var promptHtml = await prompt.Content.ReadAsStringAsync();
+                    tooltip += Check(prompt.IsSuccessStatusCode && promptHtml.Contains("</html>"),
+                        "  /Forum/DeletePostPrompt is a whole page (" + (int)prompt.StatusCode + ", "
+                        + promptHtml.Length + " bytes)");
+                }
+
+                // The history of an edit, which needs an edit. PostHistory/Index was already
+                // checked and renders the LIST; this is the entry behind a row of it.
+                int editID;
+                using (var db = new ZkDataContext())
+                {
+                    var edit = new ForumPostEdit
+                    {
+                        ForumPostID = postID,
+                        EditorAccountID = db.Accounts.OrderBy(a => a.AccountID).First().AccountID,
+                        OriginalText = "Harness original text",
+                        NewText = "Harness edited text",
+                        EditTime = DateTime.UtcNow,
+                    };
+                    db.ForumPostEdits.Add(edit);
+                    db.SaveChanges();
+                    editID = edit.ForumPostEditID;
+                }
+
+                try
+                {
+                    using (var client = new HttpClient())
+                    {
+                        var entry = await client.GetAsync(Url + "/PostHistory/ViewEntry/" + editID);
+                        var entryHtml = await entry.Content.ReadAsStringAsync();
+                        tooltip += Check(entry.IsSuccessStatusCode
+                                         && entryHtml.Contains("Harness original text"),
+                            "  /PostHistory/ViewEntry shows the text that was edited ("
+                            + (int)entry.StatusCode + ")");
+                    }
+                }
+                finally
+                {
+                    using (var db = new ZkDataContext())
+                    {
+                        var edit = db.ForumPostEdits.FirstOrDefault(x => x.ForumPostEditID == editID);
+                        if (edit != null) { db.ForumPostEdits.Remove(edit); db.SaveChanges(); }
+                    }
+                }
+
+                return tooltip;
+            });
+
+            failures += await WithPoll(async pollID =>
+            {
+                int optionID;
+                using (var db = new ZkDataContext())
+                    optionID = db.PollOptions.Where(x => x.PollID == pollID)
+                                 .OrderBy(x => x.OptionID).First().OptionID;
+                return await Tooltip("polloption$" + optionID, "Poll/PollVoteList", "<span");
+            });
+
+            failures += await WithUnlock(async (unlockID, unlockName) =>
+                await Tooltip("unlock$" + unlockID, "Home/UnlockTooltip", unlockName));
+
+            failures += await WithStructureType(async (structureTypeID, structureName) =>
+                await Tooltip("structuretype$" + structureTypeID,
+                              "Shared/DisplayTemplates/StructureType", structureName));
+
+            failures += await WithGalaxy(async (galaxyID, planetID, otherPlanetID) =>
+            {
+                var planet = await Tooltip("planet$" + planetID, "Home/PlanetTooltip", "Harness Planet");
+                // The influence list over a planet with no factions on it. An empty table is the
+                // view running, which is the question here - not whether it has anything to show.
+                var influence = await Tooltip("planetInfluence$" + planetID,
+                                              "Shared/InfluenceListShort", "<table");
+                return planet + influence;
+            });
+
+            return failures;
+        }
+
+        /// <summary>One tooltip, asserted on something only its own view writes.</summary>
+        private static async Task<int> Tooltip(string key, string view, string marks)
+        {
+            using (var client = new HttpClient())
+            {
+                var response = await client.GetAsync(Url + "/Home/GetTooltip?key=" + Uri.EscapeDataString(key));
+                var html = await response.Content.ReadAsStringAsync();
+
+                var failures = Check(response.IsSuccessStatusCode && html.Contains(marks),
+                    "  " + view + " renders as a tooltip (" + (int)response.StatusCode + ", "
+                    + html.Length + " bytes)");
+                failures += Check(!html.Contains("@Html.") && !html.Contains("@Model"),
+                    "  and no unprocessed Razor survived in it");
+                return failures;
+            }
+        }
+
+        /// <summary>
+        /// One Unlock, which the fixture has none of. Code and Name are the NOT NULL columns;
+        /// everything else is left at its default on purpose, because a tooltip that only renders
+        /// for a fully populated row is a tooltip that breaks on a real one.
+        /// </summary>
+        private static async Task<int> WithUnlock(Func<int, string, Task<int>> body)
+        {
+            const string name = "Harness Unlock";
+            int unlockID;
+            using (var db = new ZkDataContext())
+            {
+                var unlock = new Unlock { Code = "harness_unlock", Name = name, NeededLevel = 1 };
+                db.Unlocks.Add(unlock);
+                db.SaveChanges();
+                unlockID = unlock.UnlockID;
+            }
+
+            try
+            {
+                return await body(unlockID, name);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var unlock = db.Unlocks.FirstOrDefault(x => x.UnlockID == unlockID);
+                    if (unlock != null) { db.Unlocks.Remove(unlock); db.SaveChanges(); }
+                }
+            }
+        }
+
+        /// <summary>
+        /// One PlanetWars structure type, which the fixture also has none of. Name is the only
+        /// NOT NULL column besides the key; every nullable one is left null on purpose, because a
+        /// display template that only survives a fully populated row is one that breaks on a real
+        /// one.
+        /// </summary>
+        private static async Task<int> WithStructureType(Func<int, string, Task<int>> body)
+        {
+            const string name = "Harness Structure";
+            int structureTypeID;
+            using (var db = new ZkDataContext())
+            {
+                var structure = new StructureType { Name = name };
+                db.StructureTypes.Add(structure);
+                db.SaveChanges();
+                structureTypeID = structure.StructureTypeID;
+            }
+
+            try
+            {
+                return await body(structureTypeID, name);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var structure = db.StructureTypes.FirstOrDefault(x => x.StructureTypeID == structureTypeID);
+                    if (structure != null) { db.StructureTypes.Remove(structure); db.SaveChanges(); }
+                }
+            }
         }
 
         /// <summary>
