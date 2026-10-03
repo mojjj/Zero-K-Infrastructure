@@ -148,6 +148,32 @@ namespace ZeroKWeb.Host
             Ratings.RatingSystems.CreateRatingSystems();
             Ratings.MapRatings.Init();
 
+            // HarnessController is in this project, so whatever this project is deployed as serves
+            // it. That is fine while this is only a test host and is not fine for a minute longer
+            // than that: /Harness/Whoami names the signed-in account and its admin level,
+            // /Harness/Throw makes the site answer 500 on demand, /Harness/Upload takes a file,
+            // /Harness/Token hands out an anti-forgery token and /Harness/Slow sleeps for as long
+            // as it is asked to. None of them is reachable by accident, and all of them are
+            // reachable by anyone who guesses the path.
+            //
+            // So they are OFF when this is serving, and on only for the two things that need them:
+            // this process running its own checks, and the site container in tools/stack.sh, which
+            // the lobby probe asks /Harness/Whoami to prove single sign-on worked.
+            //
+            // 404 rather than 403, because 403 tells you the endpoint is there.
+            var harnessEndpoints = !serving
+                                   || Environment.GetEnvironmentVariable("ZK_HARNESS_ENDPOINTS") == "1";
+            if (!harnessEndpoints)
+                app.Use(async (context, next) =>
+                {
+                    if (context.Request.Path.StartsWithSegments("/Harness"))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status404NotFound;
+                        return;
+                    }
+                    await next();
+                });
+
             // Order matters and is not interchangeable: UseAuthentication populates
             // HttpContext.User from the cookie, UseZkAccount turns that name into an Account and
             // publishes it where Global reads it, and UseAuthorization runs [Auth] against the

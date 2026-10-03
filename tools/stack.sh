@@ -16,6 +16,8 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 SITE_PORT=5200
+# A second site, started for one check: the same image with the harness endpoints left off.
+LOCKED_PORT=5201
 API_PORT=8300
 SECRET="local-dev-secret-not-a-real-one"
 DB_NAME="${DB_NAME:-zk_test}"
@@ -30,7 +32,7 @@ echo "building both images..."
 ./tools/lobby-image.sh zk-lobby
 docker build -q -t zk-site . >/dev/null
 
-docker rm -f zk-lobby-up zk-site-up >/dev/null 2>&1 || true
+docker rm -f zk-lobby-up zk-site-up zk-site-locked >/dev/null 2>&1 || true
 harness_log="$(mktemp)"
 # Served by the site container as /Resources/*, which is where the lobby server looks for map
 # metadata when it cannot read the website's disk - and out of process it never can.
@@ -45,7 +47,7 @@ MAP_OPTION=stackprobeopt
 # In the fixture like $MAP, and deliberately left out of $RESOURCES.
 UNSERVED_MAP=test_map_2
 cleanup() {
-    docker rm -f zk-lobby-up zk-site-up >/dev/null 2>&1 || true
+    docker rm -f zk-lobby-up zk-site-up zk-site-locked >/dev/null 2>&1 || true
     docker run --rm --network host -e ZK_CONNECTION_STRING="$CS" \
         --entrypoint dotnet zk-site bin/ZeroKWeb.Host.dll --remove-planetwars-round >/dev/null 2>&1 || true
     rm -f "$harness_log"
@@ -102,8 +104,12 @@ fi
 echo "starting the website..."
 # The resources directory is mounted rather than baked in: it is deployment content that
 # AutoRegistrator writes, so a checkout has none and the image ships none.
+# ZK_HARNESS_ENDPOINTS because the lobby probe asks /Harness/Whoami to prove that single
+# sign-on left the player signed in. Those endpoints are OFF by default when serving - see the
+# control below, which starts the same image without this line and shows that they are.
 docker run -d --rm --name zk-site-up --network host \
     -v "$RESOURCES":/app/Zero-K.info/Resources:ro \
+    -e ZK_HARNESS_ENDPOINTS=1 \
     -e ZK_CONNECTION_STRING="$CS" -e ZK_HOST_URLS="http://0.0.0.0:$SITE_PORT" zk-site >/dev/null
 for _ in $(seq 1 120); do
     curl -fsS -o /dev/null "http://127.0.0.1:$SITE_PORT/Home/NotLoggedIn" 2>/dev/null && { site=1; break; }
@@ -160,6 +166,36 @@ if [ "${lobby:-}" = "1" ] && [ "${site:-}" = "1" ]; then
     code=$(curl -sS -o /dev/null -w '%{http_code}' \
         "http://127.0.0.1:$SITE_PORT/Resources/$MAP.metadata.xml.gz" 2>/dev/null)
     check "$([ "$code" = "200" ] && echo 0 || echo 1)" "the site serves the map's metadata ($code)"
+
+    # THE CONTROL for the harness endpoints, and the only place it can be run: the same image,
+    # the same command, one environment variable fewer. HarnessController ships in this project,
+    # so whatever gets deployed serves it - /Harness/Whoami names the signed-in account and its
+    # admin level, /Harness/Throw answers 500 on demand, /Harness/Slow sleeps on request. The
+    # container above has them because the lobby probe needs them; a deployment would not.
+    #
+    # A second container on a second port rather than a restart of the first, which everything
+    # after this still depends on.
+    docker run -d --rm --name zk-site-locked --network host \
+        -e ZK_CONNECTION_STRING="$CS" -e ZK_HOST_URLS="http://0.0.0.0:$LOCKED_PORT" zk-site >/dev/null
+    locked_up=
+    for _ in $(seq 1 120); do
+        curl -fsS -o /dev/null "http://127.0.0.1:$LOCKED_PORT/Home/NotLoggedIn" 2>/dev/null \
+            && { locked_up=1; break; }
+        sleep 1
+    done
+    if [ "${locked_up:-}" = "1" ]; then
+        locked=$(curl -sS -o /dev/null -w '%{http_code}' \
+            "http://127.0.0.1:$LOCKED_PORT/Harness/Whoami" 2>/dev/null)
+        page=$(curl -sS -o /dev/null -w '%{http_code}' \
+            "http://127.0.0.1:$LOCKED_PORT/Home/NotLoggedIn" 2>/dev/null)
+        check "$([ "$locked" = "404" ] && echo 0 || echo 1)" \
+            "without ZK_HARNESS_ENDPOINTS the harness endpoints are gone ($locked)"
+        check "$([ "$page" = "200" ] && echo 0 || echo 1)" \
+            "and the site itself still serves, so it is the endpoints and not the container ($page)"
+    else
+        check 1 "the locked-down site container never came up"
+    fi
+    docker rm -f zk-site-locked >/dev/null 2>&1 || true
 
     # ZK_SITE_URL turns on the probe's single sign-on check, which needs BOTH halves at once and
     # is the reason it lives in the probe rather than in this script: the lobby server issues the

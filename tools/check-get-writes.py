@@ -43,7 +43,12 @@ NOT_YET = re.compile(r'\[WritesOnGetNotYetFixed\("([^"]*)"\)\]')
 
 
 def controllers():
-    listed = subprocess.run(["git", "ls-files", "Zero-K.info/Controllers/*.cs"],
+    # BOTH controller directories, because both are deployed. ZeroKWeb.Host ships
+    # HarnessController alongside every linked site controller, so a GET that writes in it is as
+    # live as one in Zero-K.info/Controllers - and this glob did not look at it. The limit was a
+    # glob rather than a decision; it finds nothing new today, and now it would.
+    listed = subprocess.run(["git", "ls-files",
+                             "Zero-K.info/Controllers/*.cs", "ZeroKWeb.Host/Controllers/*.cs"],
                             capture_output=True, text=True, check=True)
     return [line for line in listed.stdout.splitlines() if line]
 
