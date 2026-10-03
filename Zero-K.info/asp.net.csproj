@@ -66,6 +66,7 @@
     <Compile Include="AppCode\ContentServiceImplementation.cs" />
     <Compile Include="AppCode\MissionServiceImplementation.cs" />
     <Compile Include="AppCode\DosProtector.cs" />
+    <Compile Include="AppCode\DosProtector.Portable.cs" />
     <Compile Include="AppCode\ForumPostCache.cs" />
     <Compile Include="AppCode\ForumPostIndexer.cs" />
     <Compile Include="AppCode\LadderCalculator.cs" />

@@ -192,6 +192,21 @@ namespace ZeroKWeb.Host.Controllers
         public ActionResult Throw() => throw new InvalidOperationException("harness-deliberate-failure");
 
         /// <summary>
+        ///     A request that takes a while, so the rate limiter can be driven deliberately.
+        ///
+        ///     DosProtector refuses an address with more than fifteen requests IN FLIGHT, which a
+        ///     fast endpoint cannot produce however many are sent: twenty requests that each finish
+        ///     in a millisecond are never twenty at once. The delay is what makes "at once" true,
+        ///     and it is what the parallel limit is about in the first place - a caller holding
+        ///     pages open, not a caller asking for cheap ones quickly.
+        /// </summary>
+        public async Task<ActionResult> Slow(int ms = 300)
+        {
+            await Task.Delay(Math.Min(ms, 5000));
+            return Content("slept " + ms);
+        }
+
+        /// <summary>
         ///     What culture a request actually runs under, and what that does to a number and a
         ///     date. Web.config pins en-US; nothing in the port did, so this reports the effect
         ///     rather than the setting - a pinned culture that failed to apply would still read
