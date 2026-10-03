@@ -31,6 +31,18 @@ in known ways, and both sides are normalised before comparing:
 ORDER is compared too, because these routes are matched in order and the default one has to
 stay last - a route after it is a route that never matches.
 
+It also checks the OTHER route table, which is the reason this script grew a second half.
+Application_Start configures Web API separately - GlobalConfiguration.Configure(
+WebApiConfig.Register) - and on .NET Framework that is an independent pipeline with its own
+controllers. Comparing MapRoute tables says nothing about it, and the port had no /api surface
+at all for the whole of its life: WhrController serves POST /api/whr/battles, nothing in this
+repository calls it, and the consumer is outside the repo.
+
+So: every class deriving from ApiController has to be linked into the port. There is no route
+table to compare, because ASP.NET Core needs no registration for these - MapControllerRoute
+already builds the endpoint data source and that includes attribute-routed actions - which is
+exactly why the failure is silent. The class simply has to exist in the build.
+
 What this does NOT cover: routes.IgnoreRoute. MVC 5 uses it to hand `img/`, `Resources/`,
 `autoregistrator/maps/` and robots.txt to the IIS static handler instead of to MVC. The port
 has no equivalent line because it needs none - UseStaticFiles runs before routing, so those
@@ -155,6 +167,46 @@ def normalise(name, template, raw):
     return name.lower(), "/".join(segments), tuple(sorted(values.items()))
 
 
+# class Foo : ApiController   /   class Foo: ApiController
+API = re.compile(r"class\s+(\w+)\s*:\s*ApiController\b")
+PORT_SOURCES = "port-sources.props"
+
+_api_files = []
+
+
+def api_count():
+    return len(_api_files)
+
+
+def api_controllers_not_linked():
+    """Every ApiController in the repository, and whether port-sources.props compiles it."""
+    listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "*.cs"],
+                            capture_output=True, text=True)
+    if listed.returncode != 0:
+        return []
+
+    # XML comments, not C# ones: read() takes out // and /* */, and an entry commented out of
+    # an msbuild file is <!-- ... -->. Left in, a commented-out Compile Include would read as
+    # linked - the same mistake the route half of this script made and was caught making.
+    linked = re.sub(r"<!--.*?-->", "", read(PORT_SOURCES), flags=re.DOTALL)
+    missing = []
+    del _api_files[:]
+    for name in listed.stdout.split():
+        if "/obj/" in name or "/bin/" in name:
+            continue
+        try:
+            text = read(name)
+        except OSError:
+            continue
+        if not API.search(text):
+            continue
+        _api_files.append(name)
+        # The props file spells paths with backslashes and a leading ..\.
+        if name.replace("/", "\\") not in linked:
+            missing.append(name)
+    return missing
+
+
 def show(route):
     name, template, values = route
     return '%-13s %-34s %s' % (name, template or '""',
@@ -199,7 +251,21 @@ def main():
     legacy = [r for r in legacy if r[1] != ""]
 
     if legacy == port:
-        print("%d route(s), declared the same way in both route tables" % len(port))
+        unlinked = api_controllers_not_linked()
+        if unlinked:
+            print("%d Web API controller(s) the live site serves and the port does not compile:"
+                  % len(unlinked))
+            print("")
+            for name in unlinked:
+                print("  " + name)
+            print("")
+            print("Web API is a second pipeline on .NET Framework, so these are URLs with no entry")
+            print("in the route table above. Link the file in port-sources.props; nothing else is")
+            print("needed, because attribute routing is already on.")
+            return 1
+
+        print("%d route(s), declared the same way in both route tables, and %d Web API "
+              "controller(s) linked into the port" % (len(port), api_count()))
         return 0
 
     print("the two route tables do not agree:")
