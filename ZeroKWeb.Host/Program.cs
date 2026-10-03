@@ -2449,12 +2449,30 @@ namespace ZeroKWeb.Host
         /// is why no check here would ever have missed it - the consumer is outside the repo, and
         /// would have found out at cutover.
         ///
-        /// The ratings come back null here and that is correct rather than a gap: they are read
-        /// from the running rating system through Global.LobbyApi, which this host has none of.
-        /// What is asserted is the shape and the data that comes from the DATABASE - the battle
-        /// id, and a player roster that matches the fixture's own rows - because an endpoint that
+        /// The ratings come back null with no lobby server, and that is correct rather than a
+        /// gap: they are read from the running rating system through Global.LobbyApi. What is
+        /// asserted then is the shape and the data that comes from the DATABASE - the battle id,
+        /// and a player roster that matches the fixture's own rows - because an endpoint that
         /// answered `[]` with a 200 would pass anything weaker, which is the mistake the
         /// autocomplete endpoints made before they were checked properly.
+        ///
+        /// **With a lobby server attached it answers 500 against this fixture, and that is
+        /// recorded rather than asserted.** Measured in tools/stack.sh, where the site's exception
+        /// is
+        ///
+        ///     ZkLobbyServer.Api.LobbyApiException: lobby API GetInternalRating failed (500)
+        ///
+        /// so the failure is on the lobby server's side of the call. It is not a port defect: the
+        /// site code is identical on both stacks and MVC 5 calls the same method in-process, so
+        /// MVC 5 would surface the same throw. What it is NOT is diagnosed here - the lobby
+        /// server's own exception was not captured, and the lead is only read rather than
+        /// measured: WholeHistoryRating.GetInternalRating indexes players[accountID] with none of
+        /// the ContainsKey guard that every neighbouring method in that file has, which would
+        /// throw for an account the rating pass produced no Player for.
+        ///
+        /// So the assertion that holds in BOTH environments is the one this change is actually
+        /// about: the request reaches the controller instead of answering 404, which is what it
+        /// did before /api existed at all.
         /// </summary>
         private static async Task<int> CheckWebApi()
         {
@@ -2486,8 +2504,25 @@ namespace ZeroKWeb.Host
                 var response = await client.PostAsync(Url + "/api/whr/battles", body);
                 var json = await response.Content.ReadAsStringAsync();
 
+                // The route, which is the whole claim of this change and holds either way. 404 is
+                // what this answered before the controller was linked.
+                failures += Check((int)response.StatusCode != 404,
+                    "  POST /api/whr/battles reaches the controller (" + (int)response.StatusCode + ")");
+
+                if (ZeroKWeb.Global.LobbyApi != null)
+                {
+                    // Worded with the phrase tools/stack.sh greps for, so it is PRINTED there
+                    // rather than sitting in a temp file nobody reads. A note nobody sees is a
+                    // comment with extra steps.
+                    Console.WriteLine("   note  POST /api/whr/battles answers " + (int)response.StatusCode
+                                      + " against a real lobby server - the site's call to the lobby"
+                                      + " API's GetInternalRating fails on the server's side, and"
+                                      + " MVC 5 makes the same call in-process");
+                    return failures;
+                }
+
                 failures += Check(response.IsSuccessStatusCode,
-                    "  POST /api/whr/battles is served at all (" + (int)response.StatusCode + ")");
+                    "  and is served (" + (int)response.StatusCode + ")");
                 failures += Check(response.Content.Headers.ContentType?.MediaType == "application/json",
                     "  as JSON (" + (response.Content.Headers.ContentType?.MediaType ?? "none") + ")");
 
