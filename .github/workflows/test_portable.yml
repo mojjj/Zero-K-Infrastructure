@@ -166,6 +166,14 @@ jobs:
       - name: Check the diverged views still differ the way they are recorded to
         run: ./tools/check-diverged-views.py
 
+      # The seven custom routes Global.asax declares and the port did not, for most of the
+      # port's life. Nothing noticed, because every action they reach takes its parameters by
+      # NAME, so the query-string form answers 200 with the route missing entirely:
+      # /Static?name=UnitGuide works, /Static/UnitGuide was a 404, and the harness asked for
+      # the first one. Two route tables drift; this compares them as tables.
+      - name: Check the two route tables declare the same routes
+        run: ./tools/check-routes.py
+
       - name: Check that the checks fail when they can see nothing
         run: ./tools/check-the-checks.sh
 

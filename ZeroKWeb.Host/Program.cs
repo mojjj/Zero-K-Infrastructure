@@ -191,6 +191,41 @@ namespace ZeroKWeb.Host
                 }
             });
 
+            // The seven routes Global.asax.RegisterRoutes declares BEFORE the default one, and
+            // that order is the whole point: each of these would otherwise be swallowed by
+            // {controller}/{action}/{id}, which binds a third segment to `id` and nothing else.
+            //
+            // Every one of them was a 404 or a 500 on this host until now, measured:
+            //
+            //     /Wiki/Commander                404   action "Commander" does not exist
+            //     /p/zero-k/wiki/Commander       404   three literal segments match nothing
+            //     /Missions/File/5011            500   binds id, the action takes name, Single() throws
+            //     /Missions/Img/5011             404
+            //     /Replays/test.sdfz             404   action "test.sdfz" does not exist
+            //     /Static/UnitGuide              404
+            //
+            // These are not obscure: /Replays/{name} is how a replay is downloaded and
+            // /Missions/File/{name} is how a mission is. The harness reached the Static page as
+            // /Static?name=UnitGuide and the mission file as /Missions/File?name=5011 - both work,
+            // because the actions take those parameters by name, and both quietly worked AROUND
+            // the missing route rather than finding it.
+            //
+            // UrlParameter.Optional becomes {node?}. The literal "p/zero-k/wiki" route is a legacy
+            // path and is kept because it is in Global.asax; removing it is a separate decision.
+            app.MapControllerRoute("WikiPage", "Wiki/{node?}", new { controller = "Wiki", action = "Index" });
+            app.MapControllerRoute("WikiPage2", "p/zero-k/wiki/{node?}", new { controller = "Wiki", action = "Index" });
+            // Dead on BOTH stacks and kept anyway: there is no Img action on MissionsController,
+            // so this route resolves to nothing and 404s wherever it is registered. Reproduced
+            // because the port's list is meant to be Global.asax's list, which is a property
+            // somebody can check; deleting it here would make the two differ for a reason that
+            // then has to be remembered.
+            app.MapControllerRoute("MissionImage", "Missions/Img/{name?}", new { controller = "Missions", action = "Img" });
+            app.MapControllerRoute("MissionFile", "Missions/File/{name?}", new { controller = "Missions", action = "File" });
+            app.MapControllerRoute("ReplayFile", "Replays/{name?}", new { controller = "Replays", action = "Download" });
+            app.MapControllerRoute("StaticFile", "Static/{name?}", new { controller = "Static", action = "Index" });
+            app.MapControllerRoute("RedeemCode", "Contributions/Redeem/{code?}",
+                new { controller = "Contributions", action = "Redeem" });
+
             app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
 
             // content/ is the fifth, and it is the one a GAME CLIENT follows rather than a
@@ -717,6 +752,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckGameModeAndInfolog();
                 failures += await CheckContentArchivesAreServed();
                 failures += await CheckUploadSizeLimit();
+                failures += await CheckGlobalAsaxRoutes();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2096,7 +2132,7 @@ namespace ZeroKWeb.Host
                 var failures = 0;
                 foreach (var path in new[]
                          {
-                             "/My/Commanders", "/My/UnlockList", "/Clans/Create", "/Wiki", "/MapBans",
+                             "/My/Commanders", "/My/UnlockList", "/Wiki", "/MapBans",
                              // Needs a thread to post into, which is what WithForumThread is for.
                              "/Forum/NewPost?threadID=" + threadID,
                              // And the thread itself. A thread is only reachable with a forum
@@ -2115,6 +2151,23 @@ namespace ZeroKWeb.Host
                     failures += Check(!html.Contains("@Html.") && !html.Contains("@Model"),
                         "  and no unprocessed Razor survived in it");
                 }
+
+                // /Clans/Create is NOT always a page, and it was in the loop above until a
+                // database with a clan in it proved that. AsAccount signs in as the lowest
+                // AccountID there is, so whether that account is in a clan is a property of the
+                // rows, not of the port: with no clan it renders the form, with a clan it has no
+                // right to it answers Content("You already have clan and you dont have rights to
+                // it") - 51 bytes, no </html>, and a failure line that sends you looking for a
+                // port defect. Both are correct, so this asserts that it is one of them.
+                var clanCreate = await client.GetAsync(Url + "/Clans/Create");
+                var clanHtml = await clanCreate.Content.ReadAsStringAsync();
+                var refused = clanHtml.StartsWith("You already have clan");
+                failures += Check(clanCreate.IsSuccessStatusCode
+                                  && (clanHtml.Contains("</html>") || refused),
+                    "  /Clans/Create answers for this account (" + (int)clanCreate.StatusCode + ", "
+                    + (refused ? "already in a clan" : clanHtml.Length + " bytes of page") + ")");
+                failures += Check(!clanHtml.Contains("@Html.") && !clanHtml.Contains("@Model"),
+                    "  and no unprocessed Razor survived in it");
 
                 // The seeded post reaches the page rather than only its chrome - the same
                 // distinction WithFactionAndClan draws, and the one an "is it 200" check misses.
@@ -2212,6 +2265,69 @@ namespace ZeroKWeb.Host
                     }
                 }
             });
+        }
+
+        /// <summary>
+        /// The routes Global.asax declares before the default one, which this host did not have.
+        ///
+        /// Each of them is a URL whose third segment is NOT an id: Wiki/{node}, Static/{name},
+        /// Replays/{name}, Missions/File/{name}. The default route binds a third segment to `id`
+        /// and nothing else, so without these every one of them was a 404 - or a 500, where the
+        /// action took a differently-named parameter and then used it.
+        ///
+        /// The replay and mission ones are asserted where their files are seeded, in
+        /// CheckReplayDownload and CheckMissionDownloads. This covers the rest.
+        ///
+        /// Worth saying plainly, because it is how this was missed for so long: two checks here
+        /// already reached these actions through ?name=, which works and proves nothing about the
+        /// route. Writing the query-string form is the natural thing to do when the pretty URL
+        /// 404s, and it quietly turns a broken route into a passing check.
+        /// </summary>
+        private static async Task<int> CheckGlobalAsaxRoutes()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the routes Global.asax declares:");
+
+            var failures = 0;
+            using (var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }))
+            {
+                var guide = await client.GetAsync(Url + "/Static/UnitGuide");
+                var guideHtml = await guide.Content.ReadAsStringAsync();
+                failures += Check(guide.IsSuccessStatusCode && guideHtml.Contains("</html>"),
+                    "  Static/{name} serves the page (" + (int)guide.StatusCode + ", "
+                    + guideHtml.Length + " bytes)");
+
+                // A node that does not exist redirects you to create it, which is the Wiki
+                // controller working rather than failing - the point here is that the request
+                // reached the controller at all instead of looking for an action called
+                // "Commander".
+                foreach (var path in new[] { "/Wiki/Commander", "/p/zero-k/wiki/Commander" })
+                {
+                    var wiki = await client.GetAsync(Url + path);
+                    failures += Check((int)wiki.StatusCode != 404,
+                        "  " + path + " reaches the Wiki controller (" + (int)wiki.StatusCode + ")");
+                }
+            }
+
+            // Contributions/Redeem/{code} is the one route whose presence a status code cannot
+            // show, and the one that would otherwise go unchecked. BOTH route tables send
+            // /Contributions/Redeem/ZZZ to the same action; the difference is what binds. The
+            // default route calls the third segment `id`, so without the RedeemCode route `code`
+            // stays null and the action answers "Code is empty" - a 200, from the right action,
+            // with the route missing. With it, `code` is "ZZZ" and the answer names the lookup.
+            // The body is the evidence here, not the status.
+            //
+            // The code is deliberately not in the database: Redeem assigns the contribution to
+            // whoever asks, and the harness is not going to redeem a real one.
+            failures += await AsAccount(AdminLevel.None, async client =>
+            {
+                var redeem = await client.GetAsync(Url + "/Contributions/Redeem/HARNESS-NO-SUCH-CODE");
+                var body = (await redeem.Content.ReadAsStringAsync()).Trim();
+                return Check(body == "No contribution with that code found",
+                    "  Contributions/Redeem/{code} binds the code (\"" + body + "\")");
+            });
+
+            return failures;
         }
 
         /// <summary>
@@ -2465,7 +2581,9 @@ namespace ZeroKWeb.Host
                 var failures = 0;
                 using (var client = new HttpClient())
                 {
-                    var got = await client.GetAsync(Url + "/Replays/Download?name=" + name);
+                    // /Replays/{name}, which is the only shape that works. See the note below
+                    // about /Replays/Download?name=, which this check used to ask for.
+                    var got = await client.GetAsync(Url + "/Replays/" + name);
                     var bytes = await got.Content.ReadAsByteArrayAsync();
 
                     failures += Check(got.IsSuccessStatusCode,
@@ -2485,7 +2603,29 @@ namespace ZeroKWeb.Host
                     failures += Check(Directory.Exists(folder),
                         "  through SpringieDataDir, which is a directory here (" + folder + ")");
 
-                    var missing = await client.GetAsync(Url + "/Replays/Download?name=not-a-replay.sdfz");
+                    // The route EATS the action segment, and that is the point of this note.
+                    // Replays/{name} sits above the default route and its first segment after
+                    // "Replays" is the file name, so /Replays/Download?name=x binds name from the
+                    // ROUTE - "Download" - and the query string never gets a say. Route values
+                    // beat the query string on both stacks, and MVC 5 declares the same template
+                    // with name = UrlParameter.Optional, so this URL has never worked in
+                    // production. It worked HERE, and this check asked for it, only because the
+                    // route was missing and the default one bound ?name= instead. A check that
+                    // passed BECAUSE of the defect next to it.
+                    var shadowed = await client.GetAsync(Url + "/Replays/Download?name=" + name);
+                    Console.WriteLine("   note  /Replays/Download?name= answers " + (int)shadowed.StatusCode
+                                      + " - Replays/{name} binds name=\"Download\" and the query is"
+                                      + " ignored, on both stacks");
+
+                    // Same cause, and it costs nothing: /Replays and /Replays/Index reach Download
+                    // too, so Index() is unreachable. It returns Content("") and nothing in the
+                    // views or the controllers links to it, which is why no one has noticed.
+                    var index = await client.GetAsync(Url + "/Replays/Index");
+                    Console.WriteLine("   note  /Replays/Index answers " + (int)index.StatusCode
+                                      + " for the same reason - ReplaysController.Index is dead on"
+                                      + " both stacks, and returns an empty page anyway");
+
+                    var missing = await client.GetAsync(Url + "/Replays/not-a-replay.sdfz");
                     Console.WriteLine("   note  a replay that is not there answers " + (int)missing.StatusCode
                                       + " - GetLocalFileContent returns null and File(null, ...) throws, "
                                       + "on both stacks");
@@ -2507,11 +2647,11 @@ namespace ZeroKWeb.Host
         /// survives a byte array that came out of a varbinary column. This does, over
         /// MissionsController.File, which is what a player's client actually downloads.
         ///
-        /// Note the URL: the action takes `name`, and the default route calls its third segment
-        /// `id`, so /Missions/File/1 binds NOTHING and ends in a 500 from Single(). ?name=1 is the
-        /// shape that works - the parameter accepts an id or a name, which is why it parses. That
-        /// is true on MVC 5 as well; it is routing, not a port defect, and it is written down here
-        /// because it looks exactly like one.
+        /// Note the URL, and the correction in it: this said that /Missions/File/1 ending in a
+        /// 500 was "routing, not a port defect", because the default route calls a third segment
+        /// `id` and the action takes `name`. That was wrong. Global.asax declares
+        /// Missions/File/{name} explicitly, and the 500 was this host never registering it. Both
+        /// shapes are asked for below and both now answer 200.
         /// </summary>
         private static async Task<int> CheckMissionDownloads()
         {
@@ -2545,6 +2685,15 @@ namespace ZeroKWeb.Host
                         "  advertising Accept-Ranges: bytes");
 
                     // The part the harness endpoint cannot tell you: a real action, a real column.
+                    // The ROUTE form. Global.asax maps Missions/File/{name}, and this check used
+                    // ?name= until that route was ported - at which point the comment here said the
+                    // 500 from /Missions/File/5011 was "routing, not the port". It was the port:
+                    // MVC 5 has the route and this host did not.
+                    var byRoute = await client.GetAsync(Url + "/Missions/File/" + missionID);
+                    var routeBytes = await byRoute.Content.ReadAsByteArrayAsync();
+                    failures += Check(byRoute.IsSuccessStatusCode && routeBytes.Length == mutator.Length,
+                        "  and /Missions/File/{name} reaches it too (" + (int)byRoute.StatusCode + ")");
+
                     var request = new HttpRequestMessage(HttpMethod.Get, Url + "/Missions/File?name=" + missionID);
                     request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(1, 3);
                     var partial = await client.SendAsync(request);
@@ -3247,14 +3396,23 @@ namespace ZeroKWeb.Host
                         path + " renders for a signed-in user (" + (int)response.StatusCode + ", " + html.Length + " bytes)");
                 }
 
-                // /Wiki is NOT a page here, and that is correct rather than a gap. Asked for no
-                // node it looks for a wiki thread, finds none - the fixture has no forum posts -
-                // and sends you to create it. The first version of this check expected HTML and
-                // failed; the behaviour was right and the expectation was wrong.
+                // /Wiki asked for no node has TWO correct answers, and which one you get is a
+                // property of the rows. WikiController.Index looks up WikiKey == node with node
+                // null, which on EF Core is WikiKey IS NULL - and that is every ordinary forum
+                // thread, not none of them. On the committed fixture there are no threads yet, so
+                // it finds nothing and redirects you to create the page; on a database that has
+                // been browsed it renders whichever thread sorts first as a wiki page, which is
+                // odd but is the controller's own doing and not the port's. This check asserted
+                // the 302 and so asserted an empty database: five leftover threads turned it red
+                // while nothing was wrong. What is actually worth holding is that neither answer
+                // is a crash.
                 var wiki = await moderator.GetAsync(Url + "/Wiki");
-                signedIn += Check((int)wiki.StatusCode == 302
-                                  && (wiki.Headers.Location?.ToString() ?? "").Contains("/Forum/NewPost"),
-                    "/Wiki with no node offers to create it (" + (int)wiki.StatusCode + " -> " + wiki.Headers.Location + ")");
+                var wikiHtml = await wiki.Content.ReadAsStringAsync();
+                var offersToCreate = (int)wiki.StatusCode == 302
+                                     && (wiki.Headers.Location?.ToString() ?? "").Contains("/Forum/NewPost");
+                signedIn += Check(offersToCreate || (wiki.IsSuccessStatusCode && wikiHtml.Contains("</html>")),
+                    "/Wiki with no node either offers to create it or renders a thread ("
+                    + (int)wiki.StatusCode + (offersToCreate ? " -> " + wiki.Headers.Location : "") + ")");
 
                 return signedIn;
             });
