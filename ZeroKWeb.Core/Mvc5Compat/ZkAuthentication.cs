@@ -81,7 +81,8 @@ namespace ZeroKWeb.Compat
         public static IApplicationBuilder UseZkAccount(this IApplicationBuilder app) =>
             app.Use(async (context, next) =>
             {
-                var account = Resolve(context);
+                bool fromToken;
+                var account = Resolve(context, out fromToken);
 
                 if (account != null)
                 {
@@ -99,13 +100,58 @@ namespace ZeroKWeb.Compat
                     }
 
                     context.Items[Global.AccountItemKey] = account;
+
+                    // The one SetAuthCookie that is NOT the sliding-expiry re-issue the class
+                    // comment above explains away. A token is single use: SessionTokenStore.Redeem
+                    // removes it whether or not it was valid. So the request that redeems one is
+                    // the only chance to turn it into a session, and without this the player is
+                    // signed in for exactly that request and anonymous on their next click - a
+                    // page that renders their name above a menu that says they are logged out.
+                    //
+                    // Global.asax calls SetAuthCookie for both paths and the reasoning for
+                    // dropping it covered only the cookie one, where there is already a cookie to
+                    // slide. Here there is none to slide.
+                    if (fromToken) await SignIn(context, account);
+                }
+
+                // Global.asax, at the end of PostAuthenticateRequest:
+                //
+                //     var removeCake = Regex.Replace(Request.Url.ToString(), ...);
+                //     if (removeCake != Request.Url.ToString()) Response.Redirect(removeCake, true);
+                //
+                // The spent token comes back out of the address bar. It is in browser history and
+                // in the Referer of every link the player follows off the site otherwise, and the
+                // URL they copy to someone else carries it too. Done whether or not anything was
+                // redeemed, which is what Global.asax does - the token is spent either way.
+                //
+                // Only the QUERY STRING, so a POST that carries the token as a form field is not
+                // turned into a GET with no body. That is Global.asax's behaviour as well: it
+                // matches on Request.Url, which does not contain the form.
+                if (!string.IsNullOrEmpty(context.Request.Query[GlobalConst.SessionTokenVariable]))
+                {
+                    context.Response.Redirect(WithoutToken(context.Request));
+                    return;
                 }
 
                 await next();
             });
 
-        private static Account Resolve(HttpContext context)
+        /// <summary>The request's own URL with the session token taken out of the query string.</summary>
+        private static string WithoutToken(HttpRequest request)
         {
+            var kept = request.Query
+                              .Where(x => x.Key != GlobalConst.SessionTokenVariable)
+                              .SelectMany(x => x.Value.Select(v => Uri.EscapeDataString(x.Key)
+                                                                   + "=" + Uri.EscapeDataString(v)))
+                              .ToList();
+
+            return request.PathBase + request.Path
+                   + (kept.Count > 0 ? "?" + string.Join("&", kept) : "");
+        }
+
+        private static Account Resolve(HttpContext context, out bool fromToken)
+        {
+            fromToken = false;
             var db = new ZkDataContext();
 
             if (context.User?.Identity?.IsAuthenticated == true)
@@ -134,10 +180,21 @@ namespace ZeroKWeb.Compat
                 token = context.Request.Form[GlobalConst.SessionTokenVariable].FirstOrDefault();
                 context.Request.Body.Position = 0;
             }
+            // Request[key] on MVC 5 reads the query string, then the form, then the COOKIES -
+            // and ZeroKLobby/BrowserInterop.cs:37 puts the token in a cookie as well as on the
+            // URL, so the cookie is a path the live site really uses and this read only the
+            // first two.
+            if (string.IsNullOrEmpty(token))
+                token = context.Request.Cookies[GlobalConst.SessionTokenVariable];
+
             if (!string.IsNullOrEmpty(token))
             {
                 var accountID = Global.LobbyApi?.RedeemSessionToken(token);
-                if (accountID != null) return db.Accounts.Find(accountID.Value);
+                if (accountID != null)
+                {
+                    fromToken = true;
+                    return db.Accounts.Find(accountID.Value);
+                }
             }
 
             return null;

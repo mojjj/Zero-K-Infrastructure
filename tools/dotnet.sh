@@ -46,6 +46,7 @@ exec docker run --rm -i ${ZK_DOTNET_NAME:+--name "$ZK_DOTNET_NAME"} \
     -e ZK_BATTLE_CONTEXT_IN="${ZK_BATTLE_CONTEXT_IN:-}" \
     -e ZK_RENDERED_VIEWS="${ZK_RENDERED_VIEWS:-}" \
     -e ZK_REQUIRE_FULL_RUN="${ZK_REQUIRE_FULL_RUN:-}" \
+    -e ZK_SITE_URL="${ZK_SITE_URL:-}" \
     -w /repo \
     mcr.microsoft.com/dotnet/sdk:9.0 \
     dotnet "$@"
