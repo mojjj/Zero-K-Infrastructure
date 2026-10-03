@@ -1,4 +1,4 @@
-using PlasmaShared;
+﻿using PlasmaShared;
 using Ratings;
 using System;
 using System.Collections.Generic;
@@ -231,6 +231,14 @@ namespace ZeroKWeb.Controllers
             {
                 var bat = db.SpringBattles.Single(x => x.SpringBattleID == id);
                 var content = ReplayStorage.Instance.GetFileContent($"infolog_{bat.EngineGameID}.txt").ConfigureAwait(false).GetAwaiter().GetResult();
+
+                // Null is "there is nowhere to get it from", which is what ReplayStorage returns
+                // when blob storage is not configured. Encoding.UTF8.GetString(null) throws, so
+                // this page used to be a 500 on any such deployment - for the moderators who are
+                // the only people who can reach it, and with the reason already in the trace log
+                // from the constructor's warning.
+                if (content == null) return Content("No infolog stored for this battle.", "text/plain");
+
                 return Content(Encoding.UTF8.GetString(content), "text/plain");
             }
         }

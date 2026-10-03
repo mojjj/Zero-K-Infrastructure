@@ -3214,18 +3214,27 @@ namespace ZeroKWeb.Host
                 return seeded;
             });
 
-            // Recorded, not asserted - there is no blob storage here and the endpoint needs one.
+            // This was a NOTE until the defect behind it was fixed, and it is an assertion now.
+            //
+            // With no blob storage configured, ReplayStorage.GetFileContent used to dereference a
+            // null container client and the page was a 500 - for the moderators who are the only
+            // people who can reach it, on any deployment that has not set ReplaysConnectionString.
+            // The constructor already traced a warning about exactly that and nothing connected
+            // the two.
+            //
+            // "No infolog stored" is the right answer here rather than a 404: the battle exists,
+            // the page exists, and what is missing is the file. The assertion is on the BODY,
+            // because a 200 carrying an exception page would pass a status check.
             failures += await AsModerator(async moderator =>
             {
                 int battleID;
                 using (var db = new ZkDataContext()) battleID = db.SpringBattles.OrderBy(x => x.SpringBattleID).First().SpringBattleID;
 
                 var logs = await moderator.GetAsync(Url + "/Battles/Logs/" + battleID);
-                Console.WriteLine("   note  /Battles/Logs answers " + (int)logs.StatusCode
-                                  + " with no blob storage configured - ReplayStorage.GetFileContent "
-                                  + "dereferences a null container client, on both stacks. "
-                                  + "ReplaysController.Download catches and falls back to disk; this does not.");
-                return 0;
+                var body = await logs.Content.ReadAsStringAsync();
+                return Check(logs.IsSuccessStatusCode && body.Contains("No infolog stored"),
+                    "  /Battles/Logs says so plainly with no blob storage, rather than 500ing ("
+                    + (int)logs.StatusCode + ", \"" + body.Trim() + "\")");
             });
 
             return failures;
