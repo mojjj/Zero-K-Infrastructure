@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using LobbyClient;
 using PlasmaShared;
+using ZkData;
 
 namespace LobbyClientProbe
 {
@@ -39,6 +40,10 @@ namespace LobbyClientProbe
             var port = int.Parse(args[1]);
             var name = args[2];
             var password = args[3];
+            // Optional, and only the two-container stack passes it. Without it this probe behaves
+            // exactly as it did.
+            var siteUrl = Environment.GetEnvironmentVariable("ZK_SITE_URL");
+            if (!string.IsNullOrWhiteSpace(siteUrl)) siteUrl = siteUrl.TrimEnd('/'); else siteUrl = null;
 
             var client = new TasClient("LobbyClientProbe 1.0");
 
@@ -101,6 +106,32 @@ namespace LobbyClientProbe
                 return 1;
             }
             Console.WriteLine("   ok    logged in - the server accepted a real client");
+
+            // Single sign-on, which only this process can check: the token the server just issued
+            // lives in memory and ConnectedUser.Process(Disconnect) removes every token for the
+            // account, so it dies the moment this client goes away. Nothing outside a connected
+            // session can hold one.
+            if (siteUrl != null)
+            {
+                // A SECOND token, from a second account on a second connection, because a token is
+                // single use and the cookie form has to be asked the same question as the URL
+                // form. One client cannot supply two: TasClient.SessionToken is set once, at
+                // login, and logging the same account in again would take the first session's
+                // tokens with it (ConnectedUser removes them all on disconnect).
+                var second = await ConnectAndLogin(host, port, name + "Cookie", password);
+                if (second == null) return 1;
+
+                try
+                {
+                    var sso = await CheckSingleSignOn(siteUrl, client.SessionToken, name,
+                                                      second.SessionToken, name + "Cookie");
+                    if (sso != 0) return sso;
+                }
+                finally
+                {
+                    try { second.RequestDisconnect(); } catch { }
+                }
+            }
 
             // Past login. ChannelManager.CanJoin does db.Accounts.FindAsync, so joining is another
             // EF Core round trip on a path a build cannot reach; saying something comes back
@@ -227,6 +258,162 @@ namespace LobbyClientProbe
         ///     Waits, and turns "it never answered" into a message that says which step hung rather
         ///     than a stack trace or a silent hang in CI.
         /// </summary>
+        /// <summary>
+        /// A player arriving from the game client, which is the one sign-in path neither half of
+        /// the stack can check alone.
+        ///
+        /// ZeroKLobby opens the website with ?asmallcake=&lt;token&gt; on the URL (BrowserInterop.cs),
+        /// the site redeems it against the lobby server, and from then on the player is signed in
+        /// by cookie. Three things have to happen and only the first is obvious:
+        ///
+        ///   1. the token is redeemed and the page is served as that account;
+        ///   2. a session cookie is ISSUED, because the token is single use - SessionTokenStore
+        ///      .Redeem removes it whether or not it was valid - so the redeeming request is the
+        ///      only chance to turn it into a session. Without this the player is signed in for
+        ///      exactly one request and anonymous on their next click;
+        ///   3. the spent token is taken back out of the URL, which Global.asax does with a
+        ///      redirect, so it does not sit in history and in the Referer of every outbound link.
+        ///
+        /// The control is at the end: a token that was never issued must sign nobody in. Without
+        /// it, a site that signed in any caller at all would pass every line above.
+        ///
+        /// Every line is reported and none of them returns early, which matters for the controls
+        /// rather than for a passing run. The first version returned on the first failure, and
+        /// the control that reverted the fix therefore only ever showed the redirect - the
+        /// missing session cookie, which is the worse of the two, was never reached and so was
+        /// never actually proven to be caught.
+        /// </summary>
+        private static async Task<int> CheckSingleSignOn(string siteUrl, string token, string name,
+                                                         string cookieToken, string cookieName)
+        {
+            if (string.IsNullOrEmpty(token))
+            {
+                Console.WriteLine("   FAIL  the server accepted the login but issued no session token");
+                return 1;
+            }
+
+            var failures = 0;
+            var cookies = new System.Net.CookieContainer();
+            using (var handler = new System.Net.Http.HttpClientHandler
+                   { UseCookies = true, CookieContainer = cookies, AllowAutoRedirect = false })
+            using (var web = new System.Net.Http.HttpClient(handler))
+            {
+                var landing = siteUrl + "/Home/NotLoggedIn?" + GlobalConst.SessionTokenVariable
+                              + "=" + Uri.EscapeDataString(token) + "&keep=me";
+                var first = await web.GetAsync(landing);
+
+                var location = first.Headers.Location?.ToString() ?? "";
+                var redirected = (int)first.StatusCode == 302
+                                 && !location.Contains(GlobalConst.SessionTokenVariable);
+                // The rest of the query string has to survive, or the redirect loses whatever the
+                // player was actually asking for.
+                failures += Report(redirected && location.Contains("keep=me"),
+                    $"the site redirects the spent token out of the URL, keeping the rest "
+                    + $"({(int)first.StatusCode} -> {(location == "" ? "no Location" : location)})");
+
+                var signedInCookie = false;
+                foreach (System.Net.Cookie cookie in cookies.GetCookies(new Uri(siteUrl)))
+                    if (cookie.Name == "ZkAuth") signedInCookie = true;
+                failures += Report(signedInCookie,
+                    "and issues a session cookie, so the single-use token becomes a session"
+                    + (signedInCookie ? "" : " - without it the player is signed in for one"
+                                             + " request and anonymous on their next click"));
+
+                // The cookie alone, on a different URL, with no token anywhere.
+                var whoami = await (await web.GetAsync(siteUrl + "/Harness/Whoami"))
+                                   .Content.ReadAsStringAsync();
+                failures += Report(whoami.Contains("signed in as " + name),
+                    $"and the NEXT request is still {name}, by cookie alone ({whoami.Trim()})");
+            }
+
+            // The COOKIE form, which is the other half of how a player arrives. ZeroKLobby sets
+            // the token as a cookie with InternetSetCookiePub (BrowserInterop.cs:37) as well as
+            // putting it on the URL, and MVC 5 reads it because Request[key] looks in the query
+            // string, then the form, then the COOKIES. This read only the first two.
+            var byCookie = new System.Net.CookieContainer();
+            byCookie.Add(new Uri(siteUrl), new System.Net.Cookie(GlobalConst.SessionTokenVariable,
+                                                                 cookieToken) { Path = "/" });
+            using (var handler = new System.Net.Http.HttpClientHandler
+                   { UseCookies = true, CookieContainer = byCookie, AllowAutoRedirect = false })
+            using (var web = new System.Net.Http.HttpClient(handler))
+            {
+                await web.GetAsync(siteUrl + "/Home/NotLoggedIn");
+                var whoami = await (await web.GetAsync(siteUrl + "/Harness/Whoami"))
+                                   .Content.ReadAsStringAsync();
+                failures += Report(whoami.Contains("signed in as " + cookieName),
+                    $"a token carried as a COOKIE signs {cookieName} in too ({whoami.Trim()})");
+            }
+
+            // THE CONTROL. A token the server never issued must sign nobody in; otherwise every
+            // line above would pass on a site that signed in anyone who asked.
+            var madeUp = new System.Net.CookieContainer();
+            using (var handler = new System.Net.Http.HttpClientHandler
+                   { UseCookies = true, CookieContainer = madeUp, AllowAutoRedirect = false })
+            using (var web = new System.Net.Http.HttpClient(handler))
+            {
+                await web.GetAsync(siteUrl + "/Home/NotLoggedIn?" + GlobalConst.SessionTokenVariable
+                                   + "=" + Guid.NewGuid().ToString("N"));
+                var signedIn = false;
+                foreach (System.Net.Cookie cookie in madeUp.GetCookies(new Uri(siteUrl)))
+                    if (cookie.Name == "ZkAuth") signedIn = true;
+                failures += Report(!signedIn, "and a token the server never issued signs nobody in");
+            }
+
+            return failures == 0 ? 0 : 1;
+        }
+
+        private static int Report(bool ok, string what)
+        {
+            Console.WriteLine((ok ? "   ok    " : "   FAIL  ") + what);
+            return ok ? 0 : 1;
+        }
+
+        /// <summary>
+        /// A second connected client, registered and logged in, held open by the caller. Null if
+        /// any step failed, having said which.
+        /// </summary>
+        private static async Task<TasClient> ConnectAndLogin(string host, int port, string name, string password)
+        {
+            var client = new TasClient("LobbyClientProbe 1.0");
+            var connected = new TaskCompletionSource<bool>();
+            var registered = new TaskCompletionSource<string>();
+            var loggedIn = new TaskCompletionSource<string>();
+
+            client.Connected += (s, e) => connected.TrySetResult(true);
+            client.ConnectionLost += (s, e) =>
+            {
+                connected.TrySetException(new Exception("connection lost: " + e.ServerParams?[0]));
+                registered.TrySetException(new Exception("connection lost before Register was answered"));
+                loggedIn.TrySetException(new Exception("connection lost before Login was answered"));
+            };
+            client.RegistrationAccepted += (s, e) => registered.TrySetResult(null);
+            client.RegistrationDenied += (s, e) => registered.TrySetResult(e.ResultCode.ToString());
+            client.LoginAccepted += (s, e) => loggedIn.TrySetResult(null);
+            client.LoginDenied += (s, e) => loggedIn.TrySetResult(e.ResultCode.ToString());
+
+            client.Connect(host, port);
+            if (!await Within(connected.Task, $"connect as {name}")) return null;
+
+            await client.Register(name, password);
+            if (!await Within(registered.Task, $"register {name}")) return null;
+            var reg = registered.Task.Result;
+            if (reg != null && reg != "NameAlreadyTaken" && reg != "AlreadyRegisteredWithThisPassword")
+            {
+                Console.WriteLine($"   FAIL  the server refused to register '{name}': {reg}");
+                return null;
+            }
+
+            await client.Login(name, password);
+            if (!await Within(loggedIn.Task, $"login as {name}")) return null;
+            if (loggedIn.Task.Result != null)
+            {
+                Console.WriteLine($"   FAIL  the server refused the login for '{name}': {loggedIn.Task.Result}");
+                return null;
+            }
+
+            return client;
+        }
+
         private static async Task<bool> Within(Task task, string step)
         {
             var finished = await Task.WhenAny(task, Task.Delay(Timeout));

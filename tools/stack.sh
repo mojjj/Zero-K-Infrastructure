@@ -161,13 +161,18 @@ if [ "${lobby:-}" = "1" ] && [ "${site:-}" = "1" ]; then
         "http://127.0.0.1:$SITE_PORT/Resources/$MAP.metadata.xml.gz" 2>/dev/null)
     check "$([ "$code" = "200" ] && echo 0 || echo 1)" "the site serves the map's metadata ($code)"
 
-    if ./tools/dotnet.sh run --project tools/lobby-client-probe -- \
+    # ZK_SITE_URL turns on the probe's single sign-on check, which needs BOTH halves at once and
+    # is the reason it lives in the probe rather than in this script: the lobby server issues the
+    # token in memory and drops every token for the account when the client disconnects, so the
+    # only process that can hand a live one to the website is the one still holding the session.
+    if ZK_SITE_URL="http://127.0.0.1:$SITE_PORT" ./tools/dotnet.sh run --project tools/lobby-client-probe -- \
             127.0.0.1 "$PLAYER_PORT" MetaProbe "$PROBE_PASS" "$MAP" "$MAP_OPTION" > "$probe_log" 2>&1; then
         meta=0
     else
         meta=1
     fi
-    grep -E "listmapoptions|opened a battle" "$probe_log" | sed 's/^/     /' || true
+    grep -E "listmapoptions|opened a battle|session|signs nobody|token out of the URL|by cookie alone|session cookie|as a COOKIE" \
+        "$probe_log" | sed 's/^/     /' || true
     check "$meta" "a battle in the lobby server has the map options only the site could have given it"
     [ "$meta" = "0" ] || tail -20 "$probe_log"
 
