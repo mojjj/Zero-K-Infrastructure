@@ -509,6 +509,40 @@ Measured against the running host, not assumed:
 to turn off. `requestPathInvalidCharacters` and `requestValidationMode` have their own section
 above.
 
+## The harness endpoints, and why they are off by default (2026-10-03)
+
+`HarnessController` lives in `ZeroKWeb.Host`, which is both the thing that runs the checks and
+the thing that serves the site. So whatever that project is deployed as would serve the harness's
+own endpoints, under guessable paths and with no authentication in front of them:
+
+| | |
+|---|---|
+| `/Harness/Whoami` | names the signed-in account, its AccountID and its AdminLevel |
+| `/Harness/Throw` | makes the site answer 500 on demand |
+| `/Harness/Upload` | accepts a file |
+| `/Harness/Ipn` | reads a raw request body |
+| `/Harness/Token` | hands out an anti-forgery token |
+| `/Harness/Slow` | sleeps for as long as it is asked to, up to five seconds |
+| `/Harness/Login`, `/Harness/Logout` | a second sign-in form, without the real one's CSRF handling |
+
+None of them is a way in - `Login` does the same password check `Home/Logon` does - but several
+are free reconnaissance and one is a cheap way to tie up connections.
+
+They are therefore **off whenever this host is serving**, and answer `404` rather than `403`,
+because a `403` tells you the endpoint is there. Two things turn them on:
+
+- **this process running its own checks** - the harness is the caller, in the same process;
+- **`ZK_HARNESS_ENDPOINTS=1`**, which `tools/stack.sh` sets on the site container because the
+  lobby probe asks `/Harness/Whoami` to prove single sign-on left the player signed in.
+
+`tools/stack.sh` also runs the control: the same image, the same command, one environment
+variable fewer, on a second port. `/Harness/Whoami` answers 404 there and `/Home/NotLoggedIn`
+still answers 200, so it is the endpoints that are gone and not the container that is broken.
+
+**If this project is deployed, deploy it without that variable.** The default is already right;
+this is written down so that setting it "to make the checks pass" in production is a decision
+somebody has to make on purpose.
+
 ## Related work in progress
 
 `ILobbyServerApi` (see `ZkLobbyServer/ILobbyServerApi.cs`) is the seam introduced so the
