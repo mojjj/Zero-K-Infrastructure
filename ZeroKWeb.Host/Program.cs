@@ -148,6 +148,21 @@ namespace ZeroKWeb.Host
             Ratings.RatingSystems.CreateRatingSystems();
             Ratings.MapRatings.Init();
 
+            // The site's own error log. Global.StartApplication does exactly this line, and it is
+            // the only thing anywhere that writes LogEntries - the table Admin/TraceLogs reads.
+            // Without it the port's Trace.TraceError calls went nowhere and that page was
+            // permanently empty, which no check noticed because the page renders either way.
+            //
+            // The constructor also drops entries older than 14 days, which is the retention the
+            // live site has always had and is left exactly as it was.
+            //
+            // NOT installed when the lobby server's own standalone process traces: that one adds a
+            // ConsoleTraceListener instead, so in the split architecture its traces go to
+            // `docker logs` rather than to this table. Before Phase 1 it ran in this process and
+            // was caught by this listener. See HOSTING.md - restoring that is one line and a
+            // decision about write volume, not a port question.
+            System.Diagnostics.Trace.Listeners.Add(new ZkLobbyServer.ZkServerTraceListener());
+
             // HarnessController is in this project, so whatever this project is deployed as serves
             // it. That is fine while this is only a test host and is not fine for a minute longer
             // than that: /Harness/Whoami names the signed-in account and its admin level,
@@ -225,9 +240,13 @@ namespace ZeroKWeb.Host
             // Trace.TraceError - and Global.StartApplication has put a ZkServerTraceListener on
             // Trace.Listeners, so it lands in the log the Admin/TraceLogs page reads. ASP.NET Core
             // logs through ILogger instead, so on the port those exceptions went to Kestrel's
-            // console and nowhere the site can see. This host does not call StartApplication - it
-            // deliberately starts no lobby server - but the Trace call is the half that belongs to
-            // serving a request rather than to booting the application.
+            // console and nowhere the site can see.
+            //
+            // That comment used to end here, saying the Trace call was the half that belongs to
+            // serving a request - which was true and was also only half the job. The LISTENER was
+            // never installed, so every one of these traces went nowhere: LogEntries stayed empty
+            // and Admin/TraceLogs was a working page with nothing to show. It is installed below,
+            // before any of this can fire.
             //
             // The "does not implement IController" filter is copied verbatim: on 4.8 that message
             // is what a request for a missing controller produces, and it was noise worth dropping.
@@ -3934,10 +3953,52 @@ namespace ZeroKWeb.Host
                                   && !body.Contains("at ZeroKWeb.") && !body.Contains("Exception"),
                     "and NOT to the client - the response carries no exception text ("
                     + body.Length + " bytes)");
+
+                // ...and all the way to the page a moderator actually looks at. The assertion
+                // above proves the Trace CALL happens; it would pass just as well with no listener
+                // installed, which is what this host did for the whole of its life - the call went
+                // nowhere, LogEntries stayed empty, and Admin/TraceLogs rendered a working page
+                // with nothing in it. The capture listener above is the harness's own, so it
+                // cannot tell the difference. Only the database can.
+                //
+                // Polled rather than read once: ZkServerTraceListener writes asynchronously and
+                // does not await, so the row lands shortly after the response does.
+                var stored = false;
+                for (var attempt = 0; attempt < 50 && !stored; attempt++)
+                {
+                    using (var db = new ZkDataContext())
+                        stored = db.LogEntries.Any(x => x.Message.Contains("harness-deliberate-failure"));
+                    if (!stored) await Task.Delay(100);
+                }
+                failures += Check(stored, "and into LogEntries, which is the site's own error log");
+
+                // UNFILTERED, and that is not a detail. The first version asked for
+                // /Admin/TraceLogs?Text=harness-deliberate-failure, and the page echoes the search
+                // text back into its own filter box - so Contains() matched the form field and the
+                // check passed with the listener removed and the table empty. A false pass, found
+                // by the control that removes the listener, in the check written to prove the
+                // listener works. Asking for the page with no filter leaves the rows as the only
+                // place that string can come from.
+                failures += await AsModerator(async moderator =>
+                {
+                    var page = await (await moderator.GetAsync(Url + "/Admin/TraceLogs"))
+                                     .Content.ReadAsStringAsync();
+                    return Check(page.Contains("harness-deliberate-failure"),
+                        "and Admin/TraceLogs shows it, which is the whole path end to end");
+                });
             }
             finally
             {
                 System.Diagnostics.Trace.Listeners.Remove(capture);
+
+                // The harness leaves the fixture as it found it. LogEntries is not in the set the
+                // stack job counts, but a check that writes rows and leaves them is how a database
+                // stops being a fixture.
+                using (var db = new ZkDataContext())
+                {
+                    var mine = db.LogEntries.Where(x => x.Message.Contains("harness-deliberate-failure")).ToList();
+                    if (mine.Count > 0) { db.LogEntries.RemoveRange(mine); db.SaveChanges(); }
+                }
             }
 
             return failures;
