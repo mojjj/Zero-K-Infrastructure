@@ -54,6 +54,7 @@
   <!-- PlanetWars galaxy map geometry (Phase 5) -->
   <ItemGroup>
     <Compile Include="..\Zero-K.info\AppCode\GalaxyMapGeometry.cs" Link="Linked\GalaxyMapGeometry.cs" />
+    <Compile Include="..\Zero-K.info\AppCode\DosProtector.Portable.cs" Link="Linked\DosProtector.Portable.cs" />
   </ItemGroup>
 
   <!-- The counting behind ContentService.svc's deprecation notice (Phase 2) -->

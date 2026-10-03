@@ -299,7 +299,6 @@ namespace ZeroKWeb.Host
                 });
             }
 
-
             if (serving)
             {
                 // Static content, and ONLY these three directories. WebRootPath above is the site
@@ -345,10 +344,24 @@ namespace ZeroKWeb.Host
                 // The directory is not in the repository - AutoRegistrator writes it on a
                 // deployment - and the loop below skips what is not there, so this costs a
                 // checkout nothing.
+                // LAST, after every UseStaticFiles - see the note at the other call below.
+                app.UseDosProtection();
+
                 Console.WriteLine("serving on " + urls + " - try /Home/NotLoggedIn, /Tourney, /Harness/ForumPath/3");
                 await app.RunAsync();
                 return 0;
             }
+
+            // The rate limiter goes in LAST, after every UseStaticFiles, and that position IS the
+            // static-file exemption: Global.asax spells it `HttpContext.Handler == null`, which is
+            // how a file IIS serves without a managed handler presents there, and here a static
+            // file is simply answered before this is reached.
+            //
+            // It has to be said twice because the serving branch above ends in RunAsync and never
+            // comes back. Registering it once, higher up, would have put it in FRONT of the three
+            // directories only the serving branch maps - img, css and Resources - and rate-limited
+            // them. Fifteen parallel requests is one ordinary page's worth of images.
+            app.UseDosProtection();
 
             await app.StartAsync();
             try
@@ -780,6 +793,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckUploadSizeLimit();
                 failures += await CheckGlobalAsaxRoutes();
                 failures += await CheckPollAutoClose();
+                failures += await CheckRateLimit();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2353,6 +2367,82 @@ namespace ZeroKWeb.Host
                 return Check(body == "No contribution with that code found",
                     "  Contributions/Redeem/{code} binds the code (\"" + body + "\")");
             });
+
+            return failures;
+        }
+
+        /// <summary>
+        /// The rate limiter answers, which is the half the unit tests cannot say anything about.
+        ///
+        /// Tests.Portable drives DosProtector's arithmetic by hand with a fake clock and proves
+        /// what it counts. None of that says the middleware is REGISTERED, that it is registered
+        /// where static files have already been served, or that a refusal comes back as 429 rather
+        /// than as a 500 from somewhere deeper. This asks over HTTP.
+        ///
+        /// Twenty requests at once against an endpoint that sleeps, because the parallel limit is
+        /// about requests IN FLIGHT: twenty requests that each finish in a millisecond are never
+        /// twenty at once, and would leave this passing against no limiter at all.
+        ///
+        /// It then waits out the window on purpose. Everything after it runs from the same address,
+        /// and leaving ten seconds of request time inside a five-second window would hand the next
+        /// check a 429 that has nothing to do with it.
+        /// </summary>
+        private static async Task<int> CheckRateLimit()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the rate limiter Global.asax installs:");
+
+            var failures = 0;
+            using (var client = new HttpClient())
+            {
+                var burst = new List<Task<HttpResponseMessage>>();
+                for (var i = 0; i < 20; i++) burst.Add(client.GetAsync(Url + "/Harness/Slow?ms=1500"));
+
+                // WHILE the limiter is saturated, a static file still has to come back. This is
+                // the only assertion that pins WHERE the middleware is registered rather than
+                // that it exists: Global.asax exempts static content by testing for a null
+                // handler, and the equivalent here is being registered after UseStaticFiles. Put
+                // it one line higher, in front of the img/ and Resources/ mappings, and this goes
+                // red - which is what it is for, because fifteen parallel requests is one
+                // ordinary page's worth of images and the site would start refusing its own
+                // stylesheets.
+                await Task.Delay(400);
+                using (var fresh = new HttpClient())
+                {
+                    var asset = await fresh.GetAsync(Url + "/img/abuse.png");
+                    failures += Check(asset.IsSuccessStatusCode,
+                        "  a static file is served while the limiter is full, as IIS does ("
+                        + (int)asset.StatusCode + ")");
+                }
+
+                var answers = await Task.WhenAll(burst);
+
+                var refused = answers.Count(x => (int)x.StatusCode == 429);
+                failures += Check(refused > 0,
+                    "  twenty requests at once from one address get some 429s (" + refused + " of 20)");
+
+                // Not all of them: the limit is fifteen in flight, so the first fifteen are served.
+                failures += Check(answers.Count(x => x.IsSuccessStatusCode) > 0,
+                    "  and the ones inside the limit are still served ("
+                    + answers.Count(x => x.IsSuccessStatusCode) + " of 20)");
+
+                var body = "";
+                foreach (var answer in answers)
+                    if ((int)answer.StatusCode == 429) body = await answer.Content.ReadAsStringAsync();
+                failures += Check(body.Contains("Too many requests"),
+                    "  saying why, in the sentence Global.asax uses (\"" + body + "\")");
+
+                foreach (var answer in answers) answer.Dispose();
+
+                // The window has to slide, or a burst would be a ban. Waiting it out is also what
+                // keeps the checks after this one from inheriting a limiter that is still full.
+                await Task.Delay(ZeroKWeb.DosProtector.Window + TimeSpan.FromSeconds(2));
+
+                var after = await client.GetAsync(Url + "/Harness/Slow?ms=1");
+                failures += Check(after.IsSuccessStatusCode,
+                    "  and the same address is served again once the window passes ("
+                    + (int)after.StatusCode + ")");
+            }
 
             return failures;
         }
