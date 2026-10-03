@@ -543,6 +543,35 @@ still answers 200, so it is the endpoints that are gone and not the container th
 this is written down so that setting it "to make the checks pass" in production is a decision
 somebody has to make on purpose.
 
+## The site's own error log, and who writes it now (2026-10-03)
+
+`Admin/TraceLogs` reads the `LogEntries` table. Nothing writes that table unless a
+`ZkServerTraceListener` is on `Trace.Listeners`, and on .NET Framework exactly one thing puts it
+there: `Global.StartApplication`, which the .NET 9 host does not call.
+
+So the port traced into the void. `Program.cs` already called `Trace.TraceError` for an unhandled
+request exception - deliberately, and with a comment saying it was the half that belongs to
+serving a request - but the listener that turns a trace into a row was never installed. The site's
+own error log was permanently empty, and a check asserting `Admin/TraceLogs` renders passed
+against an empty page.
+
+The host installs it now, and a check follows an exception all the way through: `/Harness/Throw`
+-> `Trace.TraceError` -> `LogEntries` -> the `Admin/TraceLogs` page.
+
+### The lobby server half, which is a decision rather than a bug
+
+Before Phase 1 the lobby server ran inside the website's worker process, so the website's listener
+caught **its** traces too. `ZkLobbyServer.Standalone` installs a `ConsoleTraceListener` instead, so
+in the split architecture its traces go to the container's stdout and not to `LogEntries`.
+
+That is a real change in where a moderator looks for lobby-server errors, and it is left alone
+here on purpose. Every trace becomes its own `ZkDataContext` and one `LogEntries` insert - which is
+why `LegacyCallReporter` reports counts rather than calls - and a lobby server is far chattier than
+a website. Restoring the old behaviour is one line in `ZkLobbyServer.Standalone/Program.cs`;
+whether a busy server should write a row per trace is a question for whoever runs it.
+
+`docker logs` is where those traces are today.
+
 ## Related work in progress
 
 `ILobbyServerApi` (see `ZkLobbyServer/ILobbyServerApi.cs`) is the seam introduced so the

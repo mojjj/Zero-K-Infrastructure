@@ -108,6 +108,7 @@
     <Compile Include="..\ZkLobbyServer\TourneyApi.cs" Link="Linked\TourneyApi.cs" />
     <Compile Include="..\ZkLobbyServer\RatingApi.cs" Link="Linked\RatingApi.cs" />
     <Compile Include="..\ZkLobbyServer\ILobbyServerApi.cs" Link="Linked\ILobbyServerApi.cs" />
+    <Compile Include="..\ZkLobbyServer\ZkServerTraceListener.cs" Link="Linked\ZkServerTraceListener.cs" />
     <Compile Include="..\ZkData\SpringFilesUnitsyncAttempt.cs" Link="Linked\SpringFilesUnitsyncAttempt.cs" />
     <Compile Include="..\ZkData\SteamWebApi.cs" Link="Linked\SteamWebApi.cs" />
     <Compile Include="..\ZkData\Secrets.cs" Link="Linked\Secrets.cs" />

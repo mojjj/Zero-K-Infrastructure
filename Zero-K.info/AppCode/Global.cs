@@ -201,7 +201,6 @@ namespace ZeroKWeb
 
                 Trace.TraceInformation("Starting lobby server");
                 ZkServerRunner.Run();
-                listener.ZkLobbyServer = Server;
             }
 
             ForumPostIndexer = new ForumPostIndexer();

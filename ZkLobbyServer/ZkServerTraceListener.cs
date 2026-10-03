@@ -10,11 +10,19 @@ using ZkData;
 
 namespace ZkLobbyServer
 {
+    /// <summary>
+    /// Turns Trace output into rows in LogEntries, which is the table Admin/TraceLogs reads. It
+    /// is the site's own error log, and the only thing that writes it.
+    ///
+    /// It used to carry a <c>ZkLobbyServer</c> property. That property was assigned twice - here
+    /// and in Global.StartApplication - and READ nowhere, and it was the single reason this class
+    /// could not leave the lobby server's assembly. With it gone the file depends on ZkData only,
+    /// so ZkData.Core links it and the .NET 9 website can install the same listener instead of a
+    /// second implementation of it. The name stays, because Global.asax still constructs it.
+    /// </summary>
     public class ZkServerTraceListener: TraceListener
     {
-        public ZkLobbyServer ZkLobbyServer { get; set; }
-
-        public ZkServerTraceListener(ZkLobbyServer zkLobbyServer = null)
+        public ZkServerTraceListener()
         {
             using (var db = new ZkDataContext())
             {
@@ -25,7 +33,6 @@ namespace ZkLobbyServer
                 // {0} placeholders, so the SQL reaching the server is unchanged.
                 db.Database.ExecuteSqlCommandCompat("delete from LogEntries where Time < {0}", oldEntry);
             }
-            this.ZkLobbyServer = zkLobbyServer;
         }
 
         public override void TraceEvent(TraceEventCache eventCache, string source, TraceEventType eventType, int id, string message)
