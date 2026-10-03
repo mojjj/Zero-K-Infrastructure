@@ -3601,13 +3601,31 @@ namespace ZeroKWeb.Host
                                       + "with LinkCount > 0 and this fixture has " + downloadable + " of them");
                 }
 
-                // Recorded, not asserted. Fixing it is a production behaviour change and belongs in
-                // its own review, not in a line inside a port branch.
+                // The SAME null, in the handler next door, and this one is fixed - because the
+                // client has a branch for an empty answer. TorrentDownloader.cs:66 reads
+                //
+                //     if (e == null || e.links == null || e.torrent == null || e.links.Count == 0)
+                //
+                // and treats that as "not registered or has no links". A 500 instead throws inside
+                // Query and lands in the generic catch above it. Both end at down.Finish(false),
+                // so this changes which reason a client is given and nothing else.
+                var unknown = await Post("DownloadFileRequest {\"InternalName\":\"no_such_map_at_all\"}");
+                var unknownBody = await unknown.Content.ReadAsStringAsync();
+                failures += Check(unknown.IsSuccessStatusCode && unknownBody.Contains("DownloadFileResponse"),
+                    "  an unknown name is an empty DownloadFileResponse, not a 500 ("
+                    + (int)unknown.StatusCode + ", " + unknownBody.Length + " bytes)");
+
+                // Recorded, not asserted, and deliberately NOT fixed the same way - see the note.
                 var miss = await Post("GetResourceDataRequest {\"InternalName\":\"no_such_map_at_all\"}");
-                Console.WriteLine("   note  a resource that does not exist answers " + (int)miss.StatusCode
-                                  + " with " + (await miss.Content.ReadAsStringAsync()).Length
-                                  + " bytes - the handler returns null and the serializer dereferences it, "
-                                  + "on both stacks");
+                Console.WriteLine("   note  GetResourceDataRequest for a name that does not exist still answers "
+                                  + (int)miss.StatusCode + " with "
+                                  + (await miss.Content.ReadAsStringAsync()).Length
+                                  + " bytes, on both stacks - and an empty response would be WORSE than the 500 "
+                                  + "here: PlasmaResourceChecker.cs:307 treats a NULL result as 'ask later' and "
+                                  + "anything non-null as a resource it now knows, so it would copy "
+                                  + "result.InternalName and result.ResourceType straight off an empty object. "
+                                  + "Fixing it needs a wire representation of null that Query turns back into "
+                                  + "null, which is a protocol decision rather than a one-line one");
             }
 
             return failures;
