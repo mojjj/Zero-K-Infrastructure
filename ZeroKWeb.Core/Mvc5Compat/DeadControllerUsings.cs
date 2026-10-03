@@ -21,5 +21,8 @@ namespace ZeroKWeb.SpringieInterface { internal static class DeadUsingMarker { }
 namespace System.Web.Services.Description { internal static class DeadUsingMarker { } }
 
 
-// ContentServiceController's `using System.Web.Http;` - Web API, which it never names.
+// ContentServiceController's `using System.Web.Http;` - Web API, which it never names. The
+// namespace is no longer only a marker: ApiControllerCompat.cs puts a real ApiController in it,
+// so that WhrController - the site's one Web API controller, and an endpoint outside this
+// repository calls it - links into the port as well.
 namespace System.Web.Http { internal static class DeadUsingMarker { } }

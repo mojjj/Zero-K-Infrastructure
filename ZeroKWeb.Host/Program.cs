@@ -286,6 +286,37 @@ namespace ZeroKWeb.Host
 
             app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
 
+            // The OTHER route table, and NOTHING is registered for it here on purpose.
+            //
+            // Application_Start calls GlobalConfiguration.Configure(WebApiConfig.Register), which
+            // on .NET Framework builds a second, independent pipeline: Web API's own routes, its
+            // own controller base, its own table. Auditing RegisterRoutes found seven missing MVC
+            // routes and said nothing about this one, because it is a different table in a
+            // different file - and the port served no /api surface at all. The site serves
+            //
+            //     POST /api/whr/battles
+            //
+            // through WhrController, and nothing in this repository calls it, so the consumer is
+            // outside the repo and would have found out at cutover.
+            //
+            // What fixes it is LINKING that controller (port-sources.props) with an ApiController
+            // base to compile against - see ZeroKWeb.Core/Mvc5Compat/ApiControllerCompat.cs. No
+            // routing call is needed: MapControllerRoute above already builds the controller
+            // endpoint data source, and that includes attribute-routed actions, so
+            // [Route("api/whr/battles")] is live the moment the class exists.
+            //
+            // An app.MapControllers() was written here first, on the assumption that attribute
+            // routing needed turning on. Removing it changed nothing - the endpoint still
+            // answered 200 - while unlinking the controller took it to 404. So the line was
+            // deleted rather than kept for looks.
+            //
+            // WebApiConfig's other line, the api/{controller}/{id} convention route, is
+            // deliberately NOT reproduced. On .NET Framework it can only ever match an
+            // ApiController, because the Web API table is a separate table. ASP.NET Core has one
+            // controller model, so the same template here would put EVERY controller on the site
+            // under /api/ - /api/Home/Index would reach HomeController, which the live site does
+            // not do. Reproducing the line would reproduce the text and not the behaviour.
+
             // content/ is the fifth, and it is the one a GAME CLIENT follows rather than a
             // browser. ResourceLinkProvider hands out {BaseSiteUrl}/content/{maps|games}/{file}
             // as a download link whenever that file is on the site's disk - so the site
@@ -827,6 +858,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckPollAutoClose();
                 failures += await CheckRateLimit();
                 failures += await CheckWebLobbyFlag();
+                failures += await CheckWebApi();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2403,6 +2435,75 @@ namespace ZeroKWeb.Host
 
             return failures;
         }
+
+        /// <summary>
+        /// The site's Web API, which the port did not have at all.
+        ///
+        /// Application_Start configures a SECOND pipeline - GlobalConfiguration.Configure(
+        /// WebApiConfig.Register) - with its own routes and its own controllers. Auditing
+        /// RegisterRoutes found seven missing MVC routes and said nothing about this one, because
+        /// it is a different table in a different file.
+        ///
+        /// POST /api/whr/battles is the whole of that surface: WhrController returns each battle's
+        /// players with their WHR internal ratings. **Nothing in this repository calls it**, which
+        /// is why no check here would ever have missed it - the consumer is outside the repo, and
+        /// would have found out at cutover.
+        ///
+        /// The ratings come back null here and that is correct rather than a gap: they are read
+        /// from the running rating system through Global.LobbyApi, which this host has none of.
+        /// What is asserted is the shape and the data that comes from the DATABASE - the battle
+        /// id, and a player roster that matches the fixture's own rows - because an endpoint that
+        /// answered `[]` with a 200 would pass anything weaker, which is the mistake the
+        /// autocomplete endpoints made before they were checked properly.
+        /// </summary>
+        private static async Task<int> CheckWebApi()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the Web API route table, which is a second route table:");
+
+            int battleID, players;
+            using (var db = new ZkDataContext())
+            {
+                // A battle the fixture really has, with players on it - picked rather than
+                // assumed, so this says nothing about a battle that does not exist.
+                var battle = db.SpringBattles
+                               .Where(x => x.SpringBattlePlayers.Any(p => !p.IsSpectator))
+                               .OrderBy(x => x.SpringBattleID).FirstOrDefault();
+                if (battle == null)
+                {
+                    Console.WriteLine("   ....  the fixture has no battle with players, so this cannot run");
+                    return 0;
+                }
+                battleID = battle.SpringBattleID;
+                players = battle.SpringBattlePlayers.Count(p => !p.IsSpectator);
+            }
+
+            var failures = 0;
+            using (var client = new HttpClient())
+            {
+                var body = new StringContent("{\"battleIds\":[" + battleID + "]}",
+                                             System.Text.Encoding.UTF8, "application/json");
+                var response = await client.PostAsync(Url + "/api/whr/battles", body);
+                var json = await response.Content.ReadAsStringAsync();
+
+                failures += Check(response.IsSuccessStatusCode,
+                    "  POST /api/whr/battles is served at all (" + (int)response.StatusCode + ")");
+                failures += Check(response.Content.Headers.ContentType?.MediaType == "application/json",
+                    "  as JSON (" + (response.Content.Headers.ContentType?.MediaType ?? "none") + ")");
+
+                // The battle asked for, and the right number of players on it. A 200 carrying
+                // "[]" passes neither.
+                failures += Check(json.Contains("\"id\":" + battleID),
+                    "  and it is the battle that was asked for (" + Trim(json) + ")");
+                failures += Check(System.Text.RegularExpressions.Regex.Matches(json, "accountId").Count == players,
+                    "  with the fixture's own players on it (" + players + " expected)");
+            }
+
+            return failures;
+        }
+
+        private static string Trim(string text) =>
+            text.Length <= 90 ? text : text.Substring(0, 90) + "...";
 
         /// <summary>
         /// The menu the web lobby asks not to be given.
