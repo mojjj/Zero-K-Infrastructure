@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Hosting;
+﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ZeroKWeb.Compat;
@@ -17,6 +17,19 @@ namespace ZeroKWeb
                 ?.GetService(typeof(IWebHostEnvironment)) as IWebHostEnvironment;
             return new Mvc5Server(environment).MapPath(virtualPath);
         }
+    }
+
+    public static class NotFoundCompat
+    {
+        /// <summary>
+        /// MVC 5's <c>Controller.HttpNotFound()</c>. ASP.NET Core spells the same thing
+        /// <c>NotFound()</c>, so a linked controller that says HttpNotFound finds this.
+        ///
+        /// An extension rather than a member, and that is what makes it safe: ASP.NET Core's
+        /// Controller has no instance method of this name, so the extension applies here and is
+        /// not compiled at all for MVC 5, where the real instance method wins.
+        /// </summary>
+        public static ActionResult HttpNotFound(this Controller controller) => controller.NotFound();
     }
 
     public static class HttpResponseCompat
