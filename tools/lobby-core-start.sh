@@ -33,6 +33,9 @@ PROBE_USER="${ZK_PROBE_USER:-LobbyProbe}"
 PROBE_PASS="${ZK_PROBE_PASS:-probe-pass-not-a-real-one}"
 CONTAINER=zk-lobby-core
 BOOT_TIMEOUT="${ZK_LOBBY_BOOT_TIMEOUT:-360}"
+# How long a port is given to appear AFTER the server says it is up. Seconds, not minutes: this
+# is the gap between two listeners in the same process, not a boot.
+PORT_TIMEOUT="${ZK_LOBBY_PORT_TIMEOUT:-30}"
 
 cleanup() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; ./tools/lobby-config.sh clear >/dev/null 2>&1 || true; rm -f "$LOG"; }
 trap cleanup EXIT
@@ -71,10 +74,28 @@ check "$listening" "starts, and says it is listening on the player port"
 # Opening a TCP connection rather than reading a socket table: it is the claim that matters
 # ("a client can reach it"), and it does not need iproute2 to be installed on the runner.
 connects() { timeout 5 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1" 2>/dev/null; }
-connects "$PLAYER_PORT" \
+
+# Given a bounded chance rather than asked once, and the API port is why. The loop above waits
+# for "Listening at port $PLAYER_PORT", which is the PLAYER listener saying it is up - the API
+# port is bound by a different server in the same process and that log line promises nothing
+# about it. Both were then tested in the same instant, which made this a race the runner could
+# lose, and on 2026-10-03 it did: the player port connected, the API port was refused, and the
+# twelve checks after it all passed against the server that had just been reported unreachable.
+#
+# Still a real connection, still a real failure if nothing ever binds - it just stops being a
+# question about which listener got there first.
+reachable() {
+    for _ in $(seq 1 "$PORT_TIMEOUT"); do
+        connects "$1" && return 0
+        sleep 1
+    done
+    return 1
+}
+
+reachable "$PLAYER_PORT" \
     && check 0 "a client can connect to the player port ($PLAYER_PORT)" \
     || check 1 "a client can connect to the player port ($PLAYER_PORT)"
-connects "$API_PORT" \
+reachable "$API_PORT" \
     && check 0 "a client can connect to the API port ($API_PORT)" \
     || check 1 "a client can connect to the API port ($API_PORT)"
 # The handshake. Opening a port is not serving anybody: this drives LobbyClient's TasClient - the
