@@ -3891,6 +3891,85 @@ namespace ZeroKWeb.Host
         }
 
         /// <summary>
+        /// A second faction, a treaty between the two, and one effect under it.
+        ///
+        /// PROPOSED rather than Accepted, because Factions/Detail.cshtml:77 calls DisplayFor only
+        /// for that state - the other states are summarised in a line of their own and never reach
+        /// the template.
+        ///
+        /// The treaty is viewed ANONYMOUSLY, which is safe and deliberate: the template ends with
+        /// tr.CanCancel(Global.Account), and CanCancel returns false for a null account rather
+        /// than dereferencing it. Nothing here needs the diplomacy right that PROPOSING one does.
+        /// </summary>
+        private static async Task<int> WithProposedTreaty(int factionID, int accountID,
+                                                          Func<int, string, Task<int>> body)
+        {
+            const string effectName = "Harness Treaty Effect";
+            int otherFactionID, effectTypeID, treatyID;
+
+            using (var db = new ZkDataContext())
+            {
+                var other = NewHarnessFaction();
+                other.Name = "Harness Other Faction";
+                other.Shortcut = "HARN2";
+                db.Factions.Add(other);
+
+                var effectType = new TreatyEffectType
+                {
+                    Name = effectName,
+                    Description = "Seeded by the host harness",
+                };
+                db.TreatyEffectTypes.Add(effectType);
+                db.SaveChanges();
+                otherFactionID = other.FactionID;
+                effectTypeID = effectType.EffectTypeID;
+
+                var treaty = new FactionTreaty
+                {
+                    ProposingFactionID = factionID,
+                    AcceptingFactionID = otherFactionID,
+                    ProposingAccountID = accountID,
+                    TreatyState = TreatyState.Proposed,
+                };
+                db.FactionTreaties.Add(treaty);
+                db.SaveChanges();
+                treatyID = treaty.FactionTreatyID;
+
+                db.TreatyEffects.Add(new TreatyEffect
+                {
+                    FactionTreatyID = treatyID,
+                    EffectTypeID = effectTypeID,
+                    GivingFactionID = factionID,
+                    ReceivingFactionID = otherFactionID,
+                });
+                db.SaveChanges();
+            }
+
+            try
+            {
+                return await body(otherFactionID, effectName);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var effects = db.TreatyEffects.Where(x => x.FactionTreatyID == treatyID).ToList();
+                    if (effects.Count > 0) db.TreatyEffects.RemoveRange(effects);
+                    db.SaveChanges();
+
+                    var treaty = db.FactionTreaties.FirstOrDefault(x => x.FactionTreatyID == treatyID);
+                    if (treaty != null) db.FactionTreaties.Remove(treaty);
+                    var effectType = db.TreatyEffectTypes.FirstOrDefault(x => x.EffectTypeID == effectTypeID);
+                    if (effectType != null) db.TreatyEffectTypes.Remove(effectType);
+                    db.SaveChanges();
+
+                    var other = db.Factions.FirstOrDefault(x => x.FactionID == otherFactionID);
+                    if (other != null) { db.Factions.Remove(other); db.SaveChanges(); }
+                }
+            }
+        }
+
+        /// <summary>
         /// One clan role and one EXPIRED punishment on an account, which are what
         /// DisplayTemplates/AccountRole and DisplayTemplates/Punishment need in order to render
         /// at all. The fixture has neither.
@@ -4149,6 +4228,21 @@ namespace ZeroKWeb.Host
                 // account's roles and calls DisplayFor on each, and AdminUserDetail does the same
                 // for its expired punishments - so both templates needed a row to exist, not a
                 // request to be made.
+                // The treaty pair, which needs a SECOND faction and so could not come from the
+                // one this scope seeds. /Factions/Detail renders DisplayTemplates/FactionTreaty
+                // for a treaty in the Proposed state, and that template renders
+                // DisplayTemplates/TreatyEffect for each of its effects - so the two stand or
+                // fall together, like Diff and DiffPiece.
+                seeded += await WithProposedTreaty(factionID, accountID, async (otherFactionID, effectName) =>
+                {
+                    var page = await (await client.GetAsync(Url + "/Factions/Detail/" + factionID))
+                                     .Content.ReadAsStringAsync();
+                    var treaty = Check(page.Contains("DRAFT PROPOSAL"),
+                        "  a proposed treaty renders DisplayTemplates/FactionTreaty");
+                    return treaty + Check(page.Contains(effectName),
+                        "  and its effect renders DisplayTemplates/TreatyEffect");
+                });
+
                 seeded += await WithRoleAndPunishment(accountID, clanID, async roleName =>
                 {
                     var withRole = await (await client.GetAsync(Url + "/Users/Detail/" + accountID))
