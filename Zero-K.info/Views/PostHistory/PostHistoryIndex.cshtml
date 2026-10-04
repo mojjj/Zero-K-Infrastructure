@@ -16,11 +16,11 @@
     // a generated method can be called before its declaration and a local cannot.
     Func<ForumPostEdit, object> Before =
         @<text><a href='#' onclick="DynDialog('@Url.Action("ViewEntry", "PostHistory", new { id = item.ForumPostEditID })', 'Before @item.EditTime - @item.Account.Name')">before</a>
-        @Html.ActionLink("revert", "RevertTo", "PostHistory", new { id = item.ForumPostEditID }, new { @class = "textbutton js_confirm" })</text>;
+        @Html.PostLink("revert", "RevertTo", "PostHistory", new { id = item.ForumPostEditID }, "textbutton js_confirm")</text>;
 
     Func<ForumPostEdit, object> After =
         @<text><a href='#' onclick="DynDialog('@Url.Action("ViewEntry", "PostHistory", new { id = item.ForumPostEditID, isAfter = true })', 'After @item.EditTime - @item.Account.Name')">after</a>
-        @Html.ActionLink("revert", "RevertTo", "PostHistory", new { id = item.ForumPostEditID, isAfter = true }, new { @class = "textbutton js_confirm" })</text>;
+        @Html.PostLink("revert", "RevertTo", "PostHistory", new { id = item.ForumPostEditID, isAfter = true }, "textbutton js_confirm")</text>;
 
     grid.AddCol("", x => "").SetRowSelection(x => x.ForumPostEditID).SetWidth("20px");
     grid.AddCol("Date", x => x.EditTime).SetSort(x => x.EditTime);
