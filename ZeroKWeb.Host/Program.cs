@@ -3891,6 +3891,56 @@ namespace ZeroKWeb.Host
         }
 
         /// <summary>
+        /// A faction role carrying RightDiplomacy, which is what Account.HasFactionRight looks
+        /// for: any AccountRole whose RoleType is NOT clan-only and passes the test.
+        ///
+        /// Not clan-only, and that is the whole point - the role WithRoleAndPunishment seeds is
+        /// clan-only, which HasFactionRight filters out by design, so the two cannot be the same
+        /// row however similar they look.
+        /// </summary>
+        private static async Task<int> WithDiplomacyRole(int accountID, Func<Task<int>> body)
+        {
+            int roleTypeID;
+            using (var db = new ZkDataContext())
+            {
+                var role = new RoleType
+                {
+                    Name = "Harness Diplomat",
+                    Description = "Seeded by the host harness",
+                    IsClanOnly = false,
+                    RightDiplomacy = true,
+                    PollDurationDays = 1,
+                };
+                db.RoleTypes.Add(role);
+                db.SaveChanges();
+                roleTypeID = role.RoleTypeID;
+
+                db.AccountRoles.Add(new AccountRole
+                {
+                    AccountID = accountID,
+                    RoleTypeID = roleTypeID,
+                    Inauguration = DateTime.UtcNow,
+                });
+                db.SaveChanges();
+            }
+
+            try
+            {
+                return await body();
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var roles = db.AccountRoles.Where(x => x.RoleTypeID == roleTypeID).ToList();
+                    if (roles.Count > 0) { db.AccountRoles.RemoveRange(roles); db.SaveChanges(); }
+                    var role = db.RoleTypes.FirstOrDefault(x => x.RoleTypeID == roleTypeID);
+                    if (role != null) { db.RoleTypes.Remove(role); db.SaveChanges(); }
+                }
+            }
+        }
+
+        /// <summary>
         /// A second faction, a treaty between the two, and one effect under it.
         ///
         /// PROPOSED rather than Accepted, because Factions/Detail.cshtml:77 calls DisplayFor only
@@ -4239,8 +4289,43 @@ namespace ZeroKWeb.Host
                                      .Content.ReadAsStringAsync();
                     var treaty = Check(page.Contains("DRAFT PROPOSAL"),
                         "  a proposed treaty renders DisplayTemplates/FactionTreaty");
-                    return treaty + Check(page.Contains(effectName),
+                    treaty += Check(page.Contains(effectName),
                         "  and its effect renders DisplayTemplates/TreatyEffect");
+
+                    // The third view of the set, and the only one of the three with a RIGHT in
+                    // front of it. FactionsController.NewTreaty refuses anyone whose account does
+                    // not pass HasFactionRight(x => x.RightDiplomacy), which is
+                    // "any AccountRole whose RoleType is not clan-only and satisfies the test"
+                    // (Account.cs:502) - so viewing a treaty needs nothing and PROPOSING one needs
+                    // a seeded faction role. That is why this view outlived the other two.
+                    // Inside WithGalaxy as well, and that is the OTHER reason this view never
+                    // rendered. FactionTreatyDefinition.cshtml:50 builds its planet dropdown from
+                    //
+                    //     new ZkDataContext().Galaxies.First(x => x.IsDefault).Planets
+                    //
+                    // and First throws "Sequence contains no elements" with no default galaxy -
+                    // on both stacks. So the page needs a PlanetWars round to exist before it can
+                    // be drawn at all, which is not obvious from the action and cost a 500 to
+                    // find. WithGalaxy borrows a seeded round when one is there and seeds its own
+                    // otherwise, so nesting it here is safe.
+                    return treaty + await WithGalaxy(async (galaxyID, planetID, otherPlanetID) =>
+                        await WithDiplomacyRole(accountID, async () =>
+                        await AsAccount(AdminLevel.None, async diplomat =>
+                        {
+                            var form = await diplomat.GetAsync(
+                                Url + "/Factions/NewTreaty?acceptingFactionID=" + otherFactionID);
+                            var formHtml = await form.Content.ReadAsStringAsync();
+
+                            // Asserted on the form's own fields rather than on a status, because
+                            // NewTreaty answers 200 with Content("Not a diplomat!") when the right
+                            // is missing - which is the exact failure this seeding exists to avoid
+                            // and would otherwise pass a status check.
+                            return Check(form.IsSuccessStatusCode
+                                         && formHtml.Contains("Proposing diplomat")
+                                         && formHtml.Contains("acceptingFactionID"),
+                                "  and with the diplomacy right, Factions/FactionTreatyDefinition renders ("
+                                + (int)form.StatusCode + ", " + formHtml.Length + " bytes)");
+                        })));
                 });
 
                 seeded += await WithRoleAndPunishment(accountID, clanID, async roleName =>
