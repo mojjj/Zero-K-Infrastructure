@@ -22,7 +22,7 @@
             @Html.PostLink("Join!", "JoinFaction", "Factions", new { id = f.FactionID })
         }
         else if (Global.Account.FactionID == f.FactionID && Global.Clan == null) {
-            @Html.ActionLink("Leave", "LeaveFaction", "Factions", null, new { @class = "delete" })
+            @Html.PostLink("Leave", "LeaveFaction", "Factions", null, "delete")
         }
     }
     <table>

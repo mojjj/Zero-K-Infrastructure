@@ -78,7 +78,8 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
-        [WritesOnGetNotYetFixed("a GET that leaves your faction - PerformLeaveFaction drops your roles, releases your planets and resets your quotas. Needs to be a POST with a token, and the links to it changed to Html.PostLink: a live behaviour change and its own review.")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult LeaveFaction() {
             PerformLeaveFaction(Global.AccountID);
             return RedirectToAction("Index", "Factions");

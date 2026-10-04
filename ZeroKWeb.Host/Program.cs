@@ -881,6 +881,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckTooltipsAndUnvisitedPages();
                 failures += await CheckAjaxLayoutAndLobbyViews();
                 failures += await CheckGetSurface();
+                failures += await CheckClosedGetWrites();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2454,6 +2455,42 @@ namespace ZeroKWeb.Host
                 return Check(body == "No contribution with that code found",
                     "  Contributions/Redeem/{code} binds the code (\"" + body + "\")");
             });
+
+            return failures;
+        }
+
+        /// <summary>
+        /// The two GET-writes that were closed, asserted shut from the outside.
+        ///
+        /// tools/check-get-writes.py reads the source and is satisfied by an attribute; this asks
+        /// the running site, which is the only thing that can say the routing agrees. Both were
+        /// plain [Auth] GETs until the check learned to follow a call one level deeper and found
+        /// the write it had been looking straight past:
+        ///
+        ///   /Factions/LeaveFaction    PerformLeaveFaction drops your roles, releases your
+        ///                             planets and resets your quotas
+        ///   /PostHistory/RevertTo     reverts a forum post through ForumController.SubmitPost
+        ///
+        /// Anonymous on purpose. A 405 says the ROUTE refuses the verb, which is the property
+        /// being asserted; signing in first would let a 302 from [Auth] pass for the same thing
+        /// and prove nothing about the method.
+        /// </summary>
+        private static async Task<int> CheckClosedGetWrites()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the two GET-writes that were closed:");
+
+            var failures = 0;
+            using (var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }))
+            {
+                foreach (var path in new[] { "/Factions/LeaveFaction", "/PostHistory/RevertTo?id=1" })
+                {
+                    var byLink = await client.GetAsync(Url + path);
+                    failures += Check(byLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                        "  " + path.Split('?')[0] + " is not reachable by GET ("
+                        + (int)byLink.StatusCode + ")");
+                }
+            }
 
             return failures;
         }

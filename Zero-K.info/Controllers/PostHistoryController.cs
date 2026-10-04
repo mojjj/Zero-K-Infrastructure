@@ -62,7 +62,8 @@ namespace ZeroKWeb.Views.Forum
 
 
 
-        [WritesOnGetNotYetFixed("a GET that reverts a forum post to an earlier revision through ForumController.SubmitPost. CanEdit means it is not anyone's to call - but a link is enough to make an editor call it. Same fix and same review as Factions/LeaveFaction.")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult RevertTo(int id, bool? isAfter = false) {
             var db = new ZkDataContext();
             var edit = db.ForumPostEdits.Find(id);
