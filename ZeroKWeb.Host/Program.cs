@@ -2489,7 +2489,10 @@ namespace ZeroKWeb.Host
                 // action is selected, before any filter runs, so the method is refused without
                 // the request having to say who it is.
                 foreach (var path in new[]
-                         { "/Factions/LeaveFaction", "/PostHistory/RevertTo?id=1", "/Admin/ForceRatingsUpdate" })
+                         {
+                             "/Factions/LeaveFaction", "/PostHistory/RevertTo?id=1",
+                             "/Admin/ForceRatingsUpdate", "/Engines/MakeDefault?engine=x",
+                         })
                 {
                     var byLink = await client.GetAsync(Url + path);
                     failures += Check(byLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,

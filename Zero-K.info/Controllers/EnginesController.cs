@@ -147,6 +147,16 @@ namespace ZeroKWeb.Controllers
             return "succcess";
         }
 
+        // Changes the default engine for everyone, starts a Steam depot rebuild and tells the
+        // lobby server - from a link, with no token. The class is [Auth(Moderator)], so the
+        // forgery needs a moderator to load a page somebody else wrote; that is the whole cost
+        // of it, and the same cost ForceRatingsUpdate had.
+        //
+        // The database write is MiscVar.DefaultEngine, a property whose SETTER writes. That is
+        // why tools/check-get-writes.py did not see this one: it matches calls, and an
+        // assignment is not a call. It does now.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult MakeDefault(string engine)
         {
             Trace.TraceInformation("Trying to change engine to {0}", engine);

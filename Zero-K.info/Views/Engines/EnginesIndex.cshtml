@@ -10,11 +10,11 @@
     Func<EnginesController.EngineItem, object> DefEngine =
         @<text>@if (item.IsDefault)
         {
-            <b style="color: red">*DEFAULT*</b>  @Html.ActionLink("rebuild steam", "MakeDefault", new { engine = item.Name });
+            <b style="color: red">*DEFAULT*</b>  @Html.PostLink("rebuild steam", "MakeDefault", "Engines", new { engine = item.Name })
         }
         else
         {
-            @Html.ActionLink("make default", "MakeDefault", new { engine = item.Name });
+            @Html.PostLink("make default", "MakeDefault", "Engines", new { engine = item.Name })
         }</text>;
 }
 @{

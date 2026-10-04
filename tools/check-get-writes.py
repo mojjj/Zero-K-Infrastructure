@@ -28,7 +28,15 @@ redeem code before PayPal said it had sent nothing.
 
 So writer definitions are now read from Zero-K.info/, ZkData/ and ZeroKWeb.Core/ - the site, its
 data layer and the port's compat layer - while ACTIONS still come only from the controller
-directories. The cost of that is one false follow today, and it is worth stating what pays for
+directories.
+
+**A write does not have to look like a call.** `MiscVar.DefaultEngine = engine` is one line of
+assignment, and behind the property is a setter that calls SetValue, which calls StoreDbValue,
+which opens a context and saves. Matching calls could never see it, so /Engines/MakeDefault - a
+link that changes the default engine for every player and starts a Steam depot rebuild - read as
+an action that writes nothing. Properties whose SETTER writes are therefore collected the same
+way methods are, and an assignment to one counts as a write. All eight of them live in MiscVar,
+and three of the four actions assigning one had already been closed by hand. The cost of that is one false follow today, and it is worth stating what pays for
 it: calls are matched by NAME, so a controller calling Foo() is taken to reach any Foo() in those
 531 files that writes. Only names actually defined there are followed, which keeps an unrelated
 framework method out, but two methods that share a name are one method to this script.
@@ -69,6 +77,26 @@ ANY_METHOD = re.compile(
 # caller only follows names it has actually seen defined in these files, so the crudeness costs
 # false FOLLOWS rather than false positives.
 CALL = re.compile(r"\b(\w+)\s*\(")
+
+# `Foo = ` but not `Foo == `, `Foo >= `, `Foo != `. Matched against the names of properties whose
+# setter writes, never on its own - `acc.HasKudos = true` is an assignment too, and it is not a
+# write until something saves.
+ASSIGN = re.compile(r"\b(\w+)\s*=(?![=>])")
+
+# A property declaration: the `{` is required, so a field (`... x = 1;`) and a method (`... x(`)
+# are not mistaken for one, and `class`/`struct`/`interface`/`enum` are excluded by name because
+# `public class MiscVar {` has exactly the same shape.
+#
+# The brace is matched across a newline, and that is not cosmetic. Requiring it on the same line
+# found MiscVar.DefaultEngine, which is written on one, and silently missed ZklsMaxUsers,
+# PlanetWarsMode, PlanetWarsNextMode and PlanetWarsNextModeTime, which put it on the next. The
+# control said so: taking [HttpPost] off SetZklsMaxPlayers left this check green.
+PROPERTY = re.compile(
+    r"^[ \t]*(?:public|internal|protected)[ \t]+"
+    r"(?:(?:static|readonly|virtual|override|sealed|new|abstract)[ \t]+)*"
+    r"(?!class\b|struct\b|interface\b|enum\b|record\b)[\w<>,\[\]\.\?]+[ \t]+(\w+)\s*\{",
+    re.MULTILINE)
+SETTER = re.compile(r"\bset\s*(?:\{|=>)")
 
 HTTP_POST = re.compile(r"\[\s*HttpPost\s*[\]\(]")
 BY_DESIGN = re.compile(r'\[WritesOnGetByDesign\("([^"]*)"\)\]')
@@ -165,9 +193,34 @@ def writing_methods(paths):
     return writes
 
 
+def writing_properties(paths, writers):
+    """Properties whose SETTER writes, directly or by calling something that does.
+
+    Only the setter half is read: a getter that writes would be a different and stranger bug, and
+    reading the whole property would make every MiscVar getter - they share a cache with the
+    setters - look like one.
+    """
+    found = {}
+    for path in paths:
+        with open(path, encoding="utf-8-sig") as handle:
+            text = handle.read()
+        for match in PROPERTY.finditer(text):
+            body = body_of(text, match.end() - 1)
+            if body is None:
+                continue
+            setter = SETTER.search(body)
+            if not setter:
+                continue
+            tail = body[setter.start():]
+            if WRITE.search(tail) or (set(CALL.findall(tail)) & writers):
+                found[match.group(1)] = path
+    return found
+
+
 def scan(paths, helper_paths):
     writing, by_design, not_yet = [], [], []
     writers = writing_methods(paths + helper_paths)
+    setters = set(writing_properties(paths + helper_paths, writers))
     for path in paths:
         with open(path, encoding="utf-8-sig") as handle:
             text = handle.read()
@@ -175,8 +228,11 @@ def scan(paths, helper_paths):
             body = body_of(text, match.end())
             if body is None:
                 continue
-            # Its own body, or a call to something that ends in a write.
-            if not WRITE.search(body) and not ({c for c in CALL.findall(body)} & writers):
+            # Its own body, a call to something that ends in a write, or an assignment to a
+            # property whose setter does.
+            if (not WRITE.search(body)
+                    and not ({c for c in CALL.findall(body)} & writers)
+                    and not ({a for a in ASSIGN.findall(body)} & setters)):
                 continue
             attributes = attributes_above(text, match.start())
             # The attribute itself, not the word anywhere inside one. A reason that mentions
