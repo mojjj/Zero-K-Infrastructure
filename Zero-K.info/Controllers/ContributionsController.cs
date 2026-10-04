@@ -16,6 +16,12 @@ namespace ZeroKWeb.Controllers
         }
 
 
+        // PayPal sends IPN as a POST, and the body is the whole message. Without this a GET
+        // reached the handler too - with no body, so ParseIpn read nulls - and the endpoint is
+        // anonymous by necessity, so there was nothing else saying what method it took. No
+        // anti-forgery token: PayPal cannot carry one, which is why verification with PayPal is
+        // what this endpoint trusts, and why that now happens before anything is written.
+        [HttpPost]
         public ActionResult Ipn() {
             // One call, because the parsed fields and the raw bytes must describe the same request:
             // PayPal verification posts the bytes back. See ControllerCompat.ReadIpnRequest.

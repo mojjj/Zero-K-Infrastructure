@@ -882,6 +882,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckAjaxLayoutAndLobbyViews();
                 failures += await CheckGetSurface();
                 failures += await CheckClosedGetWrites();
+                failures += await CheckIpnVerification();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2493,6 +2494,174 @@ namespace ZeroKWeb.Host
             }
 
             return failures;
+        }
+
+        /// <summary>
+        /// A PayPal notification is acted on only once PayPal has confirmed it sent one.
+        ///
+        /// /Contributions/Ipn is anonymous and has to be - PayPal is the caller and carries no
+        /// cookie or token - so the one thing standing between a stranger and the contributions
+        /// table is the postback that asks PayPal whether the notification is real. That postback
+        /// used to happen AFTER the write. Every field is sender-chosen, so a single unauthenticated
+        /// request put a Contribution of any size under any name on the public /Contributions page,
+        /// set HasKudos on whatever account the item code named, mailed a working redeem code from
+        /// the team address to an address of the sender's choosing, and announced "WOOHOO! New
+        /// contribution" in the public zk lobby channel. PayPal then said no, and the remedy was a
+        /// comment on the row.
+        ///
+        /// Asked through HTTP rather than by calling ImportIpnPayment, because the method is only
+        /// half of it: the handler took a GET until now, and ReadIpnRequest has to hand PayPal the
+        /// same bytes it parsed the fields from.
+        ///
+        /// The POSITIVE CONTROL is the part that matters. A notification that writes nothing is
+        /// also what an exception looks like - no contribution jar, a null account, SMTP refusing
+        /// the thank-you mail - so "nothing was written" on its own would pass just as well with
+        /// the fix absent and the seeding broken. The confirmed notification has to put a row in.
+        /// </summary>
+        private static async Task<int> CheckIpnVerification()
+        {
+            Console.WriteLine();
+            Console.WriteLine("a PayPal notification is acted on only once PayPal confirms it:");
+
+            var failures = 0;
+
+            using (var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }))
+            {
+                var byLink = await client.GetAsync(Url + "/Contributions/Ipn");
+                failures += Check(byLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                    "  /Contributions/Ipn is not reachable by GET (" + (int)byLink.StatusCode + ")");
+            }
+
+            return failures + await WithContributionJar(async (jarID, accountID) =>
+            {
+                var inner = 0;
+                var paypal = ZeroKWeb.Global.PayPalInterface;
+                var realVerifier = paypal.Verifier;
+
+                // The alerts the two paths raise, kept rather than printed, so the check can say
+                // that the rejection was reported and not merely silent.
+                var alerts = new List<string>();
+                Action<string> collect = a => { lock (alerts) alerts.Add(a); };
+                paypal.Error += collect;
+
+                try
+                {
+                    foreach (var confirmed in new[] { false, true })
+                    {
+                        paypal.Verifier = _ => confirmed;
+
+                        var txn = "HARNESS-" + Guid.NewGuid().ToString("N");
+                        using (var client = new HttpClient())
+                        {
+                            var body = new FormUrlEncodedContent(new[]
+                            {
+                                new KeyValuePair<string, string>("payment_date", "12:00:00 Jan 01, 2026 PST"),
+                                new KeyValuePair<string, string>("first_name", "Harness"),
+                                new KeyValuePair<string, string>("last_name", "Sender"),
+                                new KeyValuePair<string, string>("payment_status", "Completed"),
+                                // EUR on purpose: any other currency goes through ConvertToEuros,
+                                // which fetches an http:// rate service that has not existed for
+                                // years, and the throw would be indistinguishable from the fix.
+                                new KeyValuePair<string, string>("mc_currency", "EUR"),
+                                new KeyValuePair<string, string>("mc_gross", "1000"),
+                                new KeyValuePair<string, string>("mc_fee", "0"),
+                                new KeyValuePair<string, string>("payer_email", "harness@example.invalid"),
+                                new KeyValuePair<string, string>("txn_id", txn),
+                                new KeyValuePair<string, string>("item_name", "Harness"),
+                                // The account the sender nominates. Nothing proves it is theirs.
+                                new KeyValuePair<string, string>("item_number",
+                                    "ZK_ID_" + accountID + "_JAR_" + jarID),
+                            });
+                            var answer = await client.PostAsync(Url + "/Contributions/Ipn", body);
+                            inner += Check(answer.IsSuccessStatusCode,
+                                "  a POSTed notification reaches the handler ("
+                                + (int)answer.StatusCode + ")");
+                        }
+
+                        using (var db = new ZkDataContext())
+                        {
+                            var row = db.Contributions.FirstOrDefault(x => x.PayPalTransactionID == txn);
+                            var kudos = db.Accounts.First(x => x.AccountID == accountID).HasKudos;
+
+                            if (confirmed)
+                            {
+                                inner += Check(row != null,
+                                    "  a notification PayPal CONFIRMS is recorded");
+                                inner += Check(kudos, "  ... and the named account is given kudos");
+                            }
+                            else
+                            {
+                                inner += Check(row == null,
+                                    "  a notification PayPal DENIES records no contribution");
+                                inner += Check(!kudos,
+                                    "  ... and gives the named account nothing");
+                                inner += Check(alerts.Any(x => x.Contains(txn)),
+                                    "  ... and is reported with its details, not dropped");
+                            }
+
+                            if (row != null) { db.Contributions.Remove(row); db.SaveChanges(); }
+                        }
+                    }
+                }
+                finally
+                {
+                    paypal.Error -= collect;
+                    paypal.Verifier = realVerifier;
+                }
+
+                return inner;
+            });
+        }
+
+        /// <summary>
+        /// A default contribution jar, which the fixture has none of - AddPayPalContribution reads
+        /// `jar.IsDefault` with no null guard, so without one every notification throws on its way
+        /// in and writes nothing, whatever the verification said.
+        /// </summary>
+        private static async Task<int> WithContributionJar(Func<int, int, Task<int>> body)
+        {
+            int jarID, accountID;
+            bool restoreKudos;
+
+            using (var db = new ZkDataContext())
+            {
+                var account = db.Accounts.OrderBy(a => a.AccountID).First();
+                accountID = account.AccountID;
+                restoreKudos = account.HasKudos;
+                account.HasKudos = false;
+
+                var jar = new ContributionJar
+                {
+                    Name = "Harness Jar",
+                    IsDefault = true,
+                    GuarantorAccountID = accountID,
+                    TargetGrossEuros = 1,
+                };
+                db.ContributionJars.Add(jar);
+                db.SaveChanges();
+                jarID = jar.ContributionJarID;
+            }
+
+            try
+            {
+                return await body(jarID, accountID);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    foreach (var left in db.Contributions.Where(x => x.ContributionJarID == jarID).ToList())
+                        db.Contributions.Remove(left);
+                    db.SaveChanges();
+
+                    var jar = db.ContributionJars.FirstOrDefault(x => x.ContributionJarID == jarID);
+                    if (jar != null) db.ContributionJars.Remove(jar);
+
+                    var account = db.Accounts.FirstOrDefault(x => x.AccountID == accountID);
+                    if (account != null) account.HasKudos = restoreKudos;
+                    db.SaveChanges();
+                }
+            }
         }
 
         /// <summary>
