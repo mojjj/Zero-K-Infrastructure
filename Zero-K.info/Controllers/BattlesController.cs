@@ -41,6 +41,7 @@ namespace ZeroKWeb.Controllers
         /// <summary>
         ///     Returns the page of the <see cref="SpringBattle" /> with the specified ID
         /// </summary>
+        [WritesOnGetByDesign("the battle's forum thread is marked read by looking at the page")]
         public ActionResult Detail(int id, bool showWinners = false) {
             var db = new ZkDataContext();
             var bat = db.SpringBattles.FirstOrDefault(x => x.SpringBattleID == id);
@@ -50,6 +51,7 @@ namespace ZeroKWeb.Controllers
         /// <summary>
         ///     Returns the page of the <see cref="SpringBattle" /> with the specified engine-generated GameID (not the numerical ZKLS ID)
         /// </summary>
+        [WritesOnGetByDesign("the battle's forum thread is marked read by looking at the page")]
         public ActionResult EngineDetail(string id, bool showWinners = false) {
             var db = new ZkDataContext();
             var bat = db.SpringBattles.FirstOrDefault(x => x.EngineGameID == id);

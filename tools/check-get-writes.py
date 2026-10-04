@@ -38,6 +38,19 @@ SIGNATURE = re.compile(
     re.MULTILINE)
 WRITE = re.compile(r"\b(?:SaveChanges|SubmitChanges|InsertOnSubmit|InsertAllOnSubmit"
                    r"|DeleteOnSubmit|DeleteAllOnSubmit|Update|Delete)\s*\(")
+# Any method at all, not only actions - the helpers an action can call. Used to answer
+# "does this name, called from an action, end in a write?"
+ANY_METHOD = re.compile(
+    r"^[ \t]*(?:public|private|protected|internal)[ \t]+(?:static[ \t]+)?(?:async[ \t]+)?"
+    r"[\w<>,\[\]\.\?]+[ \t]+(\w+)[ \t]*\(",
+    re.MULTILINE)
+
+# A call to something by name. Deliberately crude: it matches `Foo(` and `Bar.Foo(`, and the
+# caller only follows names it has actually seen defined in these files, so the crudeness costs
+# false FOLLOWS rather than false positives.
+CALL = re.compile(r"\b(\w+)\s*\(")
+
+HTTP_POST = re.compile(r"\[\s*HttpPost\s*[\]\(]")
 BY_DESIGN = re.compile(r'\[WritesOnGetByDesign\("([^"]*)"\)\]')
 NOT_YET = re.compile(r'\[WritesOnGetNotYetFixed\("([^"]*)"\)\]')
 
@@ -84,17 +97,64 @@ def attributes_above(text, start):
     return found
 
 
+def writing_methods(paths):
+    """Every method in these files that writes, directly or through another one of them.
+
+    The original check read only the ACTION's own body, and that is how
+    /Factions/LeaveFaction sat unnoticed: it is three lines, none of them a write, and the
+    SaveChanges is one call away in PerformLeaveFaction. A GET that changes state is the
+    whole subject of this check, so not seeing one call deep was not a detail.
+
+    Transitive, not one level, because PerformLeaveFaction in turn calls
+    ClansController.PerformLeaveClan. Only names DEFINED in these files are followed, so an
+    unrelated framework method that happens to share a name is not chased.
+    """
+    bodies = {}
+    for path in paths:
+        with open(path, encoding="utf-8-sig") as handle:
+            text = handle.read()
+        for match in ANY_METHOD.finditer(text):
+            body = body_of(text, match.end())
+            if body is not None:
+                bodies.setdefault(match.group(1), []).append(body)
+
+    writes = {name for name, found in bodies.items()
+              if any(WRITE.search(body) for body in found)}
+
+    # Closure: a method that calls a writer is a writer. Repeat until nothing new appears -
+    # the graph is small and this is clearer than ordering it by hand.
+    changed = True
+    while changed:
+        changed = False
+        for name, found in bodies.items():
+            if name in writes:
+                continue
+            called = {c for body in found for c in CALL.findall(body)}
+            if called & writes:
+                writes.add(name)
+                changed = True
+    return writes
+
+
 def scan(paths):
     writing, by_design, not_yet = [], [], []
+    writers = writing_methods(paths)
     for path in paths:
         with open(path, encoding="utf-8-sig") as handle:
             text = handle.read()
         for match in SIGNATURE.finditer(text):
             body = body_of(text, match.end())
-            if body is None or not WRITE.search(body):
+            if body is None:
+                continue
+            # Its own body, or a call to something that ends in a write.
+            if not WRITE.search(body) and not ({c for c in CALL.findall(body)} & writers):
                 continue
             attributes = attributes_above(text, match.start())
-            if any("HttpPost" in attribute for attribute in attributes):
+            # The attribute itself, not the word anywhere inside one. A reason that mentions
+            # HttpPost - "needs HttpPost and a token" is the obvious thing to write - used to
+            # read as the action HAVING it, and the action was then skipped entirely. Found by
+            # writing exactly that sentence.
+            if any(HTTP_POST.search(attribute) for attribute in attributes):
                 continue
             line = text.count("\n", 0, match.start()) + 1
             where = (path, line, match.group(1))
