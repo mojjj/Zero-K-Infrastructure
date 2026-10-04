@@ -3092,8 +3092,18 @@ namespace ZeroKWeb.Host
             var failures = 0;
             using (var client = new HttpClient())
             {
+                // One request first, so the connection pool and the route are warm. The burst then
+                // measures what it is meant to - how many requests are IN FLIGHT at once - rather
+                // than how long this process takes to get twenty of them out of the door.
+                await client.GetAsync(Url + "/Harness/Slow?ms=1");
+
+                // Thirty, each sleeping three seconds, and both numbers are margin rather than
+                // taste. The limiter refuses above FIFTEEN in flight, so the burst has to get
+                // sixteen overlapping; at twenty requests of 1.5s this measured 4 refusals on a
+                // quiet machine, 1 on a busy one and 0 - a failure - on a loaded one, because
+                // dispatch time ate the overlap. Thirty of three seconds cannot.
                 var burst = new List<Task<HttpResponseMessage>>();
-                for (var i = 0; i < 20; i++) burst.Add(client.GetAsync(Url + "/Harness/Slow?ms=1500"));
+                for (var i = 0; i < 30; i++) burst.Add(client.GetAsync(Url + "/Harness/Slow?ms=3000"));
 
                 // WHILE the limiter is saturated, a static file still has to come back. This is
                 // the only assertion that pins WHERE the middleware is registered rather than
@@ -3116,12 +3126,12 @@ namespace ZeroKWeb.Host
 
                 var refused = answers.Count(x => (int)x.StatusCode == 429);
                 failures += Check(refused > 0,
-                    "  twenty requests at once from one address get some 429s (" + refused + " of 20)");
+                    "  thirty requests at once from one address get some 429s (" + refused + " of 30)");
 
                 // Not all of them: the limit is fifteen in flight, so the first fifteen are served.
                 failures += Check(answers.Count(x => x.IsSuccessStatusCode) > 0,
                     "  and the ones inside the limit are still served ("
-                    + answers.Count(x => x.IsSuccessStatusCode) + " of 20)");
+                    + answers.Count(x => x.IsSuccessStatusCode) + " of 30)");
 
                 var body = "";
                 foreach (var answer in answers)
@@ -4076,18 +4086,47 @@ namespace ZeroKWeb.Host
         ///
         /// Outside any faction/clan scope deliberately - Clan.CanJoin returns false for an
         /// account that already belongs to one, so the harness account has to be clanless when
-        /// this runs, which it is by default in the fixture.
+        /// this runs.
+        ///
+        /// The clan takes the account's OWN faction rather than having none, and that is not
+        /// tidiness either. Clan.cs:60 refuses a join when the account has a faction and the clan
+        /// is a different one, and whether this account has a faction depends on what else has
+        /// run: nothing in the plain harness gives it one, and tools/stack.sh seeds a PlanetWars
+        /// round that does. A clan with no faction therefore passed here and failed there, which
+        /// is exactly what the two-container job is for. Reading the account first makes the
+        /// check say the same thing in both.
         /// </summary>
         private static async Task<int> WithPasswordedClan(Func<int, Task<int>> body)
         {
             int clanID;
+
+            // Generated rather than written down, and tools/check-secrets.py is why: a literal
+            // assigned to anything called Password is exactly what that check hunts for, and it
+            // caught this one. It was right to - a committed password is a committed password
+            // whether or not it guards a fixture - and the check has no way to tell the two
+            // apart. Nothing here needs a KNOWN password, only one the request below does not
+            // send, so there is no reason for a literal to exist at all.
+            // Sixteen characters, because Clan.Password is [StringLength(20)] and a whole GUID is
+            // thirty-two. The port's reproduced EF6 save-time validation said so rather than the
+            // database truncating it quietly, which is the behaviour that validation exists for.
+            var password = Guid.NewGuid().ToString("N").Substring(0, 16);
+
+            int? restoreClan;
+            int accountID;
+
             using (var db = new ZkDataContext())
             {
+                var account = db.Accounts.OrderBy(a => a.AccountID).First();
+                accountID = account.AccountID;
+                restoreClan = account.ClanID;
+                account.ClanID = null;
+
                 var clan = new Clan
                 {
                     ClanName = "Harness Locked Clan",
                     Shortcut = "HLC",
-                    Password = "the-right-one",
+                    Password = password,
+                    FactionID = account.FactionID,
                 };
                 db.Clans.Add(clan);
                 db.SaveChanges();
@@ -4103,8 +4142,11 @@ namespace ZeroKWeb.Host
                 using (var db = new ZkDataContext())
                 {
                     // Anyone who did join is put back first, or the clan will not delete.
-                    foreach (var account in db.Accounts.Where(x => x.ClanID == clanID).ToList())
-                        account.ClanID = null;
+                    foreach (var joined in db.Accounts.Where(x => x.ClanID == clanID).ToList())
+                        joined.ClanID = null;
+
+                    var account = db.Accounts.FirstOrDefault(x => x.AccountID == accountID);
+                    if (account != null && account.ClanID == null) account.ClanID = restoreClan;
                     db.SaveChanges();
 
                     var clan = db.Clans.FirstOrDefault(x => x.ClanID == clanID);
