@@ -33,8 +33,19 @@ rm -f "$LOG"
 ZK_RENDERED_VIEWS="/repo/$LOG" ./tools/run-host.sh >/dev/null 2>&1 || {
     echo "the harness did not finish - run ./tools/run-host.sh to see why" >&2; exit 1; }
 
-sort -u "$LOG" | sed 's|^/Views/|Zero-K.info/Views/|' > "$LOG.rendered"
-git ls-files 'Zero-K.info/Views/*.cshtml' | grep -vE '_ViewStart|_ViewImports' | sort > "$LOG.all"
+# The SAME exclusion on both sides, which it did not used to have. _ViewStart.cshtml runs on
+# every request that is not a child action, so it was always in the rendered list - and it is
+# filtered out of the tracked list below, because it is not a view anybody renders on purpose.
+# Counting it in the numerator and not the denominator overstated the figure by exactly one, for
+# as long as this script has existed.
+#
+# Found by arithmetic rather than by noticing: the header said "never rendered by it (8)" over a
+# list of NINE, because the count came from 119 - rendered and the list came from comparing the
+# two files. Two ways of computing the same thing is what caught it, which is the argument for
+# having printed both.
+EXCLUDE='_ViewStart|_ViewImports'
+sort -u "$LOG" | sed 's|^/Views/|Zero-K.info/Views/|' | grep -vE "$EXCLUDE" > "$LOG.rendered"
+git ls-files 'Zero-K.info/Views/*.cshtml' | grep -vE "$EXCLUDE" | sort > "$LOG.all"
 rendered=$(wc -l < "$LOG.rendered")
 all=$(wc -l < "$LOG.all")
 
@@ -56,6 +67,19 @@ echo "never rendered by it ($((all - rendered))):"
 # run rewrites the file, and the only honest answer is to say when that was.
 STACK=rendered-views.tmp-stack
 comm -13 "$LOG.rendered" "$LOG.all" > "$LOG.missing"
+
+# The arithmetic and the list have to agree, and this is here because once they did not. The
+# count above is 119 - rendered; the list is what comm found. Those are two ways of computing
+# the same number, and they diverge the moment the two files are built from different rules -
+# which is exactly the bug that counting _ViewStart on one side only produced. Cheap to assert,
+# and the only thing that would have said so out loud.
+listed=$(wc -l < "$LOG.missing")
+if [ "$listed" != "$((all - rendered))" ]; then
+    echo "the count says $((all - rendered)) and the list has $listed - the rendered and tracked" >&2
+    echo "sets are being built by different rules, so neither number means what it says." >&2
+    rm -f "$LOG.rendered" "$LOG.all" "$LOG.missing"
+    exit 2
+fi
 
 elsewhere=0
 while read -r view; do
