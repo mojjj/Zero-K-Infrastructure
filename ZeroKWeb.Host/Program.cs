@@ -2544,6 +2544,61 @@ namespace ZeroKWeb.Host
                     "  with the raw tag nowhere in the response");
             }
 
+            // The planet image picker, which is a moderator page over a map the fixture already
+            // has. It lists the files in img/planets off disk, so it also says that MapPath
+            // resolves to somewhere real from a linked controller - which is the half of this
+            // that is not just one more rendered view.
+            failures += await AsModerator(async moderator =>
+            {
+                int resourceID;
+                using (var db = new ZkDataContext())
+                    resourceID = db.Resources.OrderBy(x => x.ResourceID).First().ResourceID;
+
+                var page = await moderator.GetAsync(Url + "/Maps/PlanetImageSelect?resourceID=" + resourceID);
+                var html = await page.Content.ReadAsStringAsync();
+                return Check(page.IsSuccessStatusCode && html.Contains("Remove planet"),
+                    "  /Maps/PlanetImageSelect renders for a moderator (" + (int)page.StatusCode
+                    + ", " + html.Length + " bytes)");
+            });
+
+            // Clans/JoinClan, which renders on the FAILURE path and only there:
+            //
+            //     if (!string.IsNullOrEmpty(clan.Password) && clan.Password != password)
+            //         return View(clan.ClanID);
+            //
+            // A right password joins the clan and redirects, so the only way to see this view is
+            // to get the password wrong - which is also the only way to ask for it without
+            // writing to the database.
+            //
+            // Seeded OUTSIDE WithFactionAndClan on purpose: Clan.CanJoin refuses an account that
+            // is already in a clan (Clan.cs:59), and that helper puts the harness account in one.
+            failures += await WithPasswordedClan(async clanID =>
+                await AsAccount(AdminLevel.None, async joiner =>
+                {
+                    var token = await (await joiner.GetAsync(Url + "/Harness/Token")).Content.ReadAsStringAsync();
+                    var attempt = await joiner.PostAsync(Url + "/Clans/JoinClan/" + clanID,
+                        new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("__RequestVerificationToken", token),
+                            new KeyValuePair<string, string>("password", "not-the-password"),
+                        }));
+                    var html = await attempt.Content.ReadAsStringAsync();
+
+                    var rendered = Check(attempt.IsSuccessStatusCode
+                                         && html.Contains("Password to join the clan"),
+                        "  a wrong clan password renders Clans/JoinClan.cshtml ("
+                        + (int)attempt.StatusCode + ")");
+
+                    // And it did NOT join, which is what makes asking safe to do twice.
+                    using (var db = new ZkDataContext())
+                    {
+                        var joined = db.Accounts.OrderBy(a => a.AccountID).First().ClanID;
+                        rendered += Check(joined == null,
+                            "  and the account is still in no clan, so the check did not join one");
+                    }
+                    return rendered;
+                }));
+
             // Two of the lobby's pages, which only ever needed asking for.
             failures += await AsAccount(AdminLevel.None, async client =>
             {
@@ -4012,6 +4067,48 @@ namespace ZeroKWeb.Host
                     var faction = db.Factions.FirstOrDefault(f => f.FactionID == factionID);
                     if (faction != null) db.Factions.Remove(faction);
                     db.SaveChanges();
+                }
+            }
+        }
+
+        /// <summary>
+        /// A clan with a password on it, and nobody in it.
+        ///
+        /// Outside any faction/clan scope deliberately - Clan.CanJoin returns false for an
+        /// account that already belongs to one, so the harness account has to be clanless when
+        /// this runs, which it is by default in the fixture.
+        /// </summary>
+        private static async Task<int> WithPasswordedClan(Func<int, Task<int>> body)
+        {
+            int clanID;
+            using (var db = new ZkDataContext())
+            {
+                var clan = new Clan
+                {
+                    ClanName = "Harness Locked Clan",
+                    Shortcut = "HLC",
+                    Password = "the-right-one",
+                };
+                db.Clans.Add(clan);
+                db.SaveChanges();
+                clanID = clan.ClanID;
+            }
+
+            try
+            {
+                return await body(clanID);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    // Anyone who did join is put back first, or the clan will not delete.
+                    foreach (var account in db.Accounts.Where(x => x.ClanID == clanID).ToList())
+                        account.ClanID = null;
+                    db.SaveChanges();
+
+                    var clan = db.Clans.FirstOrDefault(x => x.ClanID == clanID);
+                    if (clan != null) { db.Clans.Remove(clan); db.SaveChanges(); }
                 }
             }
         }
