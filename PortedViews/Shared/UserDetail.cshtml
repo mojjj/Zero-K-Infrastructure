@@ -1,4 +1,4 @@
-@using ZeroKWeb
+﻿@using ZeroKWeb
 @using ZkData
 @using PlasmaShared
 @model ZkData.Account
@@ -437,7 +437,7 @@
             <a href="@Url.Action("Index", "Charts")">Charts</a><br />
             <a href="@Url.Action("Index", "PlanetwarsAdmin")">PlanetWars admin</a><br />
             <a href="@Url.Action("EditDynamicConfig", "Admin")">Dynamic config</a><br />
-            <a href="@Url.Action("ForceRatingsUpdate", "Admin")">Force Ratings Update</a><br />
+            @Html.PostLink("Force Ratings Update", "ForceRatingsUpdate", "Admin")<br />
             @if (GlobalConst.Mode == ModeType.Test)
             {
                 <a href="@Url.Action("ResetDB", "Admin")" class="js_confirm">Reset database (copy from live)</a><br />

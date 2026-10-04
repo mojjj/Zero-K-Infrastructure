@@ -71,6 +71,13 @@ namespace ZeroKWeb.Controllers
         }
 
 
+        // Recomputes every rating in the database, on the lobby server. A link could fire it,
+        // which makes it forgeable: a moderator need only load a page that someone else wrote.
+        // Nothing is corrupted by it - that is why this is a token and not an incident - but it
+        // is a state change that a GET should not be able to ask for, and the work it starts is
+        // not small.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [Auth(Role = AdminLevel.Moderator)]
         public ActionResult ForceRatingsUpdate()
         {

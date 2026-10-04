@@ -15,10 +15,30 @@ InsertOnSubmit, InsertAllOnSubmit, DeleteOnSubmit, DeleteAllOnSubmit - and Entit
 server and never go near SaveChanges. Those two were missing at first, and what they hid was
 PlanetwarsAdmin's ResetRatings: a GET that rewrote every PlanetWars battle and rating in the
 database. `Update` is matched with a word boundary, so UpdateLastRead and UpdateMission are not
-mistaken for it. That is deliberately narrow and checkable. It means this does NOT see an action whose only effect is on the lobby server -
-Tourney's JoinBattle and RemoveBattle were of that kind, found by reading rather than by this -
-and it does not see writes made through a helper it calls. A check that is honest about its edges
-is worth more than one that guesses at them.
+mistaken for it. That is deliberately narrow and checkable.
+
+**Where it looks for those calls is the other half, and it was too small twice.** First it read
+only the action's own body, which is how /Factions/LeaveFaction sat unnoticed - three lines, the
+SaveChanges one call away in a helper beside it. Then it followed calls, but only into the two
+CONTROLLER directories, which is how ImportIpnPayment sat unnoticed: /Contributions/Ipn is four
+lines, and the write is in ZkData/PayPal/. That one was not academic. The postback asking PayPal
+whether it had sent the notification ran AFTER the row was written, so an anonymous request
+recorded a contribution, granted kudos to an account of the sender's choosing and mailed out a
+redeem code before PayPal said it had sent nothing.
+
+So writer definitions are now read from Zero-K.info/, ZkData/ and ZeroKWeb.Core/ - the site, its
+data layer and the port's compat layer - while ACTIONS still come only from the controller
+directories. The cost of that is one false follow today, and it is worth stating what pays for
+it: calls are matched by NAME, so a controller calling Foo() is taken to reach any Foo() in those
+531 files that writes. Only names actually defined there are followed, which keeps an unrelated
+framework method out, but two methods that share a name are one method to this script.
+
+It still does NOT see an action whose only effect is on the lobby server, out in the other
+process - Tourney's JoinBattle and RemoveBattle were of that kind, found by reading rather than
+by this, and ten more GET-reachable actions call that API today. That wants its own check,
+because the lobby API is an interface and its members can be classified one by one; guessing at
+them here would not be checkable. A check that is honest about its edges is worth more than one
+that guesses at them.
 
 An action is reachable by GET unless it carries [HttpPost]. Every action that writes and is
 reachable must say which it is, on the method:
@@ -53,6 +73,18 @@ CALL = re.compile(r"\b(\w+)\s*\(")
 HTTP_POST = re.compile(r"\[\s*HttpPost\s*[\]\(]")
 BY_DESIGN = re.compile(r'\[WritesOnGetByDesign\("([^"]*)"\)\]')
 NOT_YET = re.compile(r'\[WritesOnGetNotYetFixed\("([^"]*)"\)\]')
+
+
+def helpers():
+    """The files read for writer DEFINITIONS only - never for actions.
+
+    The site, its data layer and the port's compat layer: where a controller's helpers actually
+    live. Kept separate from controllers() because the two lists answer different questions, and
+    because a check that found no controllers and plenty of helpers would still be blind.
+    """
+    listed = subprocess.run(["git", "ls-files", "Zero-K.info/", "ZkData/", "ZeroKWeb.Core/"],
+                            capture_output=True, text=True, check=True)
+    return [line for line in listed.stdout.splitlines() if line.endswith(".cs")]
 
 
 def controllers():
@@ -100,14 +132,11 @@ def attributes_above(text, start):
 def writing_methods(paths):
     """Every method in these files that writes, directly or through another one of them.
 
-    The original check read only the ACTION's own body, and that is how
-    /Factions/LeaveFaction sat unnoticed: it is three lines, none of them a write, and the
-    SaveChanges is one call away in PerformLeaveFaction. A GET that changes state is the
-    whole subject of this check, so not seeing one call deep was not a detail.
-
     Transitive, not one level, because PerformLeaveFaction in turn calls
-    ClansController.PerformLeaveClan. Only names DEFINED in these files are followed, so an
-    unrelated framework method that happens to share a name is not chased.
+    ClansController.PerformLeaveClan, and ImportIpnPayment reaches SaveChanges through
+    AddPayPalContribution. Only names DEFINED in these files are followed, so an unrelated
+    framework method that happens to share a name is not chased - see the module docstring for
+    what that costs when two methods HERE share one.
     """
     bodies = {}
     for path in paths:
@@ -136,9 +165,9 @@ def writing_methods(paths):
     return writes
 
 
-def scan(paths):
+def scan(paths, helper_paths):
     writing, by_design, not_yet = [], [], []
-    writers = writing_methods(paths)
+    writers = writing_methods(paths + helper_paths)
     for path in paths:
         with open(path, encoding="utf-8-sig") as handle:
             text = handle.read()
@@ -179,7 +208,16 @@ def main():
         print("found no controllers - the check would pass by seeing nothing", file=sys.stderr)
         return 2
 
-    unmarked, by_design, not_yet = scan(paths)
+    helper_paths = helpers()
+    if not helper_paths:
+        # Blinding the second list is quieter than blinding the first: every action is still
+        # read, the output still names a number of controllers, and only the writes that live
+        # one call outside them stop being seen. That is the failure this check just had.
+        print("found no helper sources - writes outside the controllers would be invisible",
+              file=sys.stderr)
+        return 2
+
+    unmarked, by_design, not_yet = scan(paths, helper_paths)
 
     for path, line, name, in unmarked:
         print("%s:%d: %s writes to the database and a GET can reach it" % (path, line, name))
@@ -189,8 +227,9 @@ def main():
         print("- or say why it is right, with [WritesOnGetByDesign(\"...\")] on the method.")
         return 1
 
-    print("no action writes on a GET without saying why in %d controller(s)"
-          " (%d by design, %d not yet fixed)" % (len(paths), len(by_design), len(not_yet)))
+    print("no action writes on a GET without saying why in %d controller(s), following calls"
+          " into %d more file(s) (%d by design, %d not yet fixed)"
+          % (len(paths), len(helper_paths), len(by_design), len(not_yet)))
     if not_yet:
         print("\nstill reachable by GET, and should not be:")
         for path, line, name, reason in not_yet:
