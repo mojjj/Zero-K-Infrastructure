@@ -4017,26 +4017,92 @@ namespace ZeroKWeb.Host
         }
 
         /// <summary>
-        /// A faction role carrying RightDiplomacy, which is what Account.HasFactionRight looks
-        /// for: any AccountRole whose RoleType is NOT clan-only and passes the test.
+        /// A structure that costs upkeep energy, on a planet this faction owns.
         ///
-        /// Not clan-only, and that is the whole point - the role WithRoleAndPunishment seeds is
-        /// clan-only, which HasFactionRight filters out by design, so the two cannot be the same
-        /// row however similar they look.
+        /// The planet's owner is set and then put BACK. WithGalaxy leaves its planets neutral on
+        /// purpose - that is what makes them attackable without seeding a whole game state, and it
+        /// says so - so borrowing one has to be temporary or the next check inherits a conquered
+        /// galaxy.
+        ///
+        /// UpkeepEnergy above zero is not decoration: Planet.cshtml:237 tests exactly that before
+        /// it gets as far as asking who may change the priority.
         /// </summary>
-        private static async Task<int> WithDiplomacyRole(int accountID, Func<Task<int>> body)
+        private static async Task<int> WithOwnedStructure(int planetID, int factionID, Func<string, Task<int>> body)
+        {
+            const string structureName = "Harness Energy Structure";
+            int structureTypeID;
+            int? originalOwner;
+
+            using (var db = new ZkDataContext())
+            {
+                var type = new StructureType
+                {
+                    Name = structureName,
+                    UpkeepEnergy = 1,
+                };
+                db.StructureTypes.Add(type);
+                db.SaveChanges();
+                structureTypeID = type.StructureTypeID;
+
+                var planet = db.Planets.Single(x => x.PlanetID == planetID);
+                originalOwner = planet.OwnerFactionID;
+                planet.OwnerFactionID = factionID;
+
+                db.PlanetStructures.Add(new PlanetStructure
+                {
+                    PlanetID = planetID,
+                    StructureTypeID = structureTypeID,
+                    IsActive = true,
+                });
+                db.SaveChanges();
+            }
+
+            try
+            {
+                return await body(structureName);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var structures = db.PlanetStructures
+                                       .Where(x => x.StructureTypeID == structureTypeID).ToList();
+                    if (structures.Count > 0) db.PlanetStructures.RemoveRange(structures);
+
+                    var planet = db.Planets.FirstOrDefault(x => x.PlanetID == planetID);
+                    if (planet != null) planet.OwnerFactionID = originalOwner;
+                    db.SaveChanges();
+
+                    var type = db.StructureTypes.FirstOrDefault(x => x.StructureTypeID == structureTypeID);
+                    if (type != null) { db.StructureTypes.Remove(type); db.SaveChanges(); }
+                }
+            }
+        }
+
+        /// <summary>
+        /// A FACTION role on an account, carrying whichever right the caller needs.
+        ///
+        /// Not clan-only, and that is the whole point: Account.HasFactionRight is "any AccountRole
+        /// whose RoleType is NOT clan-only and passes the test", so the clan-only role
+        /// WithRoleAndPunishment seeds cannot serve here however similar it looks.
+        ///
+        /// The right is a parameter because two checks want different ones - RightDiplomacy to
+        /// propose a treaty, RightSetEnergyPriority to change a structure's priority - and a
+        /// second near-identical helper would be two things to keep in step.
+        /// </summary>
+        private static async Task<int> WithFactionRole(int accountID, Action<RoleType> grant, Func<Task<int>> body)
         {
             int roleTypeID;
             using (var db = new ZkDataContext())
             {
                 var role = new RoleType
                 {
-                    Name = "Harness Diplomat",
+                    Name = "Harness Faction Role",
                     Description = "Seeded by the host harness",
                     IsClanOnly = false,
-                    RightDiplomacy = true,
                     PollDurationDays = 1,
                 };
+                grant(role);
                 db.RoleTypes.Add(role);
                 db.SaveChanges();
                 roleTypeID = role.RoleTypeID;
@@ -4404,6 +4470,67 @@ namespace ZeroKWeb.Host
                 // account's roles and calls DisplayFor on each, and AdminUserDetail does the same
                 // for its expired punishments - so both templates needed a row to exist, not a
                 // request to be made.
+                // The Enum EDITOR template, which is the last view reachable by seeding alone and
+                // took four separate things to reach. Planetwars/Planet.cshtml:244 draws it as
+                //
+                //     @Html.EditorFor(x => priority, "Enum")
+                //
+                // inside two nested conditions: the structure's type must cost upkeep energy
+                // (UpkeepEnergy > 0), and Global.Account.CanSetPriority(structure) must hold -
+                // which needs the account to be in a faction, the PLANET to be owned by that same
+                // faction, and a faction role carrying RightSetEnergyPriority (Account.cs:372).
+                //
+                // So: a structure type that costs energy, a structure of it on the planet, the
+                // planet made this faction's, and the right. Miss any one and the page still
+                // renders perfectly well down the else branch, which writes the priority as plain
+                // text - which is why nothing had ever noticed the editor was unreached.
+                //
+                // ONLY with a lobby server, and finding out why is the result here. Planet.cshtml
+                // line 44 reads
+                //
+                //     Global.IsAccountAuthorized && db.CurrentAccount().CanPlayerPlanetWars()
+                //         && Global.LobbyApi.PlanetWarsPhase == PwPhase.AttackCollect && ...
+                //
+                // and dereferences Global.LobbyApi with no guard. C# short-circuits, so the third
+                // term is reached only by a signed-in account that CAN play PlanetWars - which
+                // nothing had ever been, because being one takes a faction and an owned planet.
+                // Seeding that state for the first time turned the page into a 500.
+                //
+                // Both copies of the view are identical there - tools/diverged-views.txt records
+                // one difference in this file and it is the child-action line - so this is not a
+                // port defect in the view. What differs is that MVC 5 can never HAVE a null
+                // LobbyApi: StartApplication always sets one, in-process or remote. The port's
+                // GlobalCompat returns null when LobbyApiUrl is unset, which is a state the old
+                // stack does not have. Same shape as /Battles/Logs: an optional dependency that
+                // was never optional before.
+                //
+                // So it is recorded, not asserted, and the editor is rendered where a lobby
+                // server exists - which is also the only place a real player would be.
+                if (ZeroKWeb.Global.LobbyApi == null)
+                {
+                    Console.WriteLine("   note  /Planetwars/Planet answers 500 for a signed-in player who can"
+                                      + " play PlanetWars and no lobby server is configured - the view"
+                                      + " dereferences Global.LobbyApi unguarded, on both stacks, and only"
+                                      + " this port can have a null one");
+                }
+                else
+                {
+                    seeded += await WithGalaxy(async (galaxyID, planetID, otherPlanetID) =>
+                        await WithOwnedStructure(planetID, factionID, async structureName =>
+                        await WithFactionRole(accountID, role => role.RightSetEnergyPriority = true, async () =>
+                        await AsAccount(AdminLevel.None, async owner =>
+                        {
+                            var planet = await (await owner.GetAsync(Url + "/Planetwars/Planet/" + planetID))
+                                               .Content.ReadAsStringAsync();
+
+                            // On the FORM the editor sits in rather than on the word "priority",
+                            // which the else branch writes too. This is the branch, not the topic.
+                            return Check(planet.Contains("SetEnergyPriority"),
+                                "  an owned structure's energy priority is an editor against a real"
+                                + " lobby server, which renders Shared/EditorTemplates/Enum.cshtml");
+                        }))));
+                }
+
                 // The treaty pair, which needs a SECOND faction and so could not come from the
                 // one this scope seeds. /Factions/Detail renders DisplayTemplates/FactionTreaty
                 // for a treaty in the Proposed state, and that template renders
@@ -4435,7 +4562,7 @@ namespace ZeroKWeb.Host
                     // find. WithGalaxy borrows a seeded round when one is there and seeds its own
                     // otherwise, so nesting it here is safe.
                     return treaty + await WithGalaxy(async (galaxyID, planetID, otherPlanetID) =>
-                        await WithDiplomacyRole(accountID, async () =>
+                        await WithFactionRole(accountID, role => role.RightDiplomacy = true, async () =>
                         await AsAccount(AdminLevel.None, async diplomat =>
                         {
                             var form = await diplomat.GetAsync(
