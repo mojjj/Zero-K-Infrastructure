@@ -50,7 +50,7 @@
 @if (autohost != null && autohost.IsInGame) { 
 	<b>
 		@if (autohost.IsInGame) {
-            <a href="@Url.Action("WatchPlanetBattle", "Lobby", new {id=Model.PlanetID})">Battle in progress, JOIN TO WATCH</a>
+            @Html.PostLink("Battle in progress, JOIN TO WATCH", "WatchPlanetBattle", "Lobby", new { id = Model.PlanetID })
         }
 	</b>
 }

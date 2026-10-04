@@ -2995,11 +2995,40 @@ namespace ZeroKWeb.Host
 
             failures += await AsAccount(AdminLevel.None, async client =>
             {
-                var messages = await client.GetAsync(Url + "/Lobby/ChatMessages?Channel=zk");
+                // A POST with a token, because the action takes one now. It used to be asked with
+                // a GET, which is the thing that was wrong with it: model.Message posts into the
+                // channel as the visitor, so a link could say anything in anyone's name. The
+                // panel itself always submitted through Ajax.BeginForm - a POST with no token -
+                // so neither end was closed and neither CSRF check could see it: one reads forms
+                // and skips Ajax.BeginForm, the other matches database calls and this is a
+                // lobby-server effect. tools/check-lobby-writes.py is that gap.
+                var inner = 0;
+                var token = await (await client.GetAsync(Url + "/Harness/Token")).Content.ReadAsStringAsync();
+
+                var refused = await client.GetAsync(Url + "/Lobby/ChatMessages?Channel=zk");
+                inner += Check(refused.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
+                    "  /Lobby/ChatMessages is not reachable by GET (" + (int)refused.StatusCode + ")");
+
+                var messages = await client.PostAsync(Url + "/Lobby/ChatMessages",
+                    new FormUrlEncodedContent(new[]
+                    {
+                        new KeyValuePair<string, string>("Channel", "zk"),
+                        new KeyValuePair<string, string>("__RequestVerificationToken", token),
+                    }));
                 var messagesHtml = await messages.Content.ReadAsStringAsync();
-                return Check(messages.IsSuccessStatusCode,
-                    "  /Lobby/ChatMessages rendered against a real lobby server ("
+                inner += Check(messages.IsSuccessStatusCode,
+                    "  and renders against a real lobby server when posted with a token ("
                     + (int)messages.StatusCode + ", " + messagesHtml.Length + " bytes)");
+
+                // Without the token the action must not run at all. Asserting only the success
+                // above would pass just as well with [ValidateAntiForgeryToken] absent.
+                var untokened = await client.PostAsync(Url + "/Lobby/ChatMessages",
+                    new FormUrlEncodedContent(new[]
+                        { new KeyValuePair<string, string>("Channel", "zk") }));
+                inner += Check(untokened.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                    "  while a POST with no token is refused (" + (int)untokened.StatusCode + ")");
+
+                return inner;
             });
 
             return failures;

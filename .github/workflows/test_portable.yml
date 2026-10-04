@@ -72,6 +72,12 @@ jobs:
       - name: Check no action writes on a GET
         run: ./tools/check-get-writes.py
 
+      # The third side of it. The two above read forms and database calls; a state change that
+      # happens on the LOBBY SERVER is invisible to both, and four actions were reachable by GET
+      # that way - one of them posting a chat message in the visitor's name.
+      - name: Check no action changes the lobby on a GET
+        run: ./tools/check-lobby-writes.py
+
       - name: Check every C# file is in a project
         run: ./tools/check-orphaned-sources.py
 

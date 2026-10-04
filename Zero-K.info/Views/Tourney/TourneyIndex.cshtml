@@ -89,7 +89,7 @@
             </td>
 
             <td>
-                @Html.ActionLink("Force join", "ForceJoinPlayers", new { battleID = b.BattleID }) <br />
+                @Html.PostLink("Force join", "ForceJoinPlayers", "Tourney", new { battleID = b.BattleID }) <br />
                 @Html.PostLink("Delete", "RemoveBattle", "Tourney", new { battleID = b.BattleID }, "js_confirm")
             </td>
         </tr>
