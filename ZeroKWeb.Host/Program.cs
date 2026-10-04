@@ -880,6 +880,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckWebApi();
                 failures += await CheckTooltipsAndUnvisitedPages();
                 failures += await CheckAjaxLayoutAndLobbyViews();
+                failures += await CheckGetSurface();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2455,6 +2456,146 @@ namespace ZeroKWeb.Host
             });
 
             return failures;
+        }
+
+        /// <summary>
+        /// Every action a stranger can reach with a bare GET, asked for, and the ones that answer
+        /// 500 pinned against a recorded list.
+        ///
+        /// HOSTING.md carried this as a SURVEY, done by hand on 2026-09-29: 207 actions, 86
+        /// GET-able with no required argument, of which seven answered 500 for reasons written
+        /// down one by one. That was useful once and then went stale the moment anything changed -
+        /// and plenty has. /Replays/Download is a 404 now rather than a 500, seven routes exist
+        /// that did not, and a page that had never been reached by an account that could play
+        /// PlanetWars turned out to throw the first time one did.
+        ///
+        /// A number in a document decays; a list in a check does not. This finds the actions by
+        /// REFLECTION over the linked controllers rather than from a list, so an action added
+        /// tomorrow is surveyed tomorrow, and compares the 500s against tools/get-surface-500s.txt.
+        /// Either direction fails: a new 500 is a regression, and one that stopped is a fix
+        /// somebody should record rather than silently absorb.
+        ///
+        /// Anonymous, because that is the surface a stranger has. [Auth] answering 302 is the
+        /// right answer and counts as one.
+        /// </summary>
+        private static async Task<int> CheckGetSurface()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the GET surface a stranger can reach:");
+
+            var paths = new List<string>();
+            foreach (var type in typeof(Program).Assembly.GetTypes())
+            {
+                if (!typeof(Controller).IsAssignableFrom(type) || type.IsAbstract) continue;
+                if (!type.Name.EndsWith("Controller")) continue;
+
+                // The harness's own controller is not the site's surface, and it is gated off in
+                // a deployment anyway.
+                var controller = type.Name.Substring(0, type.Name.Length - "Controller".Length);
+                if (controller == "Harness") continue;
+
+                foreach (var method in type.GetMethods(System.Reflection.BindingFlags.Public
+                                                       | System.Reflection.BindingFlags.Instance
+                                                       | System.Reflection.BindingFlags.DeclaredOnly))
+                {
+                    if (method.IsSpecialName || method.GetBaseDefinition() != method) continue;
+
+                    var returns = method.ReturnType;
+                    var isAction = typeof(IActionResult).IsAssignableFrom(returns)
+                                   || typeof(ActionResult).IsAssignableFrom(returns)
+                                   || (returns.IsGenericType
+                                       && typeof(Task).IsAssignableFrom(returns)
+                                       && (typeof(IActionResult).IsAssignableFrom(returns.GetGenericArguments()[0])
+                                           || typeof(ActionResult).IsAssignableFrom(returns.GetGenericArguments()[0])));
+                    if (!isAction) continue;
+
+                    // Only what a bare GET can reach: every parameter has to be optional or
+                    // bindable from nothing. A required int is not a GET surface, it is a 500
+                    // about model binding and says nothing about the action.
+                    if (method.GetParameters().Any(x => !x.IsOptional && x.ParameterType.IsValueType
+                                                        && Nullable.GetUnderlyingType(x.ParameterType) == null))
+                        continue;
+
+                    paths.Add("/" + controller + "/" + method.Name);
+                }
+            }
+
+            paths.Sort(StringComparer.Ordinal);
+
+            var byStatus = new Dictionary<int, int>();
+            var broke = new List<string>();
+            using (var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }))
+            {
+                foreach (var path in paths)
+                {
+                    int status;
+                    try
+                    {
+                        status = (int)(await client.GetAsync(Url + path)).StatusCode;
+                    }
+                    catch (Exception)
+                    {
+                        // A connection reset is not a status; recorded as one so the survey does
+                        // not stop at the first endpoint that drops the connection.
+                        status = 0;
+                    }
+
+                    byStatus[status] = byStatus.TryGetValue(status, out var seen) ? seen + 1 : 1;
+                    if (status == 500 || status == 0) broke.Add(path);
+                }
+            }
+
+            Console.WriteLine("   ....  " + paths.Count + " actions a bare GET can reach: "
+                              + string.Join(", ", byStatus.OrderBy(x => x.Key)
+                                                          .Select(x => x.Value + " x " + (x.Key == 0 ? "no reply" : x.Key.ToString()))));
+
+            var recorded = io_ReadSurfaceBaseline();
+            var newly = broke.Where(x => !recorded.Contains(x)).ToList();
+            var fixedUp = recorded.Where(x => !broke.Contains(x)).ToList();
+
+            var failures = Check(newly.Count == 0,
+                "  no action answers 500 that did not before"
+                + (newly.Count == 0 ? "" : " (" + string.Join(", ", newly) + ")"));
+
+            failures += Check(fixedUp.Count == 0,
+                "  and none of the recorded ones stopped"
+                + (fixedUp.Count == 0 ? "" : " (" + string.Join(", ", fixedUp)
+                   + " - fixed? record it in tools/get-surface-500s.txt)"));
+
+            return failures;
+        }
+
+        /// <summary>The recorded 500s, by path. Lines starting with # are prose.</summary>
+        private static HashSet<string> io_ReadSurfaceBaseline()
+        {
+            var file = Path.Combine(FindRepoRoot(), "tools", "get-surface-500s.txt");
+            var found = new HashSet<string>(StringComparer.Ordinal);
+            if (!File.Exists(file)) return found;
+
+            foreach (var line in File.ReadAllLines(file))
+            {
+                var text = line.Trim();
+
+                // A path or nothing. Blank lines and # are prose, and so is an indented
+                // continuation of the previous entry's reason - which the first version of this
+                // parser read as a path called "knowing," and then reported as a recorded 500
+                // that had stopped happening.
+                if (!text.StartsWith("/")) continue;
+                found.Add(text.Split(' ', '\t')[0]);
+            }
+            return found;
+        }
+
+        /// <summary>The repository root, found the way FindSiteRoot finds the site.</summary>
+        private static string FindRepoRoot()
+        {
+            var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                if (System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "tools"))) return dir.FullName;
+                dir = dir.Parent;
+            }
+            throw new System.IO.DirectoryNotFoundException("could not find the repository above " + AppContext.BaseDirectory);
         }
 
         /// <summary>

@@ -1,0 +1,26 @@
+# The actions a bare, anonymous GET reaches that answer 500.
+#
+# Checked by CheckGetSurface in ZeroKWeb.Host/Program.cs, which finds the actions by REFLECTION
+# over the linked controllers rather than from a list here - so an action added tomorrow is
+# surveyed tomorrow. Only the 500s are recorded, and the check fails BOTH ways: a new one is a
+# regression, and one that stopped is a fix worth recording rather than silently absorbing.
+#
+# This replaces a survey done by hand on 2026-09-29 and written into HOSTING.md. That was useful
+# once and then decayed: /Replays/Download was on it and is a 404 now, seven routes exist that did
+# not, and a page nobody had been the right kind of player to reach turned out to throw the first
+# time somebody was. A number in a document goes stale silently; a list in a check cannot.
+#
+# NONE OF THESE IS A PORT DEFECT. Each fails identically on MVC 5, and each is here because a bare
+# GET is not how the action is called - which is a property of the survey, not of the site.
+#
+#   <path>   <why>
+
+/Forum/DeletePostPrompt   wants postID; Single() on no match. Reached properly by the forum check.
+/Forum/GetPostList        wants a thread; ThreadID defaults to 0 and First() finds nothing.
+/Home/GetTooltip          wants key=kind$id; args[0] indexes an empty split. Reached by the tooltip check.
+/Missions/File            wants name; Single() on no match. Reached by the mission download check.
+/News/Index               Model.First() on an empty sequence - the fixture has 0 news rows. Worth
+                          knowing on its own: the RSS feed cannot render a site with no news, on
+                          either stack.
+/Planetwars/Index         Galaxies.Single(x => x.IsDefault) and the fixture has 0 galaxies.
+/Planetwars/Minimap       the same.
