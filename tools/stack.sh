@@ -18,6 +18,12 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 SITE_PORT=5200
 # A second site, started for one check: the same image with the harness endpoints left off.
 LOCKED_PORT=5201
+# Where this run records the views it rendered - see the note by the harness container below.
+VIEWS_DIR="$(mktemp -d)"
+# Named under the pattern .gitignore ALREADY carries (rendered-views.tmp*) rather than adding
+# one. It outlives the run that writes it on purpose, despite the prefix - tools/rendered-views.sh
+# reads it later and does not start a stack of its own.
+STACK_VIEWS=rendered-views.tmp-stack
 API_PORT=8300
 SECRET="local-dev-secret-not-a-real-one"
 DB_NAME="${DB_NAME:-zk_test}"
@@ -52,6 +58,7 @@ cleanup() {
         --entrypoint dotnet zk-site bin/ZeroKWeb.Host.dll --remove-planetwars-round >/dev/null 2>&1 || true
     rm -f "$harness_log"
     rm -rf "$RESOURCES"
+    rm -rf "$VIEWS_DIR"
     rm -f "$probe_log" "$control_log"
     [ "${1:-}" = "keep-config" ] || ./tools/lobby-config.sh clear
 }
@@ -139,7 +146,15 @@ if [ "${lobby:-}" = "1" ] && [ "${site:-}" = "1" ]; then
     # run for real. It binds 127.0.0.1:5199 for its own requests, which is not $SITE_PORT, so the
     # container already serving above is left alone.
     echo "   ...  running the site's checks with a lobby server attached"
+    # ZK_RENDERED_VIEWS, into a mounted directory, because this run reaches views the one
+    # tools/rendered-views.sh measures cannot. That script runs the harness with NO lobby server -
+    # deliberately, the site has to work without one - so a view whose ACTION asks Global.LobbyApi
+    # before choosing a view is invisible to it and counts as "never rendered". Measured, two are:
+    # Planetwars/PwMatchMaker and Tourney/TourneyIndex. Writing the list here lets that script say
+    # so instead of the reader having to know.
+    rm -rf "$VIEWS_DIR"; mkdir -p "$VIEWS_DIR"; chmod 777 "$VIEWS_DIR"
     if docker run --rm --network host -e ZK_CONNECTION_STRING="$CS" \
+            -v "$VIEWS_DIR":/out -e ZK_RENDERED_VIEWS=/out/views.tmp \
             --entrypoint dotnet zk-site bin/ZeroKWeb.Host.dll > "$harness_log" 2>&1; then
         harness=0
     else
@@ -152,6 +167,14 @@ if [ "${lobby:-}" = "1" ] && [ "${site:-}" = "1" ]; then
     grep -E "against a real lobby server|options loop|faction beside|Join form|needs a lobby server|needs a seeded round" \
         "$harness_log" | sed 's/^/     /' || true
     check "$harness" "the site's own checks pass with a lobby server attached"
+
+    # Kept at a stable path for tools/rendered-views.sh, which annotates its "never rendered"
+    # list from it. Removed by the cleanup trap otherwise, so a stale file cannot outlive the run
+    # that produced it and quietly make the next measurement look better than it is.
+    if [ -s "$VIEWS_DIR/views.tmp" ]; then
+        sort -u "$VIEWS_DIR/views.tmp" > "$STACK_VIEWS"
+        echo "   ...  $(wc -l < "$STACK_VIEWS") views rendered here, recorded in $STACK_VIEWS"
+    fi
     [ "$harness" = "0" ] || grep -E "^\s+(FAIL|note)" "$harness_log" | head -20
 
     # THE THING THE TWO HALVES CANNOT DO SEPARATELY: the lobby server reading a file that only
