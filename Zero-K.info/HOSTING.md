@@ -667,7 +667,22 @@ The remaining `ILobbyServerApiInProcess` members are still implemented and still
 by the lobby server itself, and by the `Fixer` tool through `Global.Server`. What changed
 is that Zero-K.info is not one of their callers.
 
-## The GET surface, surveyed 2026-09-29
+## The GET surface, surveyed 2026-09-29 - NOW A CHECK, and the numbers below are stale
+
+**Read this section as history.** The survey it records was done by hand and the figures decayed
+the moment anything changed - and plenty has. `/Replays/Download` is on its list of 500s and
+answers 404 now; seven routes exist that did not; and `/Planetwars/Planet` turned out to throw the
+first time an account that could play PlanetWars asked for it, which no hand survey had been in a
+position to notice.
+
+`CheckGetSurface` in `ZeroKWeb.Host/Program.cs` does it on every run instead. It finds the actions
+by **reflection** over the linked controllers rather than from a list, so an action added tomorrow
+is surveyed tomorrow, and it pins the ones that answer 500 against a list in that same file -
+failing in **both** directions, because a 500 that stops is a fix somebody should record rather
+than silently absorb.
+
+The reasons below are still the right reasons; it is the counts that rot.
+
 
 The host harness exercised **18 of 34 controllers**. The other sixteen compiled, their views
 compiled, and no request had ever reached them - the same gap that hid every defect the lobby port

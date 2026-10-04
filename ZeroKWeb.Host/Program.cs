@@ -880,6 +880,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckWebApi();
                 failures += await CheckTooltipsAndUnvisitedPages();
                 failures += await CheckAjaxLayoutAndLobbyViews();
+                failures += await CheckGetSurface();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2456,6 +2457,159 @@ namespace ZeroKWeb.Host
 
             return failures;
         }
+
+        /// <summary>
+        /// Every action a stranger can reach with a bare GET, asked for, and the ones that answer
+        /// 500 pinned against a recorded list.
+        ///
+        /// HOSTING.md carried this as a SURVEY, done by hand on 2026-09-29: 207 actions, 86
+        /// GET-able with no required argument, of which seven answered 500 for reasons written
+        /// down one by one. That was useful once and then went stale the moment anything changed -
+        /// and plenty has. /Replays/Download is a 404 now rather than a 500, seven routes exist
+        /// that did not, and a page that had never been reached by an account that could play
+        /// PlanetWars turned out to throw the first time one did.
+        ///
+        /// A number in a document decays; a list in a check does not. This finds the actions by
+        /// REFLECTION over the linked controllers rather than from a list, so an action added
+        /// tomorrow is surveyed tomorrow, and compares the 500s against tools/get-surface-500s.txt.
+        /// Either direction fails: a new 500 is a regression, and one that stopped is a fix
+        /// somebody should record rather than silently absorb.
+        ///
+        /// Anonymous, because that is the surface a stranger has. [Auth] answering 302 is the
+        /// right answer and counts as one.
+        /// </summary>
+        private static async Task<int> CheckGetSurface()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the GET surface a stranger can reach:");
+
+            var paths = new List<string>();
+            foreach (var type in typeof(Program).Assembly.GetTypes())
+            {
+                if (!typeof(Controller).IsAssignableFrom(type) || type.IsAbstract) continue;
+                if (!type.Name.EndsWith("Controller")) continue;
+
+                // The harness's own controller is not the site's surface, and it is gated off in
+                // a deployment anyway.
+                var controller = type.Name.Substring(0, type.Name.Length - "Controller".Length);
+                if (controller == "Harness") continue;
+
+                foreach (var method in type.GetMethods(System.Reflection.BindingFlags.Public
+                                                       | System.Reflection.BindingFlags.Instance
+                                                       | System.Reflection.BindingFlags.DeclaredOnly))
+                {
+                    if (method.IsSpecialName || method.GetBaseDefinition() != method) continue;
+
+                    var returns = method.ReturnType;
+                    var isAction = typeof(IActionResult).IsAssignableFrom(returns)
+                                   || typeof(ActionResult).IsAssignableFrom(returns)
+                                   || (returns.IsGenericType
+                                       && typeof(Task).IsAssignableFrom(returns)
+                                       && (typeof(IActionResult).IsAssignableFrom(returns.GetGenericArguments()[0])
+                                           || typeof(ActionResult).IsAssignableFrom(returns.GetGenericArguments()[0])));
+                    if (!isAction) continue;
+
+                    // Only what a bare GET can reach: every parameter has to be optional or
+                    // bindable from nothing. A required int is not a GET surface, it is a 500
+                    // about model binding and says nothing about the action.
+                    if (method.GetParameters().Any(x => !x.IsOptional && x.ParameterType.IsValueType
+                                                        && Nullable.GetUnderlyingType(x.ParameterType) == null))
+                        continue;
+
+                    paths.Add("/" + controller + "/" + method.Name);
+                }
+            }
+
+            paths.Sort(StringComparer.Ordinal);
+
+            var byStatus = new Dictionary<int, int>();
+            var broke = new List<string>();
+            using (var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }))
+            {
+                foreach (var path in paths)
+                {
+                    int status;
+                    try
+                    {
+                        status = (int)(await client.GetAsync(Url + path)).StatusCode;
+                    }
+                    catch (Exception)
+                    {
+                        // A connection reset is not a status; recorded as one so the survey does
+                        // not stop at the first endpoint that drops the connection.
+                        status = 0;
+                    }
+
+                    byStatus[status] = byStatus.TryGetValue(status, out var seen) ? seen + 1 : 1;
+                    if (status == 500 || status == 0) broke.Add(path);
+                }
+            }
+
+            Console.WriteLine("   ....  " + paths.Count + " actions a bare GET can reach: "
+                              + string.Join(", ", byStatus.OrderBy(x => x.Key)
+                                                          .Select(x => x.Value + " x " + (x.Key == 0 ? "no reply" : x.Key.ToString()))));
+
+            var newly = broke.Where(x => !SurfaceFiveHundreds.Contains(x)).ToList();
+            var fixedUp = SurfaceFiveHundreds.Where(x => !broke.Contains(x)).ToList();
+
+            // A NEW one is a regression wherever it appears, so this is asked in both
+            // environments.
+            var failures = Check(newly.Count == 0,
+                "  no action answers 500 that did not before"
+                + (newly.Count == 0 ? "" : " (" + string.Join(", ", newly) + ")"));
+
+            // One that STOPPED is a fix worth recording rather than silently absorbing - but only
+            // against the fixture the list describes. With a lobby server attached the round is
+            // already seeded, so the two Planetwars pages answer 200 and the set differs by
+            // design rather than by regression. Asking there would be asking the wrong question.
+            if (ZeroKWeb.Global.LobbyApi != null)
+            {
+                Console.WriteLine("   ....  and the list is not checked the other way here - a seeded"
+                                  + " PlanetWars round makes two of its entries answer 200, by design");
+                return failures;
+            }
+
+            failures += Check(fixedUp.Count == 0,
+                "  and none of the recorded ones stopped"
+                + (fixedUp.Count == 0 ? "" : " (" + string.Join(", ", fixedUp)
+                   + " - fixed? record it in SurfaceFiveHundreds)"));
+
+            return failures;
+        }
+
+        /// <summary>
+        /// The actions a bare anonymous GET reaches that answer 500, and why each one does.
+        ///
+        /// IN SOURCE rather than in a file beside the other baselines, and that is not a
+        /// preference. This check also runs inside the site container, where there is no
+        /// repository to read: the published image is /app and tools/ is not in it. The first
+        /// version read tools/get-surface-500s.txt, worked here, and threw
+        /// DirectoryNotFoundException the moment tools/stack.sh ran it.
+        ///
+        /// NONE OF THESE IS A PORT DEFECT. Each fails identically on MVC 5, and each is here
+        /// because a bare GET is not how the action is called - a property of the survey rather
+        /// than of the site.
+        /// </summary>
+        private static readonly HashSet<string> SurfaceFiveHundreds = new HashSet<string>(StringComparer.Ordinal)
+        {
+            // Want an argument a bare GET does not give them; Single()/First() on no match. Each
+            // is reached properly by a check of its own elsewhere in this file.
+            "/Forum/DeletePostPrompt",
+            "/Forum/GetPostList",
+            "/Home/GetTooltip",
+            "/Missions/File",
+
+            // Model.First() on an empty sequence - the fixture has 0 news rows. Worth knowing on
+            // its own: the RSS feed cannot render a site with no news at all, on either stack.
+            "/News/Index",
+
+            // Galaxies.Single(x => x.IsDefault) against a fixture with no galaxy. These two are
+            // the reason the "stopped" half of this check is asked only without a lobby server:
+            // tools/stack.sh seeds a PlanetWars round before it starts one, so over there both
+            // answer 200 and the set legitimately differs.
+            "/Planetwars/Index",
+            "/Planetwars/Minimap",
+        };
 
         /// <summary>
         /// The layout every ajax request is supposed to get, and the lobby pages nothing asked for.
