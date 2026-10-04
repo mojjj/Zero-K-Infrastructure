@@ -21,6 +21,7 @@ namespace ZeroKWeb.Controllers
         // that ContentServiceImplementation.Process - which registers resources, and writes -
         // is not reachable by one.
         [HttpPost]
+        [NoAntiForgeryTokenByDesign("the callers are game clients - ZKL, Chobby, the autoregistrator - not browsers, and carry no session to forge")]
         [ValidateInput(false)]
         public async Task<ActionResult> Index()
         {

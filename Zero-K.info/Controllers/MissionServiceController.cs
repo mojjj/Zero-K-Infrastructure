@@ -24,6 +24,7 @@ namespace ZeroKWeb.Controllers
         // As ContentServiceController: the body is the request, MissionServiceJsonClient
         // PostAsyncs it, and Process writes missions.
         [HttpPost]
+        [NoAntiForgeryTokenByDesign("the caller is the mission editor, not a browser")]
         [ValidateInput(false)]
         public async Task<ActionResult> Index()
         {

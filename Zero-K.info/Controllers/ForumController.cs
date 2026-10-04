@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Transactions;
@@ -258,7 +258,18 @@ namespace ZeroKWeb.Controllers
         /// <param name="threadID">The <see cref="ForumThread" /> ID, if not a new thread</param>
         /// <param name="categoryID">The ID of the subforum the <see cref="ForumPost" /> is/will be in</param>
         /// <param name="forumPostID">The <see cref="ForumPost" /> ID, if editing an existing post</param>
+        // Both forms that post here - Forum/NewPost.cshtml and Shared/CommentList.cshtml -
+        // have always emitted @Html.AntiForgeryToken(). Nothing validated it. The token was sent
+        // on every forum post on the site and thrown away, so an auto-submitting cross-site form
+        // could write a post, start a thread or edit an existing one as the visitor, and both
+        // CSRF checks passed: one saw the token in the view, the other saw [HttpPost] and
+        // stopped there.
+        //
+        // PostHistoryController borrows this controller and calls SubmitPost directly, in
+        // process. A filter does not run on a method call, so that path is unaffected - and
+        // RevertTo carries its own [HttpPost] and token.
         [HttpPost]
+        [ValidateAntiForgeryToken]
         [Auth]
         [ValidateInput(false)]
         public ActionResult SubmitPost(

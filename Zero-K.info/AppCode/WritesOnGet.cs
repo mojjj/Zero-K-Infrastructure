@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace ZeroKWeb
 {
@@ -17,6 +17,28 @@ namespace ZeroKWeb
     public sealed class WritesOnGetByDesignAttribute : Attribute
     {
         public WritesOnGetByDesignAttribute(string reason) { Reason = reason; }
+        public string Reason { get; }
+    }
+
+    /// <summary>
+    /// An action that changes state, takes only POST, and deliberately does NOT validate an
+    /// anti-forgery token - because its caller cannot carry one.
+    ///
+    /// [HttpPost] alone is not the rule and never was. The rule is POST **and** a validated
+    /// token: a cross-site page cannot make a browser send a GET-shaped write, but it can
+    /// certainly auto-submit a form. Both checks used to stop at [HttpPost], so
+    /// ForumController.SubmitPost - the site's most-used write - sat behind two green checks
+    /// while the token its own forms emitted was never looked at.
+    ///
+    /// The exemptions are real, and they are all the same shape: the caller is not a browser and
+    /// has no session to forge. A game client posting a command, PayPal posting a notification,
+    /// GitHub posting a webhook. Each of those authenticates some OTHER way, and the reason has
+    /// to say which - "no token" on its own is the thing this attribute exists to prevent.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Method)]
+    public sealed class NoAntiForgeryTokenByDesignAttribute : Attribute
+    {
+        public NoAntiForgeryTokenByDesignAttribute(string reason) { Reason = reason; }
         public string Reason { get; }
     }
 
