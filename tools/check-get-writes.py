@@ -48,6 +48,20 @@ because the lobby API is an interface and its members can be classified one by o
 them here would not be checkable. A check that is honest about its edges is worth more than one
 that guesses at them.
 
+**[HttpPost] is half the rule, and this script used to stop there.** A cross-site page cannot
+make a browser send a GET-shaped write, but it can auto-submit a form, so POST without a validated
+token is not a defence. ForumController.SubmitPost - the site's most-used write - was [HttpPost]
+with no [ValidateAntiForgeryToken], while both forms that post to it emitted
+@Html.AntiForgeryToken() faithfully on every page. The token was sent and thrown away, and both
+CSRF checks passed: tools/check-antiforgery.py saw a token in the view, and this one saw
+[HttpPost] and skipped. So a POSTing action that writes must also validate, or say why it cannot:
+
+    [NoAntiForgeryTokenByDesign("PayPal is the caller and has no session here")]
+
+All four exemptions are the same shape - the caller is not a browser. A game client posting a
+command, PayPal posting a notification, GitHub posting a signed webhook. Each authenticates some
+other way and the reason has to say which.
+
 An action is reachable by GET unless it carries [HttpPost]. Every action that writes and is
 reachable must say which it is, on the method:
 
@@ -99,6 +113,8 @@ PROPERTY = re.compile(
 SETTER = re.compile(r"\bset\s*(?:\{|=>)")
 
 HTTP_POST = re.compile(r"\[\s*HttpPost\s*[\]\(]")
+TOKEN = re.compile(r"\[\s*ValidateAntiForgeryToken\s*\]")
+NO_TOKEN = re.compile(r'\[NoAntiForgeryTokenByDesign\(')
 BY_DESIGN = re.compile(r'\[WritesOnGetByDesign\("([^"]*)"\)\]')
 NOT_YET = re.compile(r'\[WritesOnGetNotYetFixed\("([^"]*)"\)\]')
 
@@ -143,15 +159,28 @@ def body_of(text, start):
 
 
 def attributes_above(text, start):
-    """The attribute lines immediately above a signature, stopping at a blank line or code."""
+    """The attributes immediately above a signature, stopping at a blank line or code.
+
+    An attribute may span several physical lines - a long reason wraps - and reading bottom-up
+    those continuations arrive BEFORE the `[` that opens them. Treating one as code stopped the
+    walk, so every attribute above it became invisible: a three-line
+    [NoAntiForgeryTokenByDesign("...")] hid the [HttpPost] over it and the action read as
+    reachable by GET. Continuations are gathered and folded into the attribute they belong to.
+    """
     head = text[:start].rstrip("\n")
-    found = []
+    found, pending = [], []
     for line in reversed(head.split("\n")):
         stripped = line.strip()
         if stripped.startswith("["):
-            found.append(stripped)
+            found.append(" ".join([stripped] + pending))
+            pending = []
         elif stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
             continue
+        elif pending or stripped.endswith("]"):
+            # Part of a multi-line attribute, read bottom-up. Only reachable from directly above
+            # a signature, where the alternative is a brace, a comment or a blank line - none of
+            # which ends in a bracket.
+            pending.insert(0, stripped)
         else:
             break
     return found
@@ -218,7 +247,7 @@ def writing_properties(paths, writers):
 
 
 def scan(paths, helper_paths):
-    writing, by_design, not_yet = [], [], []
+    writing, by_design, not_yet, untokened = [], [], [], []
     writers = writing_methods(paths + helper_paths)
     setters = set(writing_properties(paths + helper_paths, writers))
     for path in paths:
@@ -239,9 +268,14 @@ def scan(paths, helper_paths):
             # HttpPost - "needs HttpPost and a token" is the obvious thing to write - used to
             # read as the action HAVING it, and the action was then skipped entirely. Found by
             # writing exactly that sentence.
-            if any(HTTP_POST.search(attribute) for attribute in attributes):
-                continue
             line = text.count("\n", 0, match.start()) + 1
+            if any(HTTP_POST.search(attribute) for attribute in attributes):
+                # POST, so no link reaches it - but a cross-site form can, unless the token is
+                # validated or the action says why its caller cannot send one.
+                if not any(TOKEN.search(a) for a in attributes) \
+                        and not any(NO_TOKEN.search(a) for a in attributes):
+                    untokened.append((path, line, match.group(1)))
+                continue
             where = (path, line, match.group(1))
             design = next((BY_DESIGN.search(a) for a in attributes if BY_DESIGN.search(a)), None)
             pending = next((NOT_YET.search(a) for a in attributes if NOT_YET.search(a)), None)
@@ -251,7 +285,7 @@ def scan(paths, helper_paths):
                 not_yet.append(where + (pending.group(1),))
             else:
                 writing.append(where)
-    return writing, by_design, not_yet
+    return writing, by_design, not_yet, untokened
 
 
 # A check that looks at nothing passes. These scripts find their subjects through
@@ -273,7 +307,7 @@ def main():
               file=sys.stderr)
         return 2
 
-    unmarked, by_design, not_yet = scan(paths, helper_paths)
+    unmarked, by_design, not_yet, untokened = scan(paths, helper_paths)
 
     for path, line, name, in unmarked:
         print("%s:%d: %s writes to the database and a GET can reach it" % (path, line, name))
@@ -281,6 +315,15 @@ def main():
         print("\n%d action(s) change state on a GET with nothing said about it." % len(unmarked))
         print("Add [HttpPost] and [ValidateAntiForgeryToken], and make the view use Html.PostLink")
         print("- or say why it is right, with [WritesOnGetByDesign(\"...\")] on the method.")
+        return 1
+
+    for path, line, name in untokened:
+        print("%s:%d: %s writes and takes POST, but never validates the token" % (path, line, name))
+    if untokened:
+        print("\n%d POSTing action(s) change state with no anti-forgery token validated."
+              % len(untokened))
+        print("Add [ValidateAntiForgeryToken] - or, if the caller is not a browser and cannot")
+        print('send one, say so with [NoAntiForgeryTokenByDesign("...")] on the method.')
         return 1
 
     print("no action writes on a GET without saying why in %d controller(s), following calls"

@@ -883,6 +883,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckGetSurface();
                 failures += await CheckClosedGetWrites();
                 failures += await CheckIpnVerification();
+                failures += await CheckForumPostToken();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2502,6 +2503,97 @@ namespace ZeroKWeb.Host
             }
 
             return failures;
+        }
+
+        /// <summary>
+        /// The forum's own form, posted the way a browser posts it - and refused without the token.
+        ///
+        /// /Forum/SubmitPost was [HttpPost] with no [ValidateAntiForgeryToken] while both forms
+        /// that post to it emitted @Html.AntiForgeryToken() on every page. The token was sent and
+        /// thrown away, so an auto-submitting cross-site form could write a post, start a thread
+        /// or edit one as the visitor - and both CSRF checks passed, one seeing a token in the
+        /// view and the other seeing [HttpPost] and stopping there.
+        ///
+        /// Nothing in this harness had ever posted to it. 209 checks and the site's most-used
+        /// write was reached only by rendering the page that holds the form, which is why adding
+        /// [ValidateAntiForgeryToken] changed no result anywhere: there was nothing to change.
+        ///
+        /// The token is scraped from the REAL form rather than taken from /Harness/Token,
+        /// because the half that was decorative is the form's own token. If the form stopped
+        /// emitting one, a harness-issued token would hide it.
+        /// </summary>
+        private static async Task<int> CheckForumPostToken()
+        {
+            Console.WriteLine();
+            Console.WriteLine("a forum post carries a token that is actually checked:");
+
+            // (threadID, postID), which is what WithForumThread passes - not (categoryID,
+            // threadID). Reading it the wrong way round aimed the post at a thread id that was
+            // really a post id, and the first run passed anyway because the two numbers happened
+            // to collide in that database. Reloading the fixture is what separated them.
+            return await WithForumThread(async (threadID, postID) =>
+                await AsAccount(AdminLevel.None, async client =>
+                {
+                    var failures = 0;
+                    var text = "Harness token post " + Guid.NewGuid().ToString("N");
+
+                    var form = await client.GetAsync(Url + "/Forum/NewPost?threadID=" + threadID);
+                    var formHtml = await form.Content.ReadAsStringAsync();
+                    // Asserted before the token is looked for, because "no token on the page" and
+                    // "no page" read the same in a scrape and are not the same fault. Finding out
+                    // which cost a run.
+                    failures += Check(form.IsSuccessStatusCode,
+                        "  the new-post form renders (" + (int)form.StatusCode + ", "
+                        + formHtml.Length + " bytes)");
+                    var token = System.Text.RegularExpressions.Regex.Match(formHtml,
+                        "name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"").Groups[1].Value;
+                    failures += Check(!string.IsNullOrEmpty(token),
+                        "  and emits an anti-forgery token");
+
+                    var without = await client.PostAsync(Url + "/Forum/SubmitPost",
+                        new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("threadID", threadID.ToString()),
+                            new KeyValuePair<string, string>("text", text),
+                        }));
+                    failures += Check(without.StatusCode == System.Net.HttpStatusCode.BadRequest,
+                        "  a post with no token is refused (" + (int)without.StatusCode + ")");
+
+                    var with = await client.PostAsync(Url + "/Forum/SubmitPost",
+                        new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("threadID", threadID.ToString()),
+                            new KeyValuePair<string, string>("text", text),
+                            new KeyValuePair<string, string>("__RequestVerificationToken", token),
+                        }));
+                    failures += Check(with.IsSuccessStatusCode || (int)with.StatusCode == 302,
+                        "  and one that carries the form's own token is accepted ("
+                        + (int)with.StatusCode + ")");
+
+                    // The refusal is only worth having if the acceptance really wrote. A
+                    // [ValidateAntiForgeryToken] that rejected everything would satisfy the
+                    // refusal, and a 302 says nothing about what happened behind it.
+                    //
+                    // It does NOT establish that the untokened post wrote nothing, and saying so
+                    // would be wrong: with the attribute removed this still reads 1, because the
+                    // two attempts carry identical text and the forum merges a repeat of the
+                    // last post. The refusal above is what measures the refusal.
+                    using (var db = new ZkDataContext())
+                    {
+                        var written = db.ForumPosts.Where(x => x.ForumThreadID == threadID
+                                                               && x.Text == text).ToList();
+                        failures += Check(written.Count == 1,
+                            "  and the accepted post really is in the thread ("
+                            + written.Count + " found)");
+                        if (written.Count > 0)
+                        {
+                            db.ForumPosts.RemoveRange(written);
+                            db.SaveChanges();
+                        }
+                    }
+
+                    return failures;
+                }));
         }
 
         /// <summary>

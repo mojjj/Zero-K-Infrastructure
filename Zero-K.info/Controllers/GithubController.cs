@@ -16,6 +16,7 @@ namespace ZeroKWeb.Controllers
     public class GithubController : Controller
     {
         [HttpPost]
+        [NoAntiForgeryTokenByDesign("GitHub signs the body with a shared secret and Hook verifies the HMAC before reading it, which is a stronger check than a token")]
         public async Task<ActionResult> Hook()
         {
             // Headers[...] is a string in MVC 5 and a StringValues in ASP.NET Core. Both convert

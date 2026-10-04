@@ -28,6 +28,11 @@ shape of the call, and OnNewsChanged, AddClanChannel, LogIpFailure and RedeemSes
 change something from under other headings. RedeemSessionToken is the one to remember - it reads
 like a query and is single-use, so redeeming invalidates.
 
+**[HttpPost] is half the rule here too.** A cross-site page cannot send a GET-shaped change, but
+it can auto-submit a form, so a POSTing action that changes the lobby must also validate the
+token - or carry [NoAntiForgeryTokenByDesign("...")], which GithubController.Hook does: GitHub
+signs the body with a shared secret and Hook verifies the HMAC before reading it.
+
 An action is reachable by GET unless it carries [HttpPost]. One that calls a changing member must
 say which it is, on the method:
 
@@ -63,6 +68,8 @@ MEMBER = re.compile(
     r"[^\n]*?\b(\w+)[ \t]*[\(\{;]", re.MULTILINE)
 
 HTTP_POST = re.compile(r"\[\s*HttpPost\s*[\]\(]")
+TOKEN = re.compile(r"\[\s*ValidateAntiForgeryToken\s*\]")
+NO_TOKEN = re.compile(r'\[NoAntiForgeryTokenByDesign\(')
 BY_DESIGN = re.compile(r'\[ChangesLobbyOnGetByDesign\("([^"]*)"\)\]')
 NOT_YET = re.compile(r'\[ChangesLobbyOnGetNotYetFixed\("([^"]*)"\)\]')
 
@@ -92,14 +99,28 @@ def body_of(text, start):
 
 
 def attributes_above(text, start):
+    """The attributes immediately above a signature, stopping at a blank line or code.
+
+    An attribute may span several physical lines - a long reason wraps - and reading bottom-up
+    those continuations arrive BEFORE the `[` that opens them. Treating one as code stopped the
+    walk, so every attribute above it became invisible: a three-line
+    [NoAntiForgeryTokenByDesign("...")] hid the [HttpPost] over it and the action read as
+    reachable by GET. Continuations are gathered and folded into the attribute they belong to.
+    """
     head = text[:start].rstrip("\n")
-    found = []
+    found, pending = [], []
     for line in reversed(head.split("\n")):
         stripped = line.strip()
         if stripped.startswith("["):
-            found.append(stripped)
+            found.append(" ".join([stripped] + pending))
+            pending = []
         elif stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
             continue
+        elif pending or stripped.endswith("]"):
+            # Part of a multi-line attribute, read bottom-up. Only reachable from directly above
+            # a signature, where the alternative is a brace, a comment or a blank line - none of
+            # which ends in a bracket.
+            pending.insert(0, stripped)
         else:
             break
     return found
@@ -127,7 +148,7 @@ def scan(paths, changing):
     # The receiver is the lobby API, spelled Global.LobbyApi or a local holding it. Matching the
     # member name alone would catch GetTourneyBattles on anything at all.
     call = re.compile(r"\bLobbyApi\s*\??\s*\.\s*(\w+)\s*\(")
-    plain, by_design, not_yet = [], [], []
+    plain, by_design, not_yet, untokened = [], [], [], []
     for path in paths:
         with open(path, encoding="utf-8-sig") as handle:
             text = handle.read()
@@ -139,9 +160,12 @@ def scan(paths, changing):
             if not hit:
                 continue
             attributes = attributes_above(text, match.start())
-            if any(HTTP_POST.search(a) for a in attributes):
-                continue
             line = text.count("\n", 0, match.start()) + 1
+            if any(HTTP_POST.search(a) for a in attributes):
+                if not any(TOKEN.search(a) for a in attributes) \
+                        and not any(NO_TOKEN.search(a) for a in attributes):
+                    untokened.append((path, line, match.group(1), hit))
+                continue
             where = (path, line, match.group(1), hit)
             design = next((BY_DESIGN.search(a) for a in attributes if BY_DESIGN.search(a)), None)
             pending = next((NOT_YET.search(a) for a in attributes if NOT_YET.search(a)), None)
@@ -151,7 +175,7 @@ def scan(paths, changing):
                 not_yet.append(where + (pending.group(1),))
             else:
                 plain.append(where)
-    return plain, by_design, not_yet
+    return plain, by_design, not_yet, untokened
 
 
 # A check that looks at nothing passes. Three ways this one could: no controllers, no interface
@@ -177,7 +201,7 @@ def main():
         print('\nAdd [ChangesLobbyState("<what it changes>")] or [ReadsLobbyState] above it.')
         return 1
 
-    plain, by_design, not_yet = scan(paths, changing)
+    plain, by_design, not_yet, untokened = scan(paths, changing)
 
     for path, line, name, hit in plain:
         print("%s:%d: %s changes the lobby server (%s) and a GET can reach it"
@@ -187,6 +211,16 @@ def main():
               % len(plain))
         print("Add [HttpPost] and [ValidateAntiForgeryToken], and make the view use Html.PostLink")
         print('- or say why it is right, with [ChangesLobbyOnGetByDesign("...")] on the method.')
+        return 1
+
+    for path, line, name, hit in untokened:
+        print("%s:%d: %s changes the lobby (%s) and takes POST, but never validates the token"
+              % (path, line, name, ", ".join(hit)))
+    if untokened:
+        print("\n%d POSTing action(s) change the lobby with no anti-forgery token validated."
+              % len(untokened))
+        print("Add [ValidateAntiForgeryToken] - or, if the caller is not a browser and cannot")
+        print('send one, say so with [NoAntiForgeryTokenByDesign("...")] on the method.')
         return 1
 
     print("no action changes the lobby on a GET without saying why"

@@ -22,6 +22,9 @@ namespace ZeroKWeb.Controllers
         // anti-forgery token: PayPal cannot carry one, which is why verification with PayPal is
         // what this endpoint trusts, and why that now happens before anything is written.
         [HttpPost]
+        [NoAntiForgeryTokenByDesign("PayPal is the caller and has no session here; the postback"
+            + " to PayPal, which ImportIpnPayment makes before writing anything, is what says"
+            + " the notification is genuine")]
         public ActionResult Ipn() {
             // One call, because the parsed fields and the raw bytes must describe the same request:
             // PayPal verification posts the bytes back. See ControllerCompat.ReadIpnRequest.
