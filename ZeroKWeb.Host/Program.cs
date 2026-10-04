@@ -879,6 +879,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckWebLobbyFlag();
                 failures += await CheckWebApi();
                 failures += await CheckTooltipsAndUnvisitedPages();
+                failures += await CheckAjaxLayoutAndLobbyViews();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2451,6 +2452,92 @@ namespace ZeroKWeb.Host
                 var body = (await redeem.Content.ReadAsStringAsync()).Trim();
                 return Check(body == "No contribution with that code found",
                     "  Contributions/Redeem/{code} binds the code (\"" + body + "\")");
+            });
+
+            return failures;
+        }
+
+        /// <summary>
+        /// The layout every ajax request is supposed to get, and the lobby pages nothing asked for.
+        ///
+        /// _ViewStart.cshtml chooses between three layouts, and one of its branches had never been
+        /// taken:
+        ///
+        ///     if (ViewContext.IsChildActionCompat())        Layout = null;
+        ///     else if (Request.IsAjaxRequest())             Layout = "_AjaxLayout.cshtml";
+        ///     else                                          Layout = "_SiteLayout.cshtml";
+        ///
+        /// _AjaxLayout is two lines - a head section and RenderBody - so a request that should get
+        /// it and gets _SiteLayout instead comes back as a whole web page wrapped around what was
+        /// meant to be a fragment. Mvc5RequestCompat.IsAjaxRequest reads the X-Requested-With
+        /// header and is the only thing standing between those two outcomes, and NOTHING had ever
+        /// called it in the place where it decides something.
+        ///
+        /// Asserted in BOTH directions on the same URL, because either alone is weak: a port that
+        /// always answered the site layout would pass "the plain request is a whole page", and one
+        /// that never did would pass "the ajax request is not".
+        ///
+        /// The lobby pages are the ordinary kind of gap - nothing requested them. Two of the three
+        /// need only a signed-in visitor. LobbyChatMessages needs a lobby server, because its
+        /// action asks Global.LobbyApi.CanJoinChannel before choosing a view, so it is skipped
+        /// here with the wording tools/stack.sh looks for rather than failed.
+        /// </summary>
+        private static async Task<int> CheckAjaxLayoutAndLobbyViews()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the ajax layout, and the lobby's own pages:");
+
+            var failures = 0;
+            using (var client = new HttpClient())
+            {
+                const string path = "/Home/NotLoggedIn";
+
+                var plain = await (await client.GetAsync(Url + path)).Content.ReadAsStringAsync();
+                failures += Check(plain.Contains("</html>"),
+                    "  " + path + " is a whole page to an ordinary request (" + plain.Length + " bytes)");
+
+                var request = new HttpRequestMessage(HttpMethod.Get, Url + path);
+                request.Headers.Add("X-Requested-With", "XMLHttpRequest");
+                var ajax = await (await client.SendAsync(request)).Content.ReadAsStringAsync();
+
+                failures += Check(!ajax.Contains("</html>") && ajax.Length < plain.Length,
+                    "  and a FRAGMENT to an ajax one, which is _ViewStart taking the _AjaxLayout "
+                    + "branch (" + ajax.Length + " bytes)");
+            }
+
+            // Two of the lobby's pages, which only ever needed asking for.
+            failures += await AsAccount(AdminLevel.None, async client =>
+            {
+                var chat = await client.GetAsync(Url + "/Lobby/Chat");
+                var chatHtml = await chat.Content.ReadAsStringAsync();
+                return Check(chat.IsSuccessStatusCode && chatHtml.Contains("</html>"),
+                    "  /Lobby/Chat renders Lobby/LobbyChat.cshtml (" + (int)chat.StatusCode + ", "
+                    + chatHtml.Length + " bytes)");
+            });
+
+            failures += await AsModerator(async moderator =>
+            {
+                var history = await moderator.GetAsync(Url + "/Lobby/ChatHistory");
+                var historyHtml = await history.Content.ReadAsStringAsync();
+                return Check(history.IsSuccessStatusCode && historyHtml.Contains("</html>"),
+                    "  /Lobby/ChatHistory renders Lobby/LobbyChatHistory.cshtml ("
+                    + (int)history.StatusCode + ", " + historyHtml.Length + " bytes)");
+            });
+
+            if (ZeroKWeb.Global.LobbyApi == null)
+            {
+                Console.WriteLine("   ....  /Lobby/ChatMessages needs a lobby server and none is configured"
+                                  + " - run tools/stack.sh, which starts one");
+                return failures;
+            }
+
+            failures += await AsAccount(AdminLevel.None, async client =>
+            {
+                var messages = await client.GetAsync(Url + "/Lobby/ChatMessages?Channel=zk");
+                var messagesHtml = await messages.Content.ReadAsStringAsync();
+                return Check(messages.IsSuccessStatusCode,
+                    "  /Lobby/ChatMessages rendered against a real lobby server ("
+                    + (int)messages.StatusCode + ", " + messagesHtml.Length + " bytes)");
             });
 
             return failures;
