@@ -1,7 +1,6 @@
 ﻿using System.IO;
 using System.Threading.Tasks;
 using System.Web;
-using System.Web.Http;
 using System.Web.Mvc;
 using LobbyClient;
 
@@ -16,6 +15,12 @@ namespace ZeroKWeb.Controllers
 
         static ContentServiceImplementation implementation = new ContentServiceImplementation();
 
+        // The body IS the request, as the error text below says, and every client POSTs it
+        // (IContentService.cs uses httpClient.PostAsync). A GET only ever reached the "please
+        // send a POST" line; saying so in an attribute is what lets the GET-write check see
+        // that ContentServiceImplementation.Process - which registers resources, and writes -
+        // is not reachable by one.
+        [HttpPost]
         [ValidateInput(false)]
         public async Task<ActionResult> Index()
         {

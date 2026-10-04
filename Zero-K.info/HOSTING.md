@@ -543,6 +543,39 @@ still answers 200, so it is the endpoints that are gone and not the container th
 this is written down so that setting it "to make the checks pass" in production is a decision
 somebody has to make on purpose.
 
+## /Contributions/Ipn, the one endpoint that must stay anonymous (2026-10-04)
+
+PayPal posts payment notifications to `/Contributions/Ipn`. It is the caller, so it carries no
+cookie, no session and no anti-forgery token, and it cannot be made to - which means the endpoint
+is open to anyone who can reach the site, by necessity rather than by oversight. Whatever a
+deployment puts in front of the site must leave it reachable from the public internet, or
+donations stop being recorded.
+
+What stands in for authentication is the **postback**: the received bytes are sent back to
+`https://www.paypal.com/cgi-bin/webscr` with `cmd=_notify-validate`, and PayPal answers
+`VERIFIED` or not. **That now happens before anything is written.** It used to happen after, and
+since the sender chooses every field, one unauthenticated request was enough to put a
+contribution of any size under any name on the public `/Contributions` page, set `HasKudos` on
+whichever account the item code named, mail a working redeem code from the team address to an
+address of the sender's choosing, and announce it in the public `zk` lobby channel - all before
+PayPal said it had sent nothing. Three outcomes now, in `PayPalInterface.ImportIpnPayment`:
+
+| PayPal says | recorded | granted |
+|---|---|---|
+| it did not send this | no - the parsed fields go into the alert so a real payment is still recoverable by hand | no |
+| nothing (unreachable) | yes, with `Comment = "VERIFICATION UNAVAILABLE"` and an alert | no |
+| `VERIFIED` | yes | yes |
+
+A deployment therefore needs **outbound HTTPS to paypal.com**. Without it every notification lands
+in the middle row: the money is still recorded and nobody is paid out in kudos until someone
+looks. That is the deliberate choice - a network fault must not lose a real donation - but it is
+silent unless the alerts are going somewhere, which on a host with no lobby server means the trace
+log (see the error-log section below).
+
+`ZeroKWeb.Host`'s own `CheckIpnVerification` holds this in place, including the positive control:
+a notification PayPal confirms still has to be recorded, or "nothing was written" would pass for
+a seeding fault as readily as for the fix.
+
 ## The site's own error log, and who writes it now (2026-10-03)
 
 `Admin/TraceLogs` reads the `LogEntries` table. Nothing writes that table unless a

@@ -21,6 +21,9 @@ namespace ZeroKWeb.Controllers
 
         private static readonly MissionServiceImplementation implementation = new MissionServiceImplementation();
 
+        // As ContentServiceController: the body is the request, MissionServiceJsonClient
+        // PostAsyncs it, and Process writes missions.
+        [HttpPost]
         [ValidateInput(false)]
         public async Task<ActionResult> Index()
         {
