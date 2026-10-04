@@ -2479,12 +2479,17 @@ namespace ZeroKWeb.Host
         private static async Task<int> CheckClosedGetWrites()
         {
             Console.WriteLine();
-            Console.WriteLine("the two GET-writes that were closed:");
+            Console.WriteLine("the GET-writes that were closed:");
 
             var failures = 0;
             using (var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }))
             {
-                foreach (var path in new[] { "/Factions/LeaveFaction", "/PostHistory/RevertTo?id=1" })
+                // ForceRatingsUpdate is [Auth(Moderator)] and still answers 405 rather than 302,
+                // which is worth having asserted: an HttpPost constraint is applied when the
+                // action is selected, before any filter runs, so the method is refused without
+                // the request having to say who it is.
+                foreach (var path in new[]
+                         { "/Factions/LeaveFaction", "/PostHistory/RevertTo?id=1", "/Admin/ForceRatingsUpdate" })
                 {
                     var byLink = await client.GetAsync(Url + path);
                     failures += Check(byLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
