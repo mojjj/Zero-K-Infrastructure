@@ -2505,6 +2505,45 @@ namespace ZeroKWeb.Host
                     + "branch (" + ajax.Length + " bytes)");
             }
 
+            // /Forum/Preview, which is the BBCode parser with no page around it. The view is two
+            // lines - @model string and @Html.BBCode(Model) - so what comes back IS the parser's
+            // output, and the action carries [ValidateInput(false)], meaning it takes whatever is
+            // sent.
+            //
+            // Worth more than one more rendered view. Html.BBCode is one of the thirty helpers
+            // that exist TWICE - MVC 5 compiles HtmlHelperExtensions.cs and ASP.NET Core compiles
+            // HtmlHelperExtensions.Ported.cs - and that pair has already drifted once in exactly
+            // this way: two encoding fixes reached the MVC 5 copies and not the ported ones, so
+            // the .NET 9 site carried two vulnerabilities the site it replaces had fixed. This is
+            // the parser's own endpoint, and nothing had ever asked it anything.
+            using (var client = new HttpClient())
+            {
+                var markup = await (await client.GetAsync(
+                    Url + "/Forum/Preview?text=" + Uri.EscapeDataString("[b]bold[/b]")))
+                    .Content.ReadAsStringAsync();
+                // <strong>, not <b> - which is what the parser actually emits, and what the first
+                // version of this check guessed wrong.
+                failures += Check(markup.Contains("<strong>bold</strong>"),
+                    "  /Forum/Preview parses BBCode rather than echoing it");
+
+                // The half with teeth. A tag the parser does NOT know has to come back as text,
+                // not as a tag - the endpoint turns off request validation, so nothing upstream
+                // is going to catch it either.
+                const string attack = "<script>alert(1)</script>";
+                var hostile = await (await client.GetAsync(
+                    Url + "/Forum/Preview?text=" + Uri.EscapeDataString(attack)))
+                    .Content.ReadAsStringAsync();
+
+                // BOTH directions, and on the exact string rather than on "<script>". The page
+                // around the fragment is a real page with the site's own script tags in it, so
+                // asking whether it contains "<script>" anywhere answers yes for every response
+                // and tests nothing - which is what the first version of this did.
+                failures += Check(hostile.Contains("&lt;script&gt;alert(1)&lt;/script&gt;"),
+                    "  and encodes a script tag rather than passing it through");
+                failures += Check(!hostile.Contains(attack),
+                    "  with the raw tag nowhere in the response");
+            }
+
             // Two of the lobby's pages, which only ever needed asking for.
             failures += await AsAccount(AdminLevel.None, async client =>
             {
