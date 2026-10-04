@@ -2560,6 +2560,34 @@ namespace ZeroKWeb.Host
                                          && entryHtml.Contains("Harness original text"),
                             "  /PostHistory/ViewEntry shows the text that was edited ("
                             + (int)entry.StatusCode + ")");
+
+                        // The DIFF, which is the same page the harness already requested and a
+                        // different half of it. PostHistoryController.Index only builds
+                        // ViewBag.DiffModel when the post HAS an edit, and PostHistoryIndex only
+                        // renders DisplayTemplates/Diff when that is not null - so every earlier
+                        // request for this page took the empty branch, and the two diff views had
+                        // never run. The edit seeded just above is what makes the other branch
+                        // reachable; it exists for ViewEntry and this costs one more request.
+                        //
+                        // DiffPiece renders inside Diff, so each is asserted on markup only IT
+                        // writes: the Before/After header row is Diff's, and the coloured span is
+                        // DiffPiece's ChangeType.Inserted branch.
+                        //
+                        // NOT on the edited text appearing whole, which is what the first version
+                        // of this check looked for and why it failed against working code. DiffPlex
+                        // splits a changed line into WORD-level sub-pieces, and DiffPiece renders
+                        // each in its own span - so "Harness edited text" is three spans and that
+                        // string is never in the page.
+                        var history = await client.GetAsync(Url + "/PostHistory/Index/" + postID);
+                        var historyHtml = await history.Content.ReadAsStringAsync();
+                        tooltip += Check(history.IsSuccessStatusCode
+                                         && historyHtml.Contains(">Before</th>")
+                                         && historyHtml.Contains(">After</th>"),
+                            "  /PostHistory/Index renders the diff table of that edit ("
+                            + (int)history.StatusCode + ", " + historyHtml.Length + " bytes)");
+                        tooltip += Check(historyHtml.Contains("color: lightgreen")
+                                         && historyHtml.Contains("color: hotpink"),
+                            "  with the inserted and deleted words marked, which is DiffPiece running");
                     }
                 }
                 finally
@@ -3863,6 +3891,79 @@ namespace ZeroKWeb.Host
         }
 
         /// <summary>
+        /// One clan role and one EXPIRED punishment on an account, which are what
+        /// DisplayTemplates/AccountRole and DisplayTemplates/Punishment need in order to render
+        /// at all. The fixture has neither.
+        ///
+        /// Expired, and with no ban flag set, and that is not tidiness. AsAccount and AsModerator
+        /// sign in as the lowest AccountID there is - the same account this seeds against - so a
+        /// live punishment carrying BanSite would put the harness behind its own ban middleware
+        /// and every check after this one would answer 403. AdminUserDetail renders the EXPIRED
+        /// list anyway, which is the branch wanted here.
+        ///
+        /// IsClanOnly on the role for a related reason: UserRoleList skips a role that is not
+        /// clan-only while PlanetWarsMode is AllOffline, and a clan-only one renders whatever the
+        /// mode is.
+        /// </summary>
+        private static async Task<int> WithRoleAndPunishment(int accountID, int clanID, Func<string, Task<int>> body)
+        {
+            const string roleName = "Harness Clan Role";
+            int roleTypeID, punishmentID;
+
+            using (var db = new ZkDataContext())
+            {
+                var role = new RoleType
+                {
+                    Name = roleName,
+                    Description = "Seeded by the host harness",
+                    IsClanOnly = true,
+                    PollDurationDays = 1,
+                };
+                db.RoleTypes.Add(role);
+                db.SaveChanges();
+                roleTypeID = role.RoleTypeID;
+
+                db.AccountRoles.Add(new AccountRole
+                {
+                    AccountID = accountID,
+                    RoleTypeID = roleTypeID,
+                    ClanID = clanID,
+                    Inauguration = DateTime.UtcNow,
+                });
+
+                var punishment = new Punishment
+                {
+                    AccountID = accountID,
+                    Reason = "Harness expired punishment",
+                    Time = DateTime.UtcNow.AddDays(-2),
+                    BanExpires = DateTime.UtcNow.AddDays(-1),
+                };
+                db.Punishments.Add(punishment);
+                db.SaveChanges();
+                punishmentID = punishment.PunishmentID;
+            }
+
+            try
+            {
+                return await body(roleName);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var roles = db.AccountRoles.Where(x => x.RoleTypeID == roleTypeID).ToList();
+                    if (roles.Count > 0) db.AccountRoles.RemoveRange(roles);
+                    var punishment = db.Punishments.FirstOrDefault(x => x.PunishmentID == punishmentID);
+                    if (punishment != null) db.Punishments.Remove(punishment);
+                    db.SaveChanges();
+
+                    var role = db.RoleTypes.FirstOrDefault(x => x.RoleTypeID == roleTypeID);
+                    if (role != null) { db.RoleTypes.Remove(role); db.SaveChanges(); }
+                }
+            }
+        }
+
+        /// <summary>
         /// The two views that diverged for their child actions - Users/Detail and
         /// Battles/Detail - requested as pages.
         ///
@@ -4042,6 +4143,27 @@ namespace ZeroKWeb.Host
                 var detail = await (await client.GetAsync(Url + "/Users/Detail/" + accountID)).Content.ReadAsStringAsync();
                 seeded += Check(detail.Contains("/Clans/Detail/" + clanID),
                     "/Users/Detail took the branch that renders Users/UserRoleList.cshtml");
+
+                // ...and the two display templates HANGING OFF that page, which the branch above
+                // reaches and nothing had ever given it rows for. UserRoleList loops over the
+                // account's roles and calls DisplayFor on each, and AdminUserDetail does the same
+                // for its expired punishments - so both templates needed a row to exist, not a
+                // request to be made.
+                seeded += await WithRoleAndPunishment(accountID, clanID, async roleName =>
+                {
+                    var withRole = await (await client.GetAsync(Url + "/Users/Detail/" + accountID))
+                                         .Content.ReadAsStringAsync();
+                    var roles = Check(withRole.Contains(roleName),
+                        "  and with a role on it, UserRoleList renders DisplayTemplates/AccountRole");
+
+                    return roles + await AsModerator(async moderator =>
+                    {
+                        var admin = await (await moderator.GetAsync(Url + "/Users/AdminUserDetail/" + accountID))
+                                          .Content.ReadAsStringAsync();
+                        return Check(admin.Contains("Harness expired punishment"),
+                            "  and an expired ban renders DisplayTemplates/Punishment");
+                    });
+                });
 
                 return seeded;
             });
