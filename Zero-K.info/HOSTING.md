@@ -677,7 +677,7 @@ position to notice.
 
 `CheckGetSurface` in `ZeroKWeb.Host/Program.cs` does it on every run instead. It finds the actions
 by **reflection** over the linked controllers rather than from a list, so an action added tomorrow
-is surveyed tomorrow, and it pins the ones that answer 500 against `tools/get-surface-500s.txt` -
+is surveyed tomorrow, and it pins the ones that answer 500 against a list in that same file -
 failing in **both** directions, because a 500 that stops is a fix somebody should record rather
 than silently absorb.
 

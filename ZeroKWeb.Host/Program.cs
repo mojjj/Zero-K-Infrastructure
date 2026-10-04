@@ -2549,54 +2549,67 @@ namespace ZeroKWeb.Host
                               + string.Join(", ", byStatus.OrderBy(x => x.Key)
                                                           .Select(x => x.Value + " x " + (x.Key == 0 ? "no reply" : x.Key.ToString()))));
 
-            var recorded = io_ReadSurfaceBaseline();
-            var newly = broke.Where(x => !recorded.Contains(x)).ToList();
-            var fixedUp = recorded.Where(x => !broke.Contains(x)).ToList();
+            var newly = broke.Where(x => !SurfaceFiveHundreds.Contains(x)).ToList();
+            var fixedUp = SurfaceFiveHundreds.Where(x => !broke.Contains(x)).ToList();
 
+            // A NEW one is a regression wherever it appears, so this is asked in both
+            // environments.
             var failures = Check(newly.Count == 0,
                 "  no action answers 500 that did not before"
                 + (newly.Count == 0 ? "" : " (" + string.Join(", ", newly) + ")"));
 
+            // One that STOPPED is a fix worth recording rather than silently absorbing - but only
+            // against the fixture the list describes. With a lobby server attached the round is
+            // already seeded, so the two Planetwars pages answer 200 and the set differs by
+            // design rather than by regression. Asking there would be asking the wrong question.
+            if (ZeroKWeb.Global.LobbyApi != null)
+            {
+                Console.WriteLine("   ....  and the list is not checked the other way here - a seeded"
+                                  + " PlanetWars round makes two of its entries answer 200, by design");
+                return failures;
+            }
+
             failures += Check(fixedUp.Count == 0,
                 "  and none of the recorded ones stopped"
                 + (fixedUp.Count == 0 ? "" : " (" + string.Join(", ", fixedUp)
-                   + " - fixed? record it in tools/get-surface-500s.txt)"));
+                   + " - fixed? record it in SurfaceFiveHundreds)"));
 
             return failures;
         }
 
-        /// <summary>The recorded 500s, by path. Lines starting with # are prose.</summary>
-        private static HashSet<string> io_ReadSurfaceBaseline()
+        /// <summary>
+        /// The actions a bare anonymous GET reaches that answer 500, and why each one does.
+        ///
+        /// IN SOURCE rather than in a file beside the other baselines, and that is not a
+        /// preference. This check also runs inside the site container, where there is no
+        /// repository to read: the published image is /app and tools/ is not in it. The first
+        /// version read tools/get-surface-500s.txt, worked here, and threw
+        /// DirectoryNotFoundException the moment tools/stack.sh ran it.
+        ///
+        /// NONE OF THESE IS A PORT DEFECT. Each fails identically on MVC 5, and each is here
+        /// because a bare GET is not how the action is called - a property of the survey rather
+        /// than of the site.
+        /// </summary>
+        private static readonly HashSet<string> SurfaceFiveHundreds = new HashSet<string>(StringComparer.Ordinal)
         {
-            var file = Path.Combine(FindRepoRoot(), "tools", "get-surface-500s.txt");
-            var found = new HashSet<string>(StringComparer.Ordinal);
-            if (!File.Exists(file)) return found;
+            // Want an argument a bare GET does not give them; Single()/First() on no match. Each
+            // is reached properly by a check of its own elsewhere in this file.
+            "/Forum/DeletePostPrompt",
+            "/Forum/GetPostList",
+            "/Home/GetTooltip",
+            "/Missions/File",
 
-            foreach (var line in File.ReadAllLines(file))
-            {
-                var text = line.Trim();
+            // Model.First() on an empty sequence - the fixture has 0 news rows. Worth knowing on
+            // its own: the RSS feed cannot render a site with no news at all, on either stack.
+            "/News/Index",
 
-                // A path or nothing. Blank lines and # are prose, and so is an indented
-                // continuation of the previous entry's reason - which the first version of this
-                // parser read as a path called "knowing," and then reported as a recorded 500
-                // that had stopped happening.
-                if (!text.StartsWith("/")) continue;
-                found.Add(text.Split(' ', '\t')[0]);
-            }
-            return found;
-        }
-
-        /// <summary>The repository root, found the way FindSiteRoot finds the site.</summary>
-        private static string FindRepoRoot()
-        {
-            var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
-            while (dir != null)
-            {
-                if (System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "tools"))) return dir.FullName;
-                dir = dir.Parent;
-            }
-            throw new System.IO.DirectoryNotFoundException("could not find the repository above " + AppContext.BaseDirectory);
-        }
+            // Galaxies.Single(x => x.IsDefault) against a fixture with no galaxy. These two are
+            // the reason the "stopped" half of this check is asked only without a lobby server:
+            // tools/stack.sh seeds a PlanetWars round before it starts one, so over there both
+            // answer 200 and the set legitimately differs.
+            "/Planetwars/Index",
+            "/Planetwars/Minimap",
+        };
 
         /// <summary>
         /// The layout every ajax request is supposed to get, and the lobby pages nothing asked for.
