@@ -74,6 +74,11 @@ namespace ZeroKWeb.Controllers
             return RedirectToAction("Index");
         }
 
+        // Moves every player in a tournament battle into it. Gated on IsTourneyController,
+        // which is who the forgery would need to reach - the same shape as the moderator-only
+        // GETs closed in #281 and #282.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult ForceJoinPlayers(int battleid)
         {
             if (!Global.IsTourneyController) return DenyAccess();

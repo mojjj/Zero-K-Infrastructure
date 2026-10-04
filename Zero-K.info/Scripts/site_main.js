@@ -157,18 +157,23 @@ function ZkVote(url) {
 
 if (typeof module !== "undefined" && module.exports) module.exports = { BuildHistoryUrl: BuildHistoryUrl, ZkPost: ZkPost, ZkPrompt: ZkPrompt, ZkVote: ZkVote };
 
+/*
+    Tells the visitor's own game client to act on a command.
+
+    This used a bare $.ajax, and $.ajax with no `type` is a GET - so /Lobby/SendCommand accepted
+    one, and any page the visitor loaded could drive their lobby client. The action is [HttpPost]
+    with a token now, which this has to match.
+*/
 function SendLobbyCommand(link) {
-    $.ajax({
-        url: "/Lobby/SendCommand",
-        data: {
-            link: link
-        },
-        success: function(data) {
-            if (data != null && data.length > 0) alert(data);
-        },
-        error: function() {
-            alert("Error sending the command to lobby, please try again later");
-        }
+    var sent = ZkPost("/Lobby/SendCommand", { link: link }, function (data) {
+        if (data != null && data.length > 0) alert(data);
+    });
+    if (!sent) {
+        alert("Cannot send to lobby: this page carries no anti-forgery token.");
+        return;
+    }
+    sent.fail(function () {
+        alert("Error sending the command to lobby, please try again later");
     });
 }
 

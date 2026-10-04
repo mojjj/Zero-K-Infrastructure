@@ -24,6 +24,11 @@ namespace ZeroKWeb.Controllers
         /// </summary>
         /// <param name="link"></param>
         [NoCache]
+        // Makes the visitor's own game client act on a command of the caller's choosing.
+        // site_main.js asked for it with a bare $.ajax, which defaults to GET - so any page
+        // could drive the lobby client of anyone who loaded it. It posts through ZkPost now.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> SendCommand(string link) {
             if (Global.Account == null) return Content("You must be logged in to the site");
             if (!Global.LobbyApi.IsLobbyConnected(Global.Account.Name)) return Content("To use this feature, you need to be running the game and be logged in there");
@@ -33,6 +38,10 @@ namespace ZeroKWeb.Controllers
 
         [NoCache]
         [Auth]
+        // Connects the visitor to whichever battle is running on a planet - a link on
+        // Planet.cshtml, so a forged one joined you to a battle you never chose.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> WatchPlanetBattle(int id)
         {
             var db = new ZkDataContext();
@@ -205,6 +214,13 @@ namespace ZeroKWeb.Controllers
             return PartialView("ChatNotification", model);
         }
         [Auth]
+        // Posts model.Message into the channel as the visitor. The panel already submits
+        // through Ajax.BeginForm, which is a POST - but the action took a GET as well, and
+        // Ajax.BeginForm emits a bare <form> with no token, so neither end was closed. The
+        // form carries @Html.AntiForgeryToken() now and the ajax submit sends it with the
+        // rest of the fields.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> ChatMessages(ChatModel model)
         {
             model = model ?? new ChatModel();
