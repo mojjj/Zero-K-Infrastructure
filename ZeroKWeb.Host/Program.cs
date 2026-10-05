@@ -886,6 +886,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckForumPostToken();
                 failures += await CheckCampaignTooltip();
                 failures += await CheckTransactionScopes();
+                failures += await CheckNewsFeed();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2508,6 +2509,58 @@ namespace ZeroKWeb.Host
         }
 
         /// <summary>
+        /// The RSS feed, with no news and with some.
+        ///
+        /// /News/Index was one of the seven recorded 500s on the bare GET surface, and the reason
+        /// was written down beside it: Model.First() on an empty sequence, because the fixture has
+        /// no news rows. That is not a fixture artefact. It is anonymous, it is the feed readers
+        /// poll, and EVERY deployment starts with an empty News table - so the first thing a new
+        /// Zero-K install serves to a feed reader was a 500, on both stacks.
+        ///
+        /// lastBuildDate is optional in RSS 2.0, so a feed with nothing in it carries none. Asked
+        /// both ways here, because "it is 200 now" would be satisfied by a feed that had quietly
+        /// stopped listing anything.
+        /// </summary>
+        private static async Task<int> CheckNewsFeed()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the RSS feed, which could not render a site with no news:");
+
+            var failures = 0;
+            using (var client = new HttpClient())
+            {
+                var empty = await client.GetAsync(Url + "/News/Index");
+                var emptyXml = await empty.Content.ReadAsStringAsync();
+                failures += Check(empty.IsSuccessStatusCode,
+                    "  /News/Index renders with no news at all (" + (int)empty.StatusCode + ", "
+                    + emptyXml.Length + " bytes)");
+                failures += Check(emptyXml.Contains("<rss") && emptyXml.Contains("</channel>"),
+                    "  and is a whole feed, opened and closed");
+                failures += Check(!emptyXml.Contains("<lastBuildDate>"),
+                    "  with no lastBuildDate, which RSS makes optional");
+                failures += Check(!emptyXml.Contains("<item>"),
+                    "  and no items, which is the honest answer");
+            }
+
+            return failures + await WithNews(async (newsID, title) =>
+            {
+                var inner = 0;
+                using (var client = new HttpClient())
+                {
+                    var filled = await client.GetAsync(Url + "/News/Index");
+                    var xml = await filled.Content.ReadAsStringAsync();
+                    inner += Check(filled.IsSuccessStatusCode,
+                        "  and with a news item (" + (int)filled.StatusCode + ", " + xml.Length + " bytes)");
+                    inner += Check(xml.Contains("<lastBuildDate>"),
+                        "  it carries lastBuildDate again");
+                    inner += Check(xml.Contains(title),
+                        "  and the item is the one that was seeded");
+                }
+                return inner;
+            });
+        }
+
+        /// <summary>
         /// The three TransactionScope paths that had never run on .NET 9.
         ///
         /// System.Transactions promotes an ambient transaction to a DISTRIBUTED one the moment a
@@ -3268,10 +3321,6 @@ namespace ZeroKWeb.Host
             "/Forum/GetPostList",
             "/Home/GetTooltip",
             "/Missions/File",
-
-            // Model.First() on an empty sequence - the fixture has 0 news rows. Worth knowing on
-            // its own: the RSS feed cannot render a site with no news at all, on either stack.
-            "/News/Index",
 
             // Galaxies.Single(x => x.IsDefault) against a fixture with no galaxy. These two are
             // the reason the "stopped" half of this check is asked only without a lobby server:
