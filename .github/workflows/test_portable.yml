@@ -78,6 +78,12 @@ jobs:
       - name: Check no action changes the lobby on a GET
         run: ./tools/check-lobby-writes.py
 
+      # Model binding fills every public settable property it finds a form field for, so an
+      # entity handed straight to InsertOnSubmit lets the request choose every column. Clan
+      # creation did, and the column that mattered was ForumThreadID.
+      - name: Check no action writes a request-bound entity whole
+        run: ./tools/check-model-binding.py
+
       - name: Check every C# file is in a project
         run: ./tools/check-orphaned-sources.py
 
