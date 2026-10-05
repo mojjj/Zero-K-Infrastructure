@@ -885,6 +885,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckIpnVerification();
                 failures += await CheckForumPostToken();
                 failures += await CheckCampaignTooltip();
+                failures += await CheckTransactionScopes();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2500,6 +2501,204 @@ namespace ZeroKWeb.Host
                     failures += Check(byLink.StatusCode == System.Net.HttpStatusCode.MethodNotAllowed,
                         "  " + path.Split('?')[0] + " is not reachable by GET ("
                         + (int)byLink.StatusCode + ")");
+                }
+            }
+
+            return failures;
+        }
+
+        /// <summary>
+        /// The three TransactionScope paths that had never run on .NET 9.
+        ///
+        /// System.Transactions promotes an ambient transaction to a DISTRIBUTED one the moment a
+        /// second connection enlists, and .NET 9 cannot do that off Windows - it throws
+        /// PlatformNotSupportedException. Six actions on this site open a TransactionScope.
+        /// Reading them says all six use one connection, so none should promote; reading is not
+        /// running, and three of the six had never been executed by anything here:
+        /// News/PostNews, LobbyNews/PostNews and Planetwars/SubmitRenamePlanet.
+        ///
+        /// Each is asked over HTTP, as a moderator, with a token - and then the DATABASE is asked
+        /// whether the change is there. That second half is the point: a scope whose Complete()
+        /// never ran rolls back silently, and the action redirects either way.
+        /// </summary>
+        private static async Task<int> CheckTransactionScopes()
+        {
+            Console.WriteLine();
+            Console.WriteLine("TransactionScope, on the three paths nothing had ever run:");
+
+            var failures = 0;
+            var title = "Harness News " + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+            // NewsController does ForumCategories.Single(x => x.ForumMode == News), so this needs
+            // EXACTLY one - and seeding one unconditionally is how the first version of this
+            // check failed. A database set up by the migrations already has one; the committed
+            // fixture alone does not. Reuse it when it is there and seed only when it is not,
+            // which is what WithGalaxy does with a round somebody else seeded.
+            int? seededCategory = null;
+            using (var db = new ZkDataContext())
+            {
+                var existing = db.ForumCategories.Count(x => x.ForumMode == ForumMode.News);
+                if (existing > 1)
+                    Console.WriteLine("   ....  " + existing + " News forum categories exist, and"
+                                      + " NewsController.PostNews does Single() - it cannot run");
+                else if (existing == 0)
+                {
+                    var category = new ForumCategory
+                    {
+                        Title = "Harness News Category",
+                        ForumMode = ForumMode.News,
+                    };
+                    db.ForumCategories.Add(category);
+                    db.SaveChanges();
+                    seededCategory = category.ForumCategoryID;
+                }
+            }
+
+            try
+            {
+                failures += await AsAccount(AdminLevel.Moderator, async client =>
+                {
+                    var inner = 0;
+                    var token = await (await client.GetAsync(Url + "/Harness/Token")).Content.ReadAsStringAsync();
+
+                    var posted = await client.PostAsync(Url + "/News/PostNews",
+                        new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("Title", title),
+                            new KeyValuePair<string, string>("Text", "seeded by the harness"),
+                            new KeyValuePair<string, string>("Created", "2026-01-01"),
+                            // Non-nullable DateTimes, both of them. Leaving HeadlineUntil out of
+                            // the form binds it to DateTime.MinValue, which SQL Server's datetime
+                            // cannot hold - "SqlDateTime overflow, must be between 1/1/1753 and
+                            // 12/31/9999" from inside SaveChanges, which reads like a port defect
+                            // and is an incomplete request.
+                            new KeyValuePair<string, string>("HeadlineUntil", "2026-01-02"),
+                            new KeyValuePair<string, string>("__RequestVerificationToken", token),
+                        }));
+                    inner += Check(posted.IsSuccessStatusCode || (int)posted.StatusCode == 302,
+                        "  /News/PostNews ran its scope (" + (int)posted.StatusCode + ")");
+
+                    using (var db = new ZkDataContext())
+                    {
+                        var news = db.News.FirstOrDefault(x => x.Title == title);
+                        inner += Check(news != null, "  and the row committed, so Complete() ran");
+                        inner += Check(news != null && news.ForumThreadID != 0,
+                            "  with the forum thread the same scope created");
+                    }
+                    return inner;
+                });
+
+                var lobbyTitle = "Harness LobbyNews " + Guid.NewGuid().ToString("N").Substring(0, 8);
+                failures += await AsAccount(AdminLevel.Moderator, async client =>
+                {
+                    var inner = 0;
+                    var token = await (await client.GetAsync(Url + "/Harness/Token")).Content.ReadAsStringAsync();
+
+                    var posted = await client.PostAsync(Url + "/LobbyNews/PostNews",
+                        new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("Title", lobbyTitle),
+                            new KeyValuePair<string, string>("Text", "seeded by the harness"),
+                            new KeyValuePair<string, string>("__RequestVerificationToken", token),
+                        }));
+                    // The status is asserted only with a lobby server attached, and the reason is
+                    // worth recording: PostNews calls Global.LobbyApi.OnNewsChanged() AFTER
+                    // scope.Complete(), so with no lobby server the write commits and the visitor
+                    // still gets a 500. The commit is the part this check is about, and it is
+                    // asserted either way.
+                    if (ZeroKWeb.Global.LobbyApi != null)
+                        inner += Check(posted.IsSuccessStatusCode || (int)posted.StatusCode == 302,
+                            "  /LobbyNews/PostNews ran its scope (" + (int)posted.StatusCode + ")");
+                    else
+                        Console.WriteLine("   ....  /LobbyNews/PostNews answers "
+                                          + (int)posted.StatusCode
+                                          + " with no lobby server - OnNewsChanged() is called"
+                                          + " after scope.Complete(), so the write still lands");
+
+                    using (var db = new ZkDataContext())
+                    {
+                        var row = db.LobbyNews.FirstOrDefault(x => x.Title == lobbyTitle);
+                        inner += Check(row != null,
+                            "  and its row committed, which is what the scope had to do");
+                        if (row != null) { db.LobbyNews.Remove(row); db.SaveChanges(); }
+                    }
+                    return inner;
+                });
+
+                failures += await WithGalaxy(async (galaxyID, planetID, otherPlanetID) =>
+                    await AsAccount(AdminLevel.Moderator, async client =>
+                    {
+                        var inner = 0;
+                        string originalName, mapName;
+                        int originalTeamSize;
+                        int? originalResourceID;
+                        using (var db = new ZkDataContext())
+                        {
+                            var planet = db.Planets.Single(x => x.PlanetID == planetID);
+                            originalName = planet.Name;
+                            originalTeamSize = planet.TeamSize;
+                            originalResourceID = planet.MapResourceID;
+                            mapName = db.Resources.First(x => x.TypeID == ResourceType.Map).InternalName;
+                        }
+
+                        var renamed = "Harness Renamed " + Guid.NewGuid().ToString("N").Substring(0, 8);
+                        var token = await (await client.GetAsync(Url + "/Harness/Token")).Content.ReadAsStringAsync();
+                        var posted = await client.PostAsync(Url + "/Planetwars/SubmitRenamePlanet",
+                            new FormUrlEncodedContent(new[]
+                            {
+                                new KeyValuePair<string, string>("planetID", planetID.ToString()),
+                                new KeyValuePair<string, string>("newName", renamed),
+                                new KeyValuePair<string, string>("teamSize", "4"),
+                                new KeyValuePair<string, string>("map", mapName),
+                                new KeyValuePair<string, string>("__RequestVerificationToken", token),
+                            }));
+                        inner += Check(posted.IsSuccessStatusCode || (int)posted.StatusCode == 302,
+                            "  /Planetwars/SubmitRenamePlanet ran its scope ("
+                            + (int)posted.StatusCode + ")");
+
+                        using (var db = new ZkDataContext())
+                        {
+                            var planet = db.Planets.Single(x => x.PlanetID == planetID);
+                            inner += Check(planet.Name == renamed, "  and the rename committed");
+                            // planet.Galaxy.IsDirty is set through a lazy-loaded navigation, which
+                            // is the other thing this proves on .NET 9.
+                            inner += Check(planet.Galaxy != null && planet.Galaxy.IsDirty,
+                                "  and the galaxy it reached through a navigation is marked dirty");
+
+                            planet.Name = originalName;
+                            planet.TeamSize = originalTeamSize;
+                            planet.MapResourceID = originalResourceID;
+                            db.SaveChanges();
+                        }
+                        return inner;
+                    }));
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var news = db.News.Where(x => x.Title == title).ToList();
+                    var threadIDs = news.Where(x => x.ForumThreadID != 0)
+                        .Select(x => x.ForumThreadID).ToList();
+                    db.News.RemoveRange(news);
+                    db.SaveChanges();
+
+                    foreach (var threadID in threadIDs)
+                    {
+                        db.ForumPosts.RemoveRange(db.ForumPosts.Where(x => x.ForumThreadID == threadID));
+                        db.ForumThreadLastReads.RemoveRange(
+                            db.ForumThreadLastReads.Where(x => x.ForumThreadID == threadID));
+                        db.SaveChanges();
+                        var thread = db.ForumThreads.FirstOrDefault(x => x.ForumThreadID == threadID);
+                        if (thread != null) { db.ForumThreads.Remove(thread); db.SaveChanges(); }
+                    }
+
+                    if (seededCategory != null)
+                    {
+                        var category = db.ForumCategories.FirstOrDefault(
+                            x => x.ForumCategoryID == seededCategory.Value);
+                        if (category != null) { db.ForumCategories.Remove(category); db.SaveChanges(); }
+                    }
                 }
             }
 
