@@ -84,6 +84,12 @@ jobs:
       - name: Check no action writes a request-bound entity whole
         run: ./tools/check-model-binding.py
 
+      # Several places print a player name into HTML without encoding it, and say in a comment
+      # that they need not because the charset is validated server-side. This is what keeps that
+      # premise true: one door, Account.SetName, and nothing going round it.
+      - name: Check a player name only arrives through Account.SetName
+        run: ./tools/check-name-invariant.py
+
       - name: Check every C# file is in a project
         run: ./tools/check-orphaned-sources.py
 
