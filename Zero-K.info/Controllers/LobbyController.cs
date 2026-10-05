@@ -180,7 +180,11 @@ namespace ZeroKWeb.Controllers
         }
 
         [Auth]
-        [WritesOnGetByDesign("a child action of the layout; marks private chat seen")]
+        // Marks the VISITOR'S OWN private chat seen, and it is a child action of the layout -
+        // so every page they load already does this. A forged request achieves exactly what
+        // their next click achieves, which is the test that matters, rather than "it is a child
+        // action" on its own: being one does not stop it being routable, as CreateLink was.
+        [WritesOnGetByDesign("marks the visitor's own chat seen, which every page they load already does")]
         public ActionResult ChatNotification(ChatModel model)
         {
             model = model ?? new ChatModel();

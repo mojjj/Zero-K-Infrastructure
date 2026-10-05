@@ -36,7 +36,14 @@ namespace ZeroKWeb.Controllers
 
 
         [Auth]
-        [WritesOnGetByDesign("a code is redeemed by following a link, and the redeemer is the beneficiary")]
+        // The reason this is safe is not that the redeemer benefits - it is that POSSESSION OF
+        // THE CODE IS THE CREDENTIAL. Anyone holding one can redeem it by visiting the link
+        // themselves, so forging a visit gives an attacker nothing they could not already have,
+        // and costs them the kudos. The earlier wording recorded the conclusion and invited the
+        // wrong objection: that a crafted link spends somebody else's code on a stranger. It
+        // does, and so does the attacker simply clicking it, which is why a token changes
+        // nothing here. What would change it is a code that could be guessed; it is a Guid.
+        [WritesOnGetByDesign("holding the code is the credential, so a forged visit gains an attacker nothing")]
         public ActionResult Redeem(string code) {
             var db = new ZkDataContext();
             if (string.IsNullOrEmpty(code)) return Content("Code is empty");
