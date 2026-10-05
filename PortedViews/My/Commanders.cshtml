@@ -1,4 +1,4 @@
- @model ZeroKWeb.Controllers.MyController.CommandersModel
+﻿ @model ZeroKWeb.Controllers.MyController.CommandersModel
 @using ZeroKWeb.Controllers
 @using ZkData
 <h2>Unlocked technologies</h2>
@@ -22,6 +22,12 @@ This page lets you configure the commander name and default modules; you can cha
 		using (Ajax.BeginForm("CommanderProfile", new { profileNumber = i }, new AjaxOptions() { UpdateTargetId = "com" + i, InsertionMode = InsertionMode.Replace, HttpMethod = "post", LoadingElementId = "busy" })) {
 		@Html.AntiForgeryToken()
 		<div id='com@(i)' class="fleft border" style="min-height: 600px;">
+			@*
+				The COMPONENT renders; the ACTION this form posts to is a different thing that
+				deletes commanders and saves modules. Rendering the page used to call that action -
+				the MVC 5 copy of this file carries the same warning, and it is repeated here
+				because a reader of this copy never sees that one.
+			*@
 			@await Component.InvokeAsync("MyCommanderProfile", new { profileNumber = i })
 		</div>
 		}
