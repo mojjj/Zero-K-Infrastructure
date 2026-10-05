@@ -52,6 +52,15 @@ A reason is required, and it is checked where the decision is visible rather tha
 list somewhere else. This replaced a baseline file that carried 25 entries: a count far from the
 code, which said nothing about which of them mattered.
 
+**And the reason is now verified rather than believed.** Every one of them claims the same thing -
+that the action it posts to changes nothing - and for a long time nothing checked that claim. All
+six were true when it was finally asked, which is the right moment to automate it: an exemption is
+the one place in this file where a sentence silences a check, so a sentence that stops being true
+is the quietest way to open a hole. The action a form posts to is resolved, and it must neither
+write to the database nor change the lobby server - the two questions tools/check-get-writes.py
+and tools/check-lobby-writes.py already answer, imported rather than reimplemented so there is one
+definition of "writes" in this repository and not three.
+
 The token is looked for anywhere inside the form element. Razor makes exact parsing unreasonable -
 a form can open in one @if branch and close in another - so a form is taken to run to its next
 </form>, and an unclosed one is reported rather than guessed at.
@@ -75,6 +84,80 @@ SIGNATURE = re.compile(
     r"(?:ActionResult|Task<ActionResult>|IActionResult|Task<IActionResult>)[ \t]+(\w+)[ \t]*\(",
     re.MULTILINE)
 VALIDATES = re.compile(r"\[\s*ValidateAntiForgeryToken\s*\]")
+
+
+def _sibling(name):
+    """Load another check in this directory as a module, for the analysis it already carries."""
+    import importlib.util
+    import os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
+    spec = importlib.util.spec_from_file_location(name.replace("-", "_")[:-3], path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def state_changing_actions():
+    """{(controller, action): why} for actions that write or change the lobby.
+
+    Both answers come from the checks that own them. Reimplementing "writes" here would give this
+    repository a second definition of it, and the two would drift the first time one was widened -
+    which has happened four times to the database one alone.
+    """
+    writes = _sibling("check-get-writes.py")
+    lobby = _sibling("check-lobby-writes.py")
+
+    controllers_, helpers_ = writes.controllers(), writes.helpers()
+    writers = writes.writing_methods(controllers_ + helpers_)
+    setters = set(writes.writing_properties(controllers_ + helpers_, writers))
+    changing, _, _ = lobby.classify()
+    lobby_call = re.compile(r"\bLobbyApi\s*\??\s*\.\s*(\w+)\s*\(")
+
+    found = {}
+    for path in controllers_:
+        with open(path, encoding="utf-8-sig") as handle:
+            text = handle.read()
+        controller = path.split("/")[-1][:-len("Controller.cs")]
+        for match in writes.SIGNATURE.finditer(text):
+            body = writes.body_of(text, match.end())
+            if body is None:
+                continue
+            why = []
+            if writes.WRITE.search(body) or (set(writes.CALL.findall(body)) & writers):
+                why.append("writes to the database")
+            if set(writes.ASSIGN.findall(body)) & setters:
+                why.append("writes through a property setter")
+            hit = sorted({c for c in lobby_call.findall(body)} & set(changing))
+            if hit:
+                why.append("changes the lobby (" + ", ".join(hit) + ")")
+            if why:
+                found[(controller, match.group(1))] = "; ".join(why)
+    return found, len(writers)
+
+
+def enclosing_form(text, position, own_controller):
+    """The targets of the form that CONTAINS this position - not the ones near it.
+
+    A window of characters either side finds the neighbouring forms too, which on
+    TourneyIndex.cshtml means three actions that have nothing to do with the exempted one.
+    """
+    best = None
+    for match in FORM_OPEN.finditer(text):
+        close = text.find("</form>", match.end())
+        if close > position > match.start():
+            if best is None or match.start() > best[0]:
+                best = (match.start(), match.end(), close)
+    if best is not None:
+        return {(m.group(2) or own_controller, m.group(1))
+                for m in URL_ACTION.finditer(text, best[0], best[1])}
+
+    for match in AJAX_FORM.finditer(text):
+        body_start = call_end(text, match.start())
+        block = block_after(text, body_start)
+        start = text.find(block, body_start) if block else -1
+        if start >= 0 and start < position < start + len(block):
+            return {(match.group(2) or own_controller, match.group(1))}
+    return set()
 
 
 def validating_actions():
@@ -308,12 +391,40 @@ def main():
     for path in scanned:
         decorative.extend(decorative_in(path, validating, every_action))
 
+    # Every exemption claims the same thing. Ask whether it is true.
+    changing, writer_count = state_changing_actions()
+    if writer_count == 0:
+        print("the write analysis found no writing methods at all - every exemption would look"
+              " honest", file=sys.stderr)
+        return 2
+
     waived = exemptions()
+    lying = []
+    for path, line, reason in waived:
+        with open(path, encoding="utf-8-sig") as handle:
+            text = handle.read()
+        offset = sum(len(l) + 1 for l in text.split("\n")[:line - 1])
+        parts = path.split("/")
+        own = parts[-2] if len(parts) > 1 else ""
+        for target in sorted(enclosing_form(text, offset, own)):
+            if target in changing:
+                lying.append((path, line, target, changing[target], reason))
+
+    for path, line, target, why, reason in lying:
+        print("%s:%d: exempted as \"%s\", but %s/%s %s"
+              % (path, line, reason, target[0], target[1], why))
+    if lying:
+        print("\n%d exemption(s) say a form changes nothing and it does." % len(lying))
+        print("An exemption is the one place a sentence silences this check. Give the form a")
+        print("token and the action [ValidateAntiForgeryToken], or correct the reason.")
+        return 1
+
     print("every hand-written form that POSTs carries an anti-forgery token, and every form"
           " posting to one of the %d validating action(s) sends one (%d views read)"
           % (len(validating), len(scanned)))
     if waived:
-        print("\n%d exempted as changing nothing:" % len(waived))
+        print("\n%d exempted as changing nothing, each checked against what its action does:"
+              % len(waived))
         for path, line, reason in waived:
             print("  %s:%d  %s" % (path, line, reason))
     if decorative:
