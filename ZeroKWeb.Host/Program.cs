@@ -2601,26 +2601,43 @@ namespace ZeroKWeb.Host
                             new KeyValuePair<string, string>("Text", "seeded by the harness"),
                             new KeyValuePair<string, string>("__RequestVerificationToken", token),
                         }));
-                    // The status is asserted only with a lobby server attached, and the reason is
-                    // worth recording: PostNews calls Global.LobbyApi.OnNewsChanged() AFTER
-                    // scope.Complete(), so with no lobby server the write commits and the visitor
-                    // still gets a 500. The commit is the part this check is about, and it is
-                    // asserted either way.
-                    if (ZeroKWeb.Global.LobbyApi != null)
-                        inner += Check(posted.IsSuccessStatusCode || (int)posted.StatusCode == 302,
-                            "  /LobbyNews/PostNews ran its scope (" + (int)posted.StatusCode + ")");
-                    else
-                        Console.WriteLine("   ....  /LobbyNews/PostNews answers "
-                                          + (int)posted.StatusCode
-                                          + " with no lobby server - OnNewsChanged() is called"
-                                          + " after scope.Complete(), so the write still lands");
+                    // Asserted with or without a lobby server now. It used to be a 500 without
+                    // one: OnNewsChanged() runs after scope.Complete(), so the news was saved,
+                    // the moderator got an error page, and posting again made a second copy of
+                    // news that was already there. The notification is guarded, like the other
+                    // eight calls on this site whose failure must not fail the request.
+                    inner += Check(posted.IsSuccessStatusCode || (int)posted.StatusCode == 302,
+                        "  /LobbyNews/PostNews ran its scope and redirected ("
+                        + (int)posted.StatusCode + ")");
 
+                    int newsID;
                     using (var db = new ZkDataContext())
                     {
                         var row = db.LobbyNews.FirstOrDefault(x => x.Title == lobbyTitle);
                         inner += Check(row != null,
                             "  and its row committed, which is what the scope had to do");
-                        if (row != null) { db.LobbyNews.Remove(row); db.SaveChanges(); }
+                        if (row == null) return inner;
+                        newsID = row.LobbyNewsID;
+                    }
+
+                    // Deleted through the action rather than the context, because Delete carries
+                    // the same notification after the same completed write - so the tidying up is
+                    // the second half of the test instead of hiding it.
+                    var deleted = await client.PostAsync(Url + "/LobbyNews/Delete",
+                        new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("id", newsID.ToString()),
+                            new KeyValuePair<string, string>("__RequestVerificationToken", token),
+                        }));
+                    inner += Check(deleted.IsSuccessStatusCode || (int)deleted.StatusCode == 302,
+                        "  /LobbyNews/Delete does the same and redirects ("
+                        + (int)deleted.StatusCode + ")");
+
+                    using (var db = new ZkDataContext())
+                    {
+                        var gone = db.LobbyNews.FirstOrDefault(x => x.LobbyNewsID == newsID);
+                        inner += Check(gone == null, "  and the row really is gone");
+                        if (gone != null) { db.LobbyNews.Remove(gone); db.SaveChanges(); }
                     }
                     return inner;
                 });
