@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -105,25 +105,33 @@ namespace ZkData.Core
             Console.WriteLine("     " + required + " [Required] string properties - NOT NULL rejects null, not the empty string");
         }
 
-        private static Account NewAccount(string name) => new Account
+        // Built through SetName rather than an initializer, because an initializer walks past
+        // the one place a player name is validated - see tools/check-name-invariant.py. The probe
+        // name is write_probe and not write_probe for the same reason: a hyphen is not a valid
+        // lobby name character, so the old name could only exist by going round the door.
+        private static Account NewAccount(string name)
         {
-            Name = name,
-            FirstLogin = new DateTime(2026, 1, 1),
-            LastLogin = new DateTime(2026, 1, 1),
-            LastLogout = new DateTime(2026, 1, 1),
-            LastChatRead = new DateTime(2026, 1, 1),
-        };
+            var account = new Account
+            {
+                FirstLogin = new DateTime(2026, 1, 1),
+                LastLogin = new DateTime(2026, 1, 1),
+                LastLogout = new DateTime(2026, 1, 1),
+                LastChatRead = new DateTime(2026, 1, 1),
+            };
+            account.SetName(name);
+            return account;
+        }
 
         private static void Insert(ZkDataContext db, List<string> failures)
         {
             Check("insert, with the identity value coming back", failures, () =>
             {
-                var account = NewAccount("write-probe");
+                var account = NewAccount("write_probe");
                 db.Accounts.Add(account);
                 db.SaveChanges();
                 if (account.AccountID == 0) throw new Exception("AccountID was not populated");
                 var round = db.Accounts.AsNoTracking().Single(a => a.AccountID == account.AccountID);
-                if (round.Name != "write-probe") throw new Exception("read back as " + round.Name);
+                if (round.Name != "write_probe") throw new Exception("read back as " + round.Name);
                 return "AccountID " + account.AccountID + " assigned and read back";
             });
         }
@@ -132,11 +140,11 @@ namespace ZkData.Core
         {
             Check("update", failures, () =>
             {
-                var account = db.Accounts.Single(a => a.Name == "write-probe");
+                var account = db.Accounts.Single(a => a.Name == "write_probe");
                 account.Level = 42;
                 db.SaveChanges();
                 db.ChangeTracker.Clear();
-                var round = db.Accounts.AsNoTracking().Single(a => a.Name == "write-probe");
+                var round = db.Accounts.AsNoTracking().Single(a => a.Name == "write_probe");
                 if (round.Level != 42) throw new Exception("Level came back as " + round.Level);
                 return "Level 42 round-tripped";
             });
@@ -149,12 +157,12 @@ namespace ZkData.Core
             Check("MarkModified through DbCompat", failures, () =>
             {
                 db.ChangeTracker.Clear();
-                var account = db.Accounts.AsNoTracking().Single(a => a.Name == "write-probe");
+                var account = db.Accounts.AsNoTracking().Single(a => a.Name == "write_probe");
                 account.Level = 43;
                 db.MarkModified(account);
                 db.SaveChanges();
                 db.ChangeTracker.Clear();
-                var round = db.Accounts.AsNoTracking().Single(a => a.Name == "write-probe");
+                var round = db.Accounts.AsNoTracking().Single(a => a.Name == "write_probe");
                 if (round.Level != 43) throw new Exception("Level came back as " + round.Level);
                 return "an untracked entity saved as modified";
             });
@@ -177,7 +185,7 @@ namespace ZkData.Core
                 try
                 {
                     db.ChangeTracker.Clear();
-                    var account = db.Accounts.Single(a => a.Name == "write-probe");
+                    var account = db.Accounts.Single(a => a.Name == "write_probe");
                     account.Level = 44;
                     db.SaveChanges();
                 }
@@ -202,7 +210,7 @@ namespace ZkData.Core
             Check("an over-long value is refused before it reaches the database", failures, () =>
             {
                 db.ChangeTracker.Clear();
-                var account = db.Accounts.Single(a => a.Name == "write-probe");
+                var account = db.Accounts.Single(a => a.Name == "write_probe");
                 account.Name = new string('x', 201);   // [StringLength(200)]
                 try
                 {
@@ -226,11 +234,11 @@ namespace ZkData.Core
             Check("delete", failures, () =>
             {
                 db.ChangeTracker.Clear();
-                var account = db.Accounts.Single(a => a.Name == "write-probe");
+                var account = db.Accounts.Single(a => a.Name == "write_probe");
                 db.Accounts.Remove(account);
                 db.SaveChanges();
                 db.ChangeTracker.Clear();
-                if (db.Accounts.AsNoTracking().Any(a => a.Name == "write-probe")) throw new Exception("still there");
+                if (db.Accounts.AsNoTracking().Any(a => a.Name == "write_probe")) throw new Exception("still there");
                 return "the row is gone";
             });
         }

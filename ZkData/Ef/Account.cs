@@ -622,8 +622,33 @@ namespace ZkData
         }
 
 
+        /// <summary>
+        /// The one door a name comes in by, and it is locked.
+        ///
+        /// Several places render a player name into HTML without encoding it, and say in a
+        /// comment that they need not - ZkHtmlFormat.PrintAccount is the one everything else
+        /// reaches, and HtmlHelperExtensions says it outright: "PrintAccount ... does not encode
+        /// and does not need to: Account.IsValidLobbyName is enforced server-side at both
+        /// registration and rename, so a player name cannot carry markup."
+        ///
+        /// That was true and nothing made it stay true. The charset was checked by each caller
+        /// remembering to, and a third caller that forgot would have turned a stored name into
+        /// stored script on every page that prints it. The check belongs here, where the name is
+        /// written, rather than in each place that writes one - and tools/check-name-invariant.py
+        /// asserts that this validation is still in this method, because a check that only
+        /// counted callers would pass happily once the premise underneath it was gone.
+        ///
+        /// Throwing is deliberate. Every caller today validates first, so nothing reaches this
+        /// with a bad name; if one ever does, failing loudly is better than a name nobody can
+        /// render safely.
+        /// </summary>
         public void SetName(string value)
         {
+            if (!IsValidLobbyName(value))
+                throw new ArgumentException(
+                    "a lobby name may only contain letters, digits, underscore and brackets, and"
+                    + " must be at most " + GlobalConst.MaxUsernameLength + " characters", nameof(value));
+
             if (!String.IsNullOrEmpty(Name) && !String.IsNullOrEmpty(value) && Name!=value)
             {
                 List<string> aliases = null;

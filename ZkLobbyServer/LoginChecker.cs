@@ -229,7 +229,10 @@ namespace ZkLobbyServer
                     return new RegisterResponse(RegisterResponse.Code.NameAlreadyTaken);
                 }
 
-                var acc = new Account() { Name = register.Name };
+                // The name is set by SetName below, which is the one door that validates it.
+                // Setting it in the initializer as well put a second, unchecked way in for no
+                // gain - SetName was called with the same value on the next line.
+                var acc = new Account();
                 acc.SetPasswordHashed(register.PasswordHash);
                 acc.SetName(register.Name);
                 acc.SetAvatar();
