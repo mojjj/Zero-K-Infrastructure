@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using PlasmaShared;
@@ -106,6 +106,17 @@ namespace ZkData
         }
 
 
+        // Encoded from here down, as PrintClan already did with a clan's shortcut. The
+        // inconsistency ran the wrong way: the shortcut is charset-validated at creation and WAS
+        // encoded, while a planet's name is free text - SubmitRenamePlanet checks it for
+        // whitespace and nothing else - and was not. All of this output ends up in Event.Text,
+        // which Planetwars/Events.cshtml renders with @Html.Raw, so it is markup by the time a
+        // visitor sees it.
+        //
+        // These are privileged-user texts rather than anybody's, which is why this is defence in
+        // depth and not an incident: it stops a moderator account, or whoever has taken one,
+        // turning a planet rename into script that runs for every visitor to that page. Encoding
+        // a normal name, colour or icon filename returns it unchanged.
         public static string PrintFaction(ZkHtmlContext ctx, Faction fac, bool big = true)
         {
             if (fac == null) return "";
@@ -116,7 +127,7 @@ namespace ZkData
             // two spaces before style= in the original, kept
             return string.Format(
                 "<a href='{3}' nicetitle='$faction${4}'><span style='color:{0}'><img src='{1}'  style='width:16px;height:16px'/>{2}</span></a>",
-                fac.Color, fac.GetImageUrl(), fac.Shortcut,
+                System.Net.WebUtility.HtmlEncode(fac.Color), fac.GetImageUrl(), System.Net.WebUtility.HtmlEncode(fac.Shortcut),
                 ctx.Action("Detail", "Factions", new { id = fac.FactionID }), fac.FactionID);
         }
 
@@ -127,11 +138,11 @@ namespace ZkData
             return string.Format(
                 "<a href='{0}' title='$planet${4}' style='{5}'><img src='/img/planets/{1}' width='{2}'>{3}</a>",
                 ctx.Action("Planet", "Planetwars", new { id = planet.PlanetID }),
-                planet.Resource.MapPlanetWarsIcon,
+                System.Net.WebUtility.HtmlEncode(planet.Resource.MapPlanetWarsIcon),
                 planet.Resource.PlanetWarsIconSize / 3,
-                planet.Name,
+                System.Net.WebUtility.HtmlEncode(planet.Name),
                 planet.PlanetID,
-                planet.Faction != null ? "color:" + planet.Faction.Color : "");
+                planet.Faction != null ? "color:" + System.Net.WebUtility.HtmlEncode(planet.Faction.Color) : "");
         }
 
 
@@ -141,7 +152,7 @@ namespace ZkData
             // because carrying it would mean calling into request state for nothing
             if (stype == null) return "";
             return string.Format("<span nicetitle='$structuretype${0}'>{1}</span>",
-                stype.StructureTypeID, stype.Name);
+                stype.StructureTypeID, System.Net.WebUtility.HtmlEncode(stype.Name));
         }
 
 
@@ -177,9 +188,9 @@ namespace ZkData
 
             // &nbsp without the semicolon, as found
             return string.Format("<span title=\"<b>{0}</b><ul>{1}</ul>\"><b>{2}</b></span>",
-                rt.Description,
-                string.Join("", factoids.Select(x => "<li>" + x + "</li>")),
-                rt.Name + "&nbsp");
+                System.Net.WebUtility.HtmlEncode(rt.Description),
+                string.Join("", factoids.Select(x => "<li>" + System.Net.WebUtility.HtmlEncode(x) + "</li>")),
+                System.Net.WebUtility.HtmlEncode(rt.Name) + "&nbsp");
         }
     }
 }

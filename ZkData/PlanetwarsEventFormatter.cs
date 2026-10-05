@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -105,6 +105,18 @@ namespace ZkData
             } else if (arg is RoleType) {
                 var rt = (RoleType)arg;
                 args[i] = ZkHtmlFormat.PrintRoleType(ctx, rt);
+            } else {
+                // Anything that is not an entity stayed as the caller passed it, and ev.Text is
+                // rendered with @Html.Raw on Planetwars/Events.cshtml - so a plain string went
+                // into the page as markup. The one that matters is a planet's new name:
+                // SubmitRenamePlanet validates it for whitespace and nothing else, and passes it
+                // here as a string.
+                //
+                // Safe to encode because no caller passes HTML: all 60 CreateEvent call sites
+                // pass entities, numbers or plain text, which is the property this relies on.
+                // The entity branches above produce markup deliberately and are left alone, and
+                // ev.PlainText was built before this loop, so the lobby channels are unaffected.
+                args[i] = System.Net.WebUtility.HtmlEncode(arg.ToString());
             }
 
             if (dontDuplicate) alreadyAddedEvents.Add(arg);
