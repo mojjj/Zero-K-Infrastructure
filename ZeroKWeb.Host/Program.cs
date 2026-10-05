@@ -884,6 +884,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckClosedGetWrites();
                 failures += await CheckIpnVerification();
                 failures += await CheckForumPostToken();
+                failures += await CheckCampaignTooltip();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2503,6 +2504,153 @@ namespace ZeroKWeb.Host
             }
 
             return failures;
+        }
+
+        /// <summary>
+        /// The campaign planet tooltip, which is where the last two unrendered views live.
+        ///
+        /// Home/PlanetTooltipCampaign.cshtml and Shared/PlanetIconCampaign.cshtml had never been
+        /// executed by anything - not here, not in the stack, not by the site, because NOTHING
+        /// emits a `campaignPlanet$` tooltip key. /Home/GetTooltip is anonymous and live all the
+        /// same, so the three ways this threw were reachable by anyone who typed the URL:
+        ///
+        /// - CampaignPlanet.GetColor(Global.Account) read viewer.AccountID, and Global.Account is
+        ///   null for anybody not signed in;
+        /// - PlanetIconCampaign took its map from FirstOrDefault and then dereferenced it three
+        ///   times, so a planet whose map is not a registered Resource threw;
+        /// - and it called Mission.Resources.First(), which throws on a mission with none.
+        ///
+        /// Asked ANONYMOUSLY on purpose: signed in, the first of those three cannot fire, and it
+        /// is the one a visitor would have hit.
+        /// </summary>
+        private static async Task<int> CheckCampaignTooltip()
+        {
+            Console.WriteLine();
+            Console.WriteLine("the campaign planet tooltip, which nothing had ever rendered:");
+
+            return await WithMission(async (missionID, missionName, mutator) =>
+                await WithCampaignPlanet(missionID, async (campaignID, planetID, mapName) =>
+                {
+                    var failures = 0;
+                    var url = Url + "/Home/GetTooltip?key="
+                              + Uri.EscapeDataString("campaignPlanet$" + planetID);
+
+                    using (var client = new HttpClient())
+                    {
+                        var complete = await client.GetAsync(url);
+                        var completeHtml = await complete.Content.ReadAsStringAsync();
+                        failures += Check(complete.IsSuccessStatusCode,
+                            "  it renders for a visitor who is not signed in ("
+                            + (int)complete.StatusCode + ", " + completeHtml.Length + " bytes)");
+                        failures += Check(completeHtml.Contains("Harness Campaign Planet"),
+                            "  and is the planet that was asked for");
+                        failures += Check(completeHtml.Contains("/img/planets/"),
+                            "  with the planet icon PlanetIconCampaign draws");
+
+                        // The map the planet names stops existing. FirstOrDefault says that is a
+                        // thing that happens; three dereferences said otherwise.
+                        using (var db = new ZkDataContext())
+                        {
+                            db.CampaignPlanets.Single(x => x.CampaignID == campaignID
+                                                            && x.PlanetID == planetID)
+                                .DisplayedMap = "harness_no_such_map";
+                            db.SaveChanges();
+                        }
+
+                        var missing = await client.GetAsync(url);
+                        var missingHtml = await missing.Content.ReadAsStringAsync();
+                        failures += Check(missing.IsSuccessStatusCode,
+                            "  and still renders when its map is not a registered Resource ("
+                            + (int)missing.StatusCode + ", " + missingHtml.Length + " bytes)");
+                        failures += Check(missingHtml.Contains("Harness Campaign Planet"),
+                            "  with the rest of the tooltip intact, icon and map box simply absent");
+                        failures += Check(!missingHtml.Contains("/img/planets/"),
+                            "  ... and the icon really is the part that went");
+                    }
+
+                    // Recorded rather than asserted, because fixing it is a decision and not a
+                    // translation: the action looks the planet up with
+                    // Single(x => x.PlanetID == id) and the primary key is (CampaignID, PlanetID).
+                    // One campaign exists, so it works; a second campaign numbering its planets
+                    // from 1 as this one does makes every campaign tooltip throw, and the key
+                    // carries no campaign to choose by.
+                    Console.WriteLine("   ....  HomeController looks this up by PlanetID alone,"
+                                      + " and the key is (CampaignID, PlanetID) - a second"
+                                      + " campaign reusing a planet id breaks every one of these");
+                    return failures;
+                }));
+        }
+
+        /// <summary>
+        /// A campaign with one planet on it, pointing at a mission, and the fixture's own map
+        /// attached to that mission so the icon has something to measure itself against.
+        /// </summary>
+        private static async Task<int> WithCampaignPlanet(
+            int missionID, Func<int, int, string, Task<int>> body)
+        {
+            int campaignID;
+            const int planetID = 1;
+            string mapName;
+            int resourceID;
+            int? restoreMissionID;
+
+            using (var db = new ZkDataContext())
+            {
+                var map = db.Resources.OrderBy(x => x.ResourceID).First();
+                resourceID = map.ResourceID;
+                mapName = map.InternalName;
+                restoreMissionID = map.MissionID;
+                // Gives Mission.Resources one element, so the icon's centring arithmetic runs
+                // with a real size rather than only through its empty-collection branch.
+                map.MissionID = missionID;
+
+                var campaign = new Campaign
+                {
+                    Name = "Harness Campaign",
+                    Description = "seeded by the harness",
+                    MapWidth = 100,
+                    MapHeight = 100,
+                    MapImageName = "harness.jpg",
+                };
+                db.Campaigns.Add(campaign);
+                db.SaveChanges();
+                campaignID = campaign.CampaignID;
+
+                db.CampaignPlanets.Add(new CampaignPlanet
+                {
+                    CampaignID = campaignID,
+                    PlanetID = planetID,
+                    Name = "Harness Campaign Planet",
+                    MissionID = missionID,
+                    X = 0.5,
+                    Y = 0.5,
+                    StartsUnlocked = true,
+                    DisplayedMap = mapName,
+                    Description = "a planet the harness made",
+                });
+                db.SaveChanges();
+            }
+
+            try
+            {
+                return await body(campaignID, planetID, mapName);
+            }
+            finally
+            {
+                using (var db = new ZkDataContext())
+                {
+                    var map = db.Resources.FirstOrDefault(x => x.ResourceID == resourceID);
+                    if (map != null) map.MissionID = restoreMissionID;
+
+                    var planet = db.CampaignPlanets.FirstOrDefault(
+                        x => x.CampaignID == campaignID && x.PlanetID == planetID);
+                    if (planet != null) db.CampaignPlanets.Remove(planet);
+                    db.SaveChanges();
+
+                    var campaign = db.Campaigns.FirstOrDefault(x => x.CampaignID == campaignID);
+                    if (campaign != null) { db.Campaigns.Remove(campaign); db.SaveChanges(); }
+                }
+            }
         }
 
         /// <summary>
