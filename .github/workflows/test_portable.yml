@@ -90,6 +90,12 @@ jobs:
       - name: Check a player name only arrives through Account.SetName
         run: ./tools/check-name-invariant.py
 
+      # The two JSON endpoints that replaced the WCF services dispatch on `dynamic`, so a request
+      # class with no handler is a runtime error the compiler cannot see - and the callers are
+      # shipped game clients that cannot be redeployed with the server.
+      - name: Check both JSON endpoints serve their whole contract
+        run: ./tools/check-service-contracts.py
+
       - name: Check every C# file is in a project
         run: ./tools/check-orphaned-sources.py
 
