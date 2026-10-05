@@ -241,3 +241,8 @@ Thumbs.db
 build/
 node_modules/
 rendered-views.tmp*
+
+# A scratch directory for working notes. Ignored rather than tidied away: this checkout is synced
+# by Synology Drive, which restores anything git deletes as an untracked file, so a stray
+# directory here is noise in every `git status` until it is named.
+/temp/
