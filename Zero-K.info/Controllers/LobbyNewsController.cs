@@ -38,7 +38,10 @@ namespace ZeroKWeb.Controllers
             var n = db.LobbyNews.Find(id);
             db.LobbyNews.Remove(n);
             db.SaveChanges();
-            Global.LobbyApi.OnNewsChanged();
+            // Best-effort, and guarded for the same reason the other eight guarded calls on this
+            // site are: the row is already gone, so a host with no lobby server should still get
+            // its redirect rather than a 500 over work that succeeded.
+            Global.LobbyApi?.OnNewsChanged();
             return RedirectToAction("Index");
         }
 
@@ -98,7 +101,10 @@ namespace ZeroKWeb.Controllers
                 }
                 scope.Complete();
             }
-            Global.LobbyApi.OnNewsChanged();
+            // After scope.Complete(), so the news is saved whatever happens here. Unguarded, this
+            // threw on a host with no lobby server: the write landed, the moderator got a 500,
+            // and posting again made a second copy of news that was already there.
+            Global.LobbyApi?.OnNewsChanged();
 
             return RedirectToAction("Index", "LobbyNews");
         }
