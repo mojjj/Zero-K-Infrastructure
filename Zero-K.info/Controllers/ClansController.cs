@@ -366,8 +366,33 @@ namespace ZeroKWeb.Controllers
                     clan.Description = inputClan.Description;
                     clan.SecretTopic = inputClan.SecretTopic;
                 }
-                else 
-                    db.Clans.InsertOnSubmit(clan);
+                else
+                {
+                    // Only the fields the form offers, copied onto a fresh row.
+                    //
+                    // The bound Clan used to be inserted whole, and model binding fills every
+                    // public settable property it finds a form field for - so a request could
+                    // carry ForumThreadID and claim any thread on the site. That is not cosmetic:
+                    // ForumController treats a thread a clan points at as that clan's own and
+                    // answers "you cannot post in their clan thread" to everyone else, so one
+                    // extra field in one POST locks the site out of any thread. IsDeleted was
+                    // settable the same way.
+                    //
+                    // The site's other four entity-bound actions already do it this way -
+                    // LobbyNews, News, GameMode and DynamicConfig each copy named fields onto a
+                    // loaded or new row. This was the one that did not.
+                    var fresh = new Clan
+                    {
+                        ClanName = clan.ClanName,
+                        Shortcut = clan.Shortcut,
+                        Description = clan.Description,
+                        SecretTopic = clan.SecretTopic,
+                        Password = clan.Password,
+                        FactionID = clan.FactionID,
+                    };
+                    db.Clans.InsertOnSubmit(fresh);
+                    clan = fresh;
+                }
 
                 db.SaveChanges();
 
