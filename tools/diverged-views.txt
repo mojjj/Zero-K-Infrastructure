@@ -48,13 +48,16 @@
 
 --- Zero-K.info/Views/My/Commanders.cshtml
 +++ PortedViews/My/Commanders.cshtml
-@@ -23,9 +23,5 @@
- 		@Html.AntiForgeryToken()
+@@ -24,8 +24,10 @@
  		<div id='com@(i)' class="fleft border" style="min-height: 600px;">
--			@*
+ 			@*
 -				CommanderProfileView, not CommanderProfile: the second one deletes commanders and
 -				saves modules, and rendering the page used to call it.
--			*@
++				The COMPONENT renders; the ACTION this form posts to is a different thing that
++				deletes commanders and saves modules. Rendering the page used to call that action -
++				the MVC 5 copy of this file carries the same warning, and it is repeated here
++				because a reader of this copy never sees that one.
+ 			*@
 -			@{Html.RenderAction("CommanderProfileView", new { profileNumber = i });}
 +			@await Component.InvokeAsync("MyCommanderProfile", new { profileNumber = i })
  		</div>
