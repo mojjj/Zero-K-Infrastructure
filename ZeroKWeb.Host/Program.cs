@@ -887,6 +887,7 @@ namespace ZeroKWeb.Host
                 failures += await CheckCampaignTooltip();
                 failures += await CheckTransactionScopes();
                 failures += await CheckNewsFeed();
+                failures += await CheckEventMarkup();
                 failures += await CheckPlanetWarsMatchMaker();
 
                 Console.WriteLine();
@@ -2506,6 +2507,101 @@ namespace ZeroKWeb.Host
             }
 
             return failures;
+        }
+
+        /// <summary>
+        /// A PlanetWars event cannot carry markup into the page that renders it raw.
+        ///
+        /// Planetwars/Events.cshtml renders Event.Text with @Html.Raw, which is correct - the
+        /// text IS markup, built by ZkHtmlFormat out of the entities the event names. What was
+        /// not correct is what else reached it. Two routes, and this drives both:
+        ///
+        /// - a plain string argument. SubmitRenamePlanet validates a new name for whitespace and
+        ///   nothing else, and the event is created BEFORE the rename, so the new name arrives
+        ///   as a string and went into the page as markup;
+        /// - ZkHtmlFormat.PrintPlanet. Renaming a second time renders the planet with the first
+        ///   name, through a formatter that did not encode it.
+        ///
+        /// Moderator-only, so this is defence in depth rather than an open door - the point is
+        /// that a moderator account, or whoever has taken one, cannot turn a rename into script
+        /// that runs for every visitor to that page.
+        /// </summary>
+        private static async Task<int> CheckEventMarkup()
+        {
+            Console.WriteLine();
+            Console.WriteLine("a planet rename cannot put markup into the events page:");
+
+            const string payload = "<b>zk-harness-markup</b>";
+
+            return await WithGalaxy(async (galaxyID, planetID, otherPlanetID) =>
+                await AsAccount(AdminLevel.Moderator, async client =>
+                {
+                    var failures = 0;
+                    string originalName, mapName;
+                    using (var db = new ZkDataContext())
+                    {
+                        var planet = db.Planets.Single(x => x.PlanetID == planetID);
+                        originalName = planet.Name;
+                        mapName = db.Resources.First(x => x.TypeID == ResourceType.Map).InternalName;
+                    }
+
+                    async Task<int> Rename(string to)
+                    {
+                        var token = await (await client.GetAsync(Url + "/Harness/Token"))
+                            .Content.ReadAsStringAsync();
+                        var answer = await client.PostAsync(Url + "/Planetwars/SubmitRenamePlanet",
+                            new FormUrlEncodedContent(new[]
+                            {
+                                new KeyValuePair<string, string>("planetID", planetID.ToString()),
+                                new KeyValuePair<string, string>("newName", to),
+                                new KeyValuePair<string, string>("teamSize", "4"),
+                                new KeyValuePair<string, string>("map", mapName),
+                                new KeyValuePair<string, string>("__RequestVerificationToken", token),
+                            }));
+                        return (int)answer.StatusCode;
+                    }
+
+                    try
+                    {
+                        // First: the name arrives as a plain format argument.
+                        var one = await Rename(payload);
+                        failures += Check(one == 302 || one == 200,
+                            "  a planet is renamed to markup (" + one + ")");
+
+                        // Second: the planet now HAS that name, so PrintPlanet renders it.
+                        var two = await Rename("Harness Plain Name");
+                        failures += Check(two == 302 || two == 200,
+                            "  and renamed again, which renders the first name through PrintPlanet ("
+                            + two + ")");
+
+                        using (var db = new ZkDataContext())
+                        {
+                            var texts = db.Events
+                                .Where(x => x.Text.Contains("zk-harness-markup"))
+                                .Select(x => x.Text).ToList();
+                            failures += Check(texts.Count == 2,
+                                "  both events are there to look at (" + texts.Count + ")");
+                            failures += Check(texts.All(x => !x.Contains(payload)),
+                                "  and neither carries the tags through");
+                            failures += Check(texts.All(x => x.Contains("&lt;b&gt;")),
+                                "  they carry the escaped form instead");
+                        }
+                    }
+                    finally
+                    {
+                        using (var db = new ZkDataContext())
+                        {
+                            db.Events.RemoveRange(
+                                db.Events.Where(x => x.Text.Contains("zk-harness-markup")));
+                            db.SaveChanges();
+                            var planet = db.Planets.FirstOrDefault(x => x.PlanetID == planetID);
+                            if (planet != null) planet.Name = originalName;
+                            db.SaveChanges();
+                        }
+                    }
+
+                    return failures;
+                }));
         }
 
         /// <summary>
