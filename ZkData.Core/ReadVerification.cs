@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using ZkData;
 using System.Data.Entity.SqlServer;
 
@@ -126,6 +127,61 @@ namespace ZkData.Core
                     .Select(p => p.AllyNumber).Distinct().Count();
                 var winners = battle.SpringBattlePlayers.Count(p => p.IsInVictoryTeam && !p.IsSpectator);
                 return "battle " + battle.SpringBattleID + ": " + teams + " teams, " + winners + " winners";
+            });
+
+            // EF6 lazy-loads a navigation by default. EF Core does not unless
+            // UseLazyLoadingProxies is called AND the property is virtual, and ZkDataContext calls
+            // it - but nothing ever read a navigation off an entity fetched WITHOUT Include to
+            // find out whether it works. The failure mode is why that matters: a navigation that
+            // stops loading comes back NULL rather than throwing, so a view renders "Nobody" or an
+            // empty list and the page still answers 200. Every one of the 119 views walks these.
+            // Each gets its OWN context, and that is not tidiness. EF Core fixes a tracked
+            // entity up into the navigations of other tracked entities, so the collection check
+            // run on the shared context passed with lazy loading TURNED OFF - it found the single
+            // player the reference check above had just loaded, and reported "1 players" where
+            // the battle has two. A clean context has nothing to fix up from.
+            Check("a reference navigation loads with no Include", failures, () =>
+            {
+                using (var own = new ZkDataContext())
+                {
+                    // Tracked on purpose: EF Core does not lazy-load into a no-tracking query,
+                    // and every other read here is AsNoTracking - so this one would have proved
+                    // nothing.
+                    var player = own.SpringBattlePlayers.FirstOrDefault();
+                    if (player == null)
+                        throw new InvalidOperationException(
+                            "no battle players in the fixture - nothing to load a navigation off");
+                    var account = player.Account;
+                    if (account == null)
+                        throw new InvalidOperationException(
+                            "SpringBattlePlayer.Account came back null with the context still open"
+                            + " - lazy loading is off, and every view reading a navigation renders"
+                            + " empty rather than failing");
+                    return "battle " + player.SpringBattleID + " player " + player.AccountID
+                           + " -> " + account.Name;
+                }
+            });
+
+            Check("a collection navigation loads with no Include", failures, () =>
+            {
+                int battleID, loaded;
+                using (var own = new ZkDataContext())
+                {
+                    var battle = own.SpringBattles.FirstOrDefault();
+                    if (battle == null) throw new InvalidOperationException("no battles in the fixture");
+                    battleID = battle.SpringBattleID;
+                    loaded = battle.SpringBattlePlayers.Count;
+                }
+
+                // Against the row count, not against zero. "Not empty" is satisfied by one
+                // fixed-up entity, which is exactly how this read as a pass with the proxies off.
+                var actual = db.SpringBattlePlayers.Count(x => x.SpringBattleID == battleID);
+                if (loaded != actual)
+                    throw new InvalidOperationException(
+                        "SpringBattle.SpringBattlePlayers came back with " + loaded + " of "
+                        + actual + " rows and no Include - a collection that does not lazy-load is"
+                        + " indistinguishable from one with no rows");
+                return "battle " + battleID + " -> " + loaded + " players, which is all of them";
             });
 
             Check("enum column filtered server side", failures, () =>
